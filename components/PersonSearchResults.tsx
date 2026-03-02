@@ -129,7 +129,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                             <div className="p-2 bg-red-100 dark:bg-red-800 rounded-full shrink-0">
                                 <AlertTriangle className="text-red-600 dark:text-red-300" size={20} />
                             </div>
-                            <div className="flex-1">
+                            <div className="flex-1 min-h-0">
                                 <h3 className="text-base font-bold text-red-700 dark:text-red-400 mb-1">
                                     {disqualifiedDirectors && disqualifiedDirectors.length > 0 && insolvencyRecords && insolvencyRecords.length > 0
                                         ? 'Disqualified Director & Bankruptcy Alert'
@@ -144,6 +144,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                                     {insolvencyRecords && insolvencyRecords.length > 0 && ' Insolvency register'}.
                                 </p>
 
+                                <div className="max-h-64 overflow-y-auto pr-1">
                                 {/* DISQUALIFIED DIRECTORS SECTION */}
                                 {disqualifiedDirectors && disqualifiedDirectors.length > 0 && (
                                     <div className="space-y-3 mb-4">
@@ -237,6 +238,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                                         ))}
                                     </div>
                                 )}
+                                </div>
                             </div>
                         </div>
                     </div>

@@ -81,9 +81,28 @@ async function safeFetch(url: string, headers: HeadersInit, logger?: LoggerCallb
     }
 }
 
+// Company insolvency types (liquidation/administration) — exclude these when searching for individuals
+const COMPANY_INSOLVENCY_TYPES = [
+    'voluntary liquidation',
+    'court liquidation',
+    'voluntary administration',
+    'interim liquidation',
+    'liquidation agency',
+];
+
 /**
- * Searches for insolvency records by name.
- * 
+ * Check if all words in the search name appear in the estate name (case-insensitive).
+ */
+function nameMatchesEstate(searchName: string, estateName: string): boolean {
+    const searchWords = searchName.toLowerCase().trim().split(/\s+/);
+    const estateNameLower = estateName.toLowerCase();
+    return searchWords.every(word => estateNameLower.includes(word));
+}
+
+/**
+ * Searches for individual insolvency (bankruptcy) records by name.
+ * Filters out company insolvency types and non-matching names.
+ *
  * @param name Name of the person to search for
  * @param config ApiConfig containing the API key
  * @param logger Optional logger callback
@@ -119,5 +138,29 @@ export async function searchInsolvency(
         throw new Error(`Insolvency Register API Error: ${response.status}`);
     }
 
-    return await response.json();
+    const result: InsolvencySearchResult = await response.json();
+
+    // Filter to individual insolvencies only: exclude company types and non-matching names
+    const filtered = result.searchResults.filter(record => {
+        // Exclude company insolvency types (liquidations, administrations)
+        const isCompanyType = COMPANY_INSOLVENCY_TYPES.includes(
+            record.insolvencyTypeDescription.toLowerCase()
+        );
+        if (isCompanyType) return false;
+
+        // Ensure the estate name actually matches the searched person name
+        if (!nameMatchesEstate(name, record.estateName)) return false;
+
+        return true;
+    });
+
+    if (filtered.length !== result.searchResults.length) {
+        console.log(`🔍 Insolvency: Filtered ${result.searchResults.length} results down to ${filtered.length} individual matches for "${name}"`);
+    }
+
+    return {
+        ...result,
+        searchResults: filtered,
+        totalItems: filtered.length,
+    };
 }
