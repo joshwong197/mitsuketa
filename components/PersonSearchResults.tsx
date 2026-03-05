@@ -144,101 +144,107 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                                     {insolvencyRecords && insolvencyRecords.length > 0 && ' Insolvency register'}.
                                 </p>
 
-                                <div className="max-h-64 overflow-y-auto pr-1">
-                                {/* DISQUALIFIED DIRECTORS SECTION */}
-                                {disqualifiedDirectors && disqualifiedDirectors.length > 0 && (
-                                    <div className="space-y-3 mb-4">
-                                        <h4 className="text-sm font-semibold text-red-700 dark:text-red-400">Disqualified Director Records:</h4>
-                                        {disqualifiedDirectors.map((director, idx) => (
-                                            <div key={idx} className="bg-white dark:bg-slate-800 p-3 rounded border border-red-200 dark:border-red-800/50">
-                                                <div className="flex items-start justify-between mb-2">
-                                                    <div>
-                                                        <p className="font-semibold text-gray-900 dark:text-white text-sm">
-                                                            {director.firstName} {director.middleName} {director.lastName}
-                                                        </p>
-                                                        {director.aliases && director.aliases.aliases && director.aliases.aliases.length > 0 && (
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                                                Also known as: {director.aliases.aliases.join(', ')}
-                                                            </p>
-                                                        )}
-                                                    </div>
-                                                    <span className="text-xs px-2 py-0.5 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 rounded-full font-medium whitespace-nowrap">
-                                                        ID: {director.disqualifiedDirectorId}
-                                                    </span>
-                                                </div>
+                                <details className="group mt-2">
+                                    <summary className="text-sm font-bold text-red-700 dark:text-red-400 cursor-pointer hover:text-red-800 flex items-center select-none outline-none">
+                                        <ChevronRight size={16} className="transition-transform group-open:rotate-90 mr-1" />
+                                        View Alert Details ({(disqualifiedDirectors?.length || 0) + (insolvencyRecords?.length || 0)} records found)
+                                    </summary>
+                                    <div className="max-h-60 overflow-y-auto pr-1 mt-3">
+                                        {/* DISQUALIFIED DIRECTORS SECTION */}
+                                        {disqualifiedDirectors && disqualifiedDirectors.length > 0 && (
+                                            <div className="space-y-3 mb-4">
+                                                <h4 className="text-sm font-semibold text-red-700 dark:text-red-400">Disqualified Director Records:</h4>
+                                                {disqualifiedDirectors.map((director, idx) => (
+                                                    <div key={idx} className="bg-white dark:bg-slate-800 p-3 rounded border border-red-200 dark:border-red-800/50">
+                                                        <div className="flex items-start justify-between mb-2">
+                                                            <div>
+                                                                <p className="font-semibold text-gray-900 dark:text-white text-sm">
+                                                                    {director.firstName} {director.middleName} {director.lastName}
+                                                                </p>
+                                                                {director.aliases && director.aliases.aliases && director.aliases.aliases.length > 0 && (
+                                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                                                        Also known as: {director.aliases.aliases.join(', ')}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                            <span className="text-xs px-2 py-0.5 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 rounded-full font-medium whitespace-nowrap">
+                                                                ID: {director.disqualifiedDirectorId}
+                                                            </span>
+                                                        </div>
 
-                                                {/* Disqualification Criteria */}
-                                                {director.disqualificationCriteria?.criteria?.map((c, i) => (
-                                                    <div key={i} className="mt-2 pl-3 border-l-2 border-red-300 dark:border-red-700">
-                                                        <p className="text-xs text-gray-700 dark:text-gray-300">
-                                                            <span className="font-medium text-red-600 dark:text-red-400">Reason:</span> {c.criteria || 'Section 385 Companies Act 1993'}
-                                                        </p>
-                                                        <p className="text-xs text-gray-700 dark:text-gray-300 mt-1">
-                                                            <span className="font-medium text-red-600 dark:text-red-400">Disqualification Period:</span>{' '}
-                                                            {formatDate(c.startDate)} - {c.endDate ? formatDate(c.endDate) : 'Indefinite'}
-                                                        </p>
-                                                        {c.comments && (
-                                                            <p className="text-xs text-gray-600 dark:text-gray-400 italic mt-1.5 bg-gray-50 dark:bg-slate-900/50 p-2 rounded">
-                                                                "{c.comments}"
-                                                            </p>
-                                                        )}
+                                                        {/* Disqualification Criteria */}
+                                                        {director.disqualificationCriteria?.criteria?.map((c, i) => (
+                                                            <div key={i} className="mt-2 pl-3 border-l-2 border-red-300 dark:border-red-700">
+                                                                <p className="text-xs text-gray-700 dark:text-gray-300">
+                                                                    <span className="font-medium text-red-600 dark:text-red-400">Reason:</span> {c.criteria || 'Section 385 Companies Act 1993'}
+                                                                </p>
+                                                                <p className="text-xs text-gray-700 dark:text-gray-300 mt-1">
+                                                                    <span className="font-medium text-red-600 dark:text-red-400">Disqualification Period:</span>{' '}
+                                                                    {formatDate(c.startDate)} - {c.endDate ? formatDate(c.endDate) : 'Indefinite'}
+                                                                </p>
+                                                                {c.comments && (
+                                                                    <p className="text-xs text-gray-600 dark:text-gray-400 italic mt-1.5 bg-gray-50 dark:bg-slate-900/50 p-2 rounded">
+                                                                        "{c.comments}"
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        ))}
                                                     </div>
                                                 ))}
                                             </div>
-                                        ))}
-                                    </div>
-                                )}
+                                        )}
 
-                                {/* INSOLVENCY/BANKRUPTCY SECTION */}
-                                {insolvencyRecords && insolvencyRecords.length > 0 && (
-                                    <div className="space-y-3">
-                                        <h4 className="text-sm font-semibold text-red-700 dark:text-red-400">Bankruptcy/Insolvency Records:</h4>
-                                        {insolvencyRecords.map((record, idx) => (
-                                            <div key={idx} className="bg-white dark:bg-slate-800 p-3 rounded border border-red-200 dark:border-red-800/50">
-                                                <div className="flex items-start justify-between mb-2">
-                                                    <div>
-                                                        <p className="font-semibold text-gray-900 dark:text-white text-sm">
-                                                            {record.estateName}
-                                                        </p>
-                                                        {record.alternateNames && record.alternateNames.length > 0 && (
-                                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                                                Also known as: {record.alternateNames.join(', ')}
+                                        {/* INSOLVENCY/BANKRUPTCY SECTION */}
+                                        {insolvencyRecords && insolvencyRecords.length > 0 && (
+                                            <div className="space-y-3">
+                                                <h4 className="text-sm font-semibold text-red-700 dark:text-red-400">Bankruptcy/Insolvency Records:</h4>
+                                                {insolvencyRecords.map((record, idx) => (
+                                                    <div key={idx} className="bg-white dark:bg-slate-800 p-3 rounded border border-red-200 dark:border-red-800/50">
+                                                        <div className="flex items-start justify-between mb-2">
+                                                            <div>
+                                                                <p className="font-semibold text-gray-900 dark:text-white text-sm">
+                                                                    {record.estateName}
+                                                                </p>
+                                                                {record.alternateNames && record.alternateNames.length > 0 && (
+                                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                                                        Also known as: {record.alternateNames.join(', ')}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${record.insolvencyStatus.includes('Current')
+                                                                ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400'
+                                                                : 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-400'
+                                                                }`}>
+                                                                {record.insolvencyStatus}
+                                                            </span>
+                                                        </div>
+
+                                                        <div className="mt-2 pl-3 border-l-2 border-red-300 dark:border-red-700">
+                                                            <p className="text-xs text-gray-700 dark:text-gray-300">
+                                                                <span className="font-medium text-red-600 dark:text-red-400">Type:</span> {record.insolvencyTypeDescription}
                                                             </p>
-                                                        )}
+                                                            <p className="text-xs text-gray-700 dark:text-gray-300 mt-1">
+                                                                <span className="font-medium text-red-600 dark:text-red-400">Adjudication Date:</span>{' '}
+                                                                {formatDate(record.adjudicationOrLiquidationDate)}
+                                                            </p>
+                                                            {record.dischargeOrCompletionDate && (
+                                                                <p className="text-xs text-gray-700 dark:text-gray-300 mt-1">
+                                                                    <span className="font-medium text-red-600 dark:text-red-400">Discharge/Completion Date:</span>{' '}
+                                                                    {formatDate(record.dischargeOrCompletionDate)}
+                                                                </p>
+                                                            )}
+                                                            {record.multipleInsolvencies && (
+                                                                <p className="text-xs text-orange-600 dark:text-orange-400 mt-1 font-medium">
+                                                                    ⚠️ Multiple insolvencies on record
+                                                                </p>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${record.insolvencyStatus.includes('Current')
-                                                            ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400'
-                                                            : 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-400'
-                                                        }`}>
-                                                        {record.insolvencyStatus}
-                                                    </span>
-                                                </div>
-
-                                                <div className="mt-2 pl-3 border-l-2 border-red-300 dark:border-red-700">
-                                                    <p className="text-xs text-gray-700 dark:text-gray-300">
-                                                        <span className="font-medium text-red-600 dark:text-red-400">Type:</span> {record.insolvencyTypeDescription}
-                                                    </p>
-                                                    <p className="text-xs text-gray-700 dark:text-gray-300 mt-1">
-                                                        <span className="font-medium text-red-600 dark:text-red-400">Adjudication Date:</span>{' '}
-                                                        {formatDate(record.adjudicationOrLiquidationDate)}
-                                                    </p>
-                                                    {record.dischargeOrCompletionDate && (
-                                                        <p className="text-xs text-gray-700 dark:text-gray-300 mt-1">
-                                                            <span className="font-medium text-red-600 dark:text-red-400">Discharge/Completion Date:</span>{' '}
-                                                            {formatDate(record.dischargeOrCompletionDate)}
-                                                        </p>
-                                                    )}
-                                                    {record.multipleInsolvencies && (
-                                                        <p className="text-xs text-orange-600 dark:text-orange-400 mt-1 font-medium">
-                                                            ⚠️ Multiple insolvencies on record
-                                                        </p>
-                                                    )}
-                                                </div>
+                                                ))}
                                             </div>
-                                        ))}
+                                        )}
                                     </div>
-                                )}
-                                </div>
+                                </details>
                             </div>
                         </div>
                     </div>

@@ -116,20 +116,16 @@ export async function searchInsolvency(
     pageSize: number = 1000,
     page: number = 1
 ): Promise<InsolvencySearchResult> {
-    const envPath = config.environment === 'prod' ? 'gateway' : 'sandbox';
-    // Production: https://api.business.govt.nz/gateway/insolvency-trustee-services/v5/insolvencies
+    const baseUrl = `/api/proxy`;
+    const proxyPath = `${INSOLVENCY_PATH}/insolvencies?name=${encodeURIComponent(name)}&page=${page}&page-size=${pageSize}`;
+    const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
 
-    const baseUrl = `${BASE_API_URL}/${envPath}${INSOLVENCY_PATH}`;
-    const url = `${baseUrl}/insolvencies?name=${encodeURIComponent(name)}&page=${page}&page-size=${pageSize}`;
-
-    const apiKey = (config as any).insolvencyKey;
-
-    if (!apiKey) {
-        throw new Error("Insolvency Register API Key is missing.");
-    }
+    // Optional user key
+    const apiKey = (config as any).insolvencyKey || '';
 
     const response = await safeFetch(url, {
-        'Ocp-Apim-Subscription-Key': apiKey,
+        'x-user-api-key': apiKey,
+        'x-api-type': 'insolvency',
         'Accept': 'application/json'
     }, logger);
 

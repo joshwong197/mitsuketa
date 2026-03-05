@@ -32,9 +32,8 @@ class OrgSpider {
 
     constructor(config: ApiConfig, logger?: LoggerCallback) {
         this.config = config;
-        const envPath = config.environment === 'prod' ? 'gateway' : 'sandbox';
-        this.nzbnBaseUrl = `${BASE_API_URL}/${envPath}${API_PATHS.nzbn}`;
-        this.companiesBaseUrl = `${BASE_API_URL}/${envPath}${API_PATHS.companies}`;
+        this.nzbnBaseUrl = `/api/proxy`;
+        this.companiesBaseUrl = `/api/proxy`;
         this.visited = new Set();
         this.nodes = new Map();
         this.edges = [];
@@ -138,7 +137,7 @@ class OrgSpider {
 
         // Find all parent/shareholder nodes
         for (const edge of this.edges) {
-            if (edge.data.relationshipType === 'shareholder' || edge.data.relationshipType === 'parent') {
+            if (edge.data?.relationshipType === 'parent') {
                 if (!parentsToExpand.includes(edge.source) && edge.source !== rootNzbn) {
                     parentsToExpand.push(edge.source);
                 }
@@ -422,6 +421,26 @@ class OrgSpider {
                 continue;
             }
 
+            // CRITICAL FIX: The Roles API uses aggressive fuzzy matching.
+            // Verify the returned role actually matches the company we searched for strictly.
+            const matchedName = (role.name || '').toUpperCase().trim();
+            const targetName = ownerName.toUpperCase().trim();
+
+            // Normalize names by standardizing common abbreviations and stripping punctuation/spaces
+            const normalizeName = (n: string) => n
+                .replace(/\bLTD\.?\b/g, 'LIMITED')
+                .replace(/\bCO\.?\b/g, 'COMPANY')
+                .replace(/[^A-Z0-9]/g, '');
+
+            const isStrictMatch =
+                (role.nzbn && role.nzbn === ownerNzbn) ||
+                (normalizeName(matchedName) === normalizeName(targetName));
+
+            if (!isStrictMatch) {
+                console.log(`${logPrefix} ❌ Skipped: Fuzzy match rejected. API returned "${role.name}" (NZBN: ${role.nzbn || 'N/A'}) but we need "${ownerName}".`);
+                continue;
+            }
+
             console.log(`${logPrefix} ✅ MATCHED! Processing as subsidiary.`);
 
             // CRITICAL FIX: For OrganisationShareholder roles, subsidiaries are in shareholdings array
@@ -657,9 +676,11 @@ async function safeFetch(url: string, headers: HeadersInit, logger?: LoggerCallb
 // Fetches full entity details including shareholding history, roles, etc.
 // Used when historical data is needed for time snapshot queries
 async function fetchEntityDetailsFull(nzbn: string, config: ApiConfig, baseUrl: string, logger?: LoggerCallback): Promise<NZBNFullEntity> {
-    const url = `${baseUrl}/entities/${nzbn}`;
+    const proxyPath = `${API_PATHS.nzbn}/entities/${nzbn}`;
+    const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
     const res = await safeFetch(url, {
-        'Ocp-Apim-Subscription-Key': config.nzbnKey,
+        'x-user-api-key': config.nzbnKey || '',
+        'x-api-type': 'nzbn',
         'Accept': 'application/json'
     }, logger);
 
@@ -676,9 +697,11 @@ async function fetchEntityDetailsFull(nzbn: string, config: ApiConfig, baseUrl: 
 // Returns only what we need for graph building, not full historical details
 async function fetchEntitySummary(nzbn: string, config: ApiConfig, baseUrl: string, logger?: LoggerCallback): Promise<{ entityName: string, nzbn: string, entityStatusDescription: string, sourceRegisterUniqueId?: string }> {
     // Use search endpoint with NZBN as search term - returns minimal data
-    const url = `${baseUrl}/entities?search-term=${encodeURIComponent(nzbn)}&page-size=1`;
+    const proxyPath = `${API_PATHS.nzbn}/entities?search-term=${encodeURIComponent(nzbn)}&page-size=1`;
+    const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
     const res = await safeFetch(url, {
-        'Ocp-Apim-Subscription-Key': config.nzbnKey,
+        'x-user-api-key': config.nzbnKey || '',
+        'x-api-type': 'nzbn',
         'Accept': 'application/json'
     }, logger);
 
@@ -708,9 +731,11 @@ async function fetchEntitySummary(nzbn: string, config: ApiConfig, baseUrl: stri
 // Used when we only need to check if entity is removed/inactive
 async function fetchEntityStatusOnly(nzbn: string, config: ApiConfig, baseUrl: string, logger?: LoggerCallback): Promise<{ status: string, sourceRegisterUniqueId?: string }> {
     try {
-        const url = `${baseUrl}/entities?search-term=${encodeURIComponent(nzbn)}&page-size=1`;
+        const proxyPath = `${API_PATHS.nzbn}/entities?search-term=${encodeURIComponent(nzbn)}&page-size=1`;
+        const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
         const res = await safeFetch(url, {
-            'Ocp-Apim-Subscription-Key': config.nzbnKey,
+            'x-user-api-key': config.nzbnKey || '',
+            'x-api-type': 'nzbn',
             'Accept': 'application/json'
         }, logger);
 
@@ -741,9 +766,11 @@ async function fetchEntityStatusOnly(nzbn: string, config: ApiConfig, baseUrl: s
 // Used when we already know it's a subsidiary from Companies API
 async function fetchEntitySummaryLight(nzbn: string, config: ApiConfig, baseUrl: string, logger?: LoggerCallback): Promise<{ entityName: string, entityStatusDescription: string, sourceRegisterUniqueId?: string }> {
     try {
-        const url = `${baseUrl}/entities?search-term=${encodeURIComponent(nzbn)}&page-size=1`;
+        const proxyPath = `${API_PATHS.nzbn}/entities?search-term=${encodeURIComponent(nzbn)}&page-size=1`;
+        const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
         const res = await safeFetch(url, {
-            'Ocp-Apim-Subscription-Key': config.nzbnKey,
+            'x-user-api-key': config.nzbnKey || '',
+            'x-api-type': 'nzbn',
             'Accept': 'application/json'
         }, logger);
 
@@ -819,7 +846,8 @@ async function fetchRolesByEntityName(name: string, config: ApiConfig, baseUrl: 
         const encodedName = encodeURIComponent(name);
 
         // UPDATED: Strictly using verified 'role-type' (singular) and enum 'SHR' with pagination
-        const url = `${baseUrl}/search?name=${encodedName}&role-type=SHR&page-size=100`;
+        const proxyPath = `${API_PATHS.companies}/search?name=${encodedName}&role-type=SHR&page-size=100`;
+        const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
 
         // Strict Specs: Visual Log confirmation
         console.log(`If I were to call this in the browser, the URL would look like this: ${url}`);
@@ -827,7 +855,8 @@ async function fetchRolesByEntityName(name: string, config: ApiConfig, baseUrl: 
         console.log(`Fetching roles: ${url}`);
 
         const res = await safeFetch(url, {
-            'Ocp-Apim-Subscription-Key': config.companiesKey,
+            'x-user-api-key': config.companiesKey || '',
+            'x-api-type': 'companies',
             'Accept': 'application/json'
         }, logger);
 
@@ -849,12 +878,14 @@ async function fetchRolesByEntityName(name: string, config: ApiConfig, baseUrl: 
 async function fetchDirectorsByEntityName(name: string, config: ApiConfig, baseUrl: string, logger?: LoggerCallback): Promise<CompaniesRoleSearchResult> {
     try {
         const encodedName = encodeURIComponent(name);
-        const url = `${baseUrl}/search?name=${encodedName}&role-type=DIR&page-size=50`;
+        const proxyPath = `${API_PATHS.companies}/search?name=${encodedName}&role-type=DIR&page-size=50`;
+        const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
 
         console.log(`Fetching directors: ${url}`);
 
         const res = await safeFetch(url, {
-            'Ocp-Apim-Subscription-Key': config.companiesKey,
+            'x-user-api-key': config.companiesKey || '',
+            'x-api-type': 'companies',
             'Accept': 'application/json'
         }, logger);
 
@@ -874,12 +905,13 @@ async function fetchDirectorsByEntityName(name: string, config: ApiConfig, baseU
 }
 
 export const searchEntities = async (term: string, config: ApiConfig, logger?: LoggerCallback): Promise<EntitySearchResultItem[]> => {
-    const envPath = config.environment === 'prod' ? 'gateway' : 'sandbox';
-    const baseUrl = `${BASE_API_URL}/${envPath}${API_PATHS.nzbn}`;
-    const url = `${baseUrl}/entities?search-term=${encodeURIComponent(term)}&page-size=10`;
+    const baseUrl = `/api/proxy`;
+    const proxyPath = `${API_PATHS.nzbn}/entities?search-term=${encodeURIComponent(term)}&page-size=10`;
+    const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
 
     const response = await safeFetch(url, {
-        'Ocp-Apim-Subscription-Key': config.nzbnKey,
+        'x-user-api-key': config.nzbnKey || '',
+        'x-api-type': 'nzbn',
         'Accept': 'application/json'
     }, logger);
 

@@ -154,28 +154,10 @@ export const ConfigBar: React.FC<Props> = ({ config, onConfigChange, theme, togg
                   </button>
                 </div>
 
-                <div className="flex items-center justify-between mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
-                  <div className="flex flex-col">
-                    <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 ml-1 mb-1">Environment</label>
-                    <div className="flex bg-slate-100 dark:bg-slate-800 rounded-md p-1 border border-slate-200 dark:border-slate-700 w-fit">
-                      <button
-                        onClick={() => setLocalConfig({ ...localConfig, environment: 'sandbox' })}
-                        className={`px-4 py-1.5 text-xs font-bold rounded transition-colors ${localConfig.environment === 'sandbox' ? 'bg-emerald-600 text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:white'}`}
-                      >
-                        Sandbox
-                      </button>
-                      <button
-                        onClick={() => setLocalConfig({ ...localConfig, environment: 'prod' })}
-                        className={`px-4 py-1.5 text-xs font-bold rounded transition-colors ${localConfig.environment === 'prod' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:white'}`}
-                      >
-                        Production
-                      </button>
-                    </div>
-                  </div>
-
+                <div className="flex items-center justify-end mt-6 pt-6 border-t border-slate-200 dark:border-slate-700">
                   <button
                     onClick={handleSave}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-md text-sm font-bold transition-all shadow-lg hover:shadow-xl shadow-blue-600/20 active:scale-95 self-end"
+                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-md text-sm font-bold transition-all shadow-lg hover:shadow-xl shadow-blue-600/20 active:scale-95"
                   >
                     <Save size={16} />
                     Apply Changes

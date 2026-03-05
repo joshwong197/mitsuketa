@@ -53,7 +53,7 @@ async function fetchCompanyStatus(
     hasHistoricInsolvency: boolean;
     historicInsolvencyType?: string;
 } | null> {
-    const envPath = config.environment === 'prod' ? 'gateway' : 'sandbox';
+    const envPath = 'gateway';
     const baseUrl = `${BASE_API_URL}/${envPath}${API_PATHS.nzbn}`;
     const url = `${baseUrl}/entities/${nzbn}`;
 

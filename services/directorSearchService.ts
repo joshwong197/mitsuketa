@@ -11,13 +11,11 @@ const BASE_URL_PROD = 'https://api.business.govt.nz/gateway';
 export async function searchByPersonName(
     personName: string,
     apiKey: string,
-    environment: 'sandbox' | 'prod' = 'sandbox',
     onLog?: (entry: LogEntry) => void
 ): Promise<PersonCompanyResult[]> {
-    const baseUrl = environment === 'prod' ? BASE_URL_PROD : BASE_URL_SANDBOX;
-    // Endpoint from spec: /companies-office/companies-register/entity-roles/v3/search
-    // Using page-size=1000 to get all results (API default is only 10)
-    const url = `${baseUrl}/companies-office/companies-register/entity-roles/v3/search?name=${encodeURIComponent(personName)}&role-type=ALL&page-size=1000`;
+    const baseUrl = `/api/proxy`;
+    const proxyPath = `/companies-office/companies-register/entity-roles/v3/search?name=${encodeURIComponent(personName)}&role-type=ALL&page-size=1000`;
+    const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
 
     const startTime = Date.now();
 
@@ -26,7 +24,8 @@ export async function searchByPersonName(
         method: 'GET',
         url,
         headers: {
-            'Ocp-Apim-Subscription-Key': '[PROVIDED]',
+            'x-user-api-key': '[PROVIDED]',
+            'x-api-type': 'companies',
             'Accept': 'application/json'
         }
     };
@@ -37,7 +36,8 @@ export async function searchByPersonName(
         const response = await fetch(url, {
             method: 'GET',
             headers: {
-                'Ocp-Apim-Subscription-Key': apiKey,
+                'x-user-api-key': apiKey || '',
+                'x-api-type': 'companies',
                 'Accept': 'application/json'
             }
         });

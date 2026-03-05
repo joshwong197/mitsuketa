@@ -107,28 +107,16 @@ export async function searchDisqualifiedDirectors(
     pageSize: number = 10,
     page: number = 0
 ): Promise<DisqualifiedDirectorSearchResult> {
-    const envPath = config.environment === 'prod' ? 'gateway' : 'sandbox';
-    // Note: The base URL in docs includes /companies-office/companies-register/disqualified-directors/v3
-    // logic in apiService.ts constructs base url as `${BASE_API_URL}/${envPath}${API_PATHS.companies}`
-    // We need to construct the correct path.
-    // Docs: https://api.business.govt.nz/gateway/companies-office/companies-register/disqualified-directors/v3/search
+    const baseUrl = `/api/proxy`;
+    const proxyPath = `${DISQUALIFIED_DIRECTORS_PATH}/search?name=${encodeURIComponent(name)}&page=${page}&page-size=${pageSize}`;
+    const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
 
-    // existing constants.ts likely has BASE_API_URL = "https://api.business.govt.nz"
-    // so we build it carefully.
-
-    const baseUrl = `${BASE_API_URL}/${envPath}${DISQUALIFIED_DIRECTORS_PATH}`;
-    const url = `${baseUrl}/search?name=${encodeURIComponent(name)}&page=${page}&page-size=${pageSize}`;
-
-    // Check for the specific key in config (we will add disqualifiedDirectorsKey to ApiConfig type)
-    // For now using cast or we update type first. I'll treat it as property access on extended type.
-    const apiKey = (config as any).disqualifiedDirectorsKey;
-
-    if (!apiKey) {
-        throw new Error("Disqualified Directors API Key is missing.");
-    }
+    // Optional user key
+    const apiKey = (config as any).disqualifiedDirectorsKey || '';
 
     const response = await safeFetch(url, {
-        'Ocp-Apim-Subscription-Key': apiKey,
+        'x-user-api-key': apiKey,
+        'x-api-type': 'disqualified',
         'Accept': 'application/json'
     }, logger);
 

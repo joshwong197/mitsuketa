@@ -192,10 +192,6 @@ function App() {
   // Search Logic (Level 1: Find Entity or Person)
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!config.nzbnKey || !config.companiesKey) {
-      setError("Please configure API Keys in the top bar first.");
-      return;
-    }
     if (!searchQuery.trim()) return;
 
     if (searchMode === 'person') {
@@ -238,7 +234,7 @@ function App() {
       console.log(`🔍 Searching for person: "${personName}"`);
 
       const searchPromises: Promise<any>[] = [
-        searchByPersonName(personName, config.companiesKey, config.environment, handleLog)
+        searchByPersonName(personName, config.companiesKey, handleLog)
       ];
 
       // Only search disqualified if key is present
