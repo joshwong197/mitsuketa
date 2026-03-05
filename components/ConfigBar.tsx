@@ -25,10 +25,10 @@ export const ConfigBar: React.FC<Props> = ({ config, onConfigChange, theme, togg
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="bg-blue-600 p-2 rounded-lg">
-              <Settings className="text-white" size={20} />
+              <Eye className="text-white" size={20} />
             </div>
             <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-emerald-600 dark:from-blue-400 dark:to-emerald-400 bg-clip-text text-transparent">
-              OrgView
+              Mitsuketa
             </h1>
           </div>
 
@@ -71,16 +71,16 @@ export const ConfigBar: React.FC<Props> = ({ config, onConfigChange, theme, togg
               <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-100 dark:border-blue-800">
                 <h3 className="flex items-center gap-2 text-sm font-bold text-blue-800 dark:text-blue-300 mb-2">
                   <Info size={16} />
-                  About OrgView
+                  About Mitsuketa
                 </h3>
                 <p className="text-sm text-blue-900/80 dark:text-blue-200/80 leading-relaxed mb-2">
-                  OrgView automatically traces corporate ownership and shareholding data across New Zealand's registers.
+                  Mitsuketa automatically traces corporate ownership and shareholding data across New Zealand's registers.
                   It visualizes company structures, uncovers hidden lineage, and enriches records with real-time status updates.
                 </p>
                 <ul className="list-disc pl-5 text-xs text-blue-900/70 dark:text-blue-200/70 space-y-1">
                   <li><strong>Company Mode:</strong> Search any NZ company to generate an interactive map of its shareholders, subsidiaries, and corporate siblings.</li>
                   <li><strong>Individual Mode:</strong> Search for a person to find all companies they act as a Director or Shareholder for.</li>
-                  <li><strong>Risk Intelligence:</strong> OrgView flags companies in external administration (Receivership/Liquidation), removed companies, disqualified directors, and historic insolvency.</li>
+                  <li><strong>Risk Intelligence:</strong> Mitsuketa flags companies in external administration (Receivership/Liquidation), removed companies, disqualified directors, and historic insolvency.</li>
                 </ul>
               </div>
 

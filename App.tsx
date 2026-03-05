@@ -8,7 +8,7 @@ import ReactFlow, {
   Edge,
   Panel,
 } from 'reactflow';
-import { Search, Calendar, Camera, AlertTriangle, Loader2, MousePointer2, Building2, X, Database, ChevronRight, ChevronLeft, Terminal, Activity, Trash2, Download, FileDown, Sparkles, Undo, User, Upload } from 'lucide-react';
+import { Search, Camera, AlertTriangle, Loader2, MousePointer2, Building2, X, Database, ChevronRight, ChevronLeft, Terminal, Activity, Trash2, Download, FileDown, Sparkles, Undo, User, Upload } from 'lucide-react';
 import { ConfigBar } from './components/ConfigBar';
 import { CompanyNode, PersonNode, SummaryNode } from './components/CustomNodes';
 import { NodeContextMenu } from './components/NodeContextMenu';
@@ -46,7 +46,7 @@ function App() {
   // Theme State
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('orgview_theme');
+      const saved = localStorage.getItem('mitsuketa_theme');
       if (saved === 'light' || saved === 'dark') return saved;
       return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
     }
@@ -61,14 +61,14 @@ function App() {
     } else {
       root.classList.remove('dark');
     }
-    localStorage.setItem('orgview_theme', theme);
+    localStorage.setItem('mitsuketa_theme', theme);
   }, [theme]);
 
   const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
 
   // App State
   const [config, setConfig] = useState<ApiConfig>(() => {
-    const saved = localStorage.getItem('orgview_config');
+    const saved = localStorage.getItem('mitsuketa_config');
     return saved ? JSON.parse(saved) : DEFAULT_CONFIG;
   });
 
@@ -79,13 +79,13 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isGraphLoading, setIsGraphLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
+
 
   const [nodes, setNodes, onNodesChange] = useNodesState<GraphNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<GraphEdge>([]);
   const [allNodesInMemory, setAllNodesInMemory] = useState<GraphNode[]>([]); // Full graph stored here
   const [snapshots, setSnapshots] = useState<GraphSnapshot[]>(() => {
-    const saved = localStorage.getItem('orgview_snapshots');
+    const saved = localStorage.getItem('mitsuketa_snapshots');
     return saved ? JSON.parse(saved) : [];
   });
 
@@ -180,12 +180,12 @@ function App() {
 
   // Persist Config
   useEffect(() => {
-    localStorage.setItem('orgview_config', JSON.stringify(config));
+    localStorage.setItem('mitsuketa_config', JSON.stringify(config));
   }, [config]);
 
   // Persist Snapshots
   useEffect(() => {
-    localStorage.setItem('orgview_snapshots', JSON.stringify(snapshots));
+    localStorage.setItem('mitsuketa_snapshots', JSON.stringify(snapshots));
   }, [snapshots]);
 
   // Search Logic (Level 1: Find Entity or Person)
@@ -587,20 +587,20 @@ function App() {
     if (confirm('Delete this snapshot?')) {
       const updated = snapshots.filter(s => s.id !== snapshotId);
       setSnapshots(updated);
-      localStorage.setItem('orgview_snapshots', JSON.stringify(updated));
+      localStorage.setItem('mitsuketa_snapshots', JSON.stringify(updated));
     }
   };
 
   const exportAsPNG = async () => {
     let element: HTMLElement | null = null;
-    let filename = 'orgview';
+    let filename = 'mitsuketa';
 
     if (searchMode === 'person' && personSearchResults.length > 0) {
       element = document.getElementById('person-search-results');
       filename = `person-results-${personSearchName.replace(/[^a-z0-9]/gi, '_')}`;
     } else if (nodes.length > 0) {
       element = document.querySelector('.react-flow') as HTMLElement;
-      filename = `orgview-${new Date().toISOString().split('T')[0]}`;
+      filename = `mitsuketa-${new Date().toISOString().split('T')[0]}`;
     }
 
     if (!element) return;
@@ -645,7 +645,7 @@ function App() {
         pdfWindow.document.write(`
           <html>
             <head>
-              <title>OrgView PDF Export</title>
+              <title>Mitsuketa PDF Export</title>
               <style>
                 body { margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #fff; }
                 img { max-width: 100%; max-height: 100%; object-fit: contain; }
@@ -694,7 +694,7 @@ function App() {
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.download = `orgview-all-snapshots-${new Date().toISOString().split('T')[0]}.json`;
+    link.download = `mitsuketa-all-snapshots-${new Date().toISOString().split('T')[0]}.json`;
     link.href = url;
     link.click();
     URL.revokeObjectURL(url);
@@ -732,7 +732,7 @@ function App() {
 
         const updated = [newSnap, ...snapshots];
         setSnapshots(updated);
-        localStorage.setItem('orgview_snapshots', JSON.stringify(updated));
+        localStorage.setItem('mitsuketa_snapshots', JSON.stringify(updated));
 
       } catch (err) {
         console.error("Import failed", err);
@@ -1119,10 +1119,7 @@ function App() {
     setOriginalLayout(null);
   };
 
-  // Time Travel (Visual Stub)
-  useEffect(() => {
-    setEdges((eds) => eds.map((e) => e)); // Trigger re-render
-  }, [selectedDate, setEdges]);
+
 
   return (
     <div className="h-screen w-screen flex flex-col bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
@@ -1279,18 +1276,7 @@ function App() {
             )}
           </div>
 
-          {/* Time Travel */}
-          <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex-shrink-0">
-            <h2 className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-wider mb-3 flex items-center gap-2">
-              <Calendar size={14} /> Time Travel
-            </h2>
-            <input
-              type="date"
-              className="w-full bg-slate-100 dark:bg-slate-800 text-gray-900 dark:text-white rounded px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 focus:outline-none transition-colors"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-            />
-          </div>
+
 
           {/* Snapshots */}
           <div className="flex-1 overflow-y-auto p-4 min-h-0">
