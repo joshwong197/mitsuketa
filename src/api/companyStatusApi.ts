@@ -224,10 +224,7 @@ export async function enrichCompanyResults(
     concurrency: number = 5,
     onProgress?: (completed: number, total: number) => void
 ): Promise<PersonCompanyResult[]> {
-    if (!config.nzbnKey) {
-        console.warn('⚠️ No NZBN API key, skipping company status enrichment');
-        return results;
-    }
+
 
     // Deduplicate NZBNs to avoid redundant lookups
     const uniqueNzbns = [...new Set(results.map(r => r.nzbn))];
@@ -279,10 +276,7 @@ export async function enrichGraphNodes(
     logger?: LoggerCallback,
     concurrency: number = 5
 ): Promise<GraphNode[]> {
-    if (!config.nzbnKey) {
-        console.warn('⚠️ No NZBN API key, skipping graph node enrichment');
-        return nodes;
-    }
+
 
     // Filter to only company nodes
     const companyNodes = nodes.filter(n => n.data.type === 'company' && n.data.nzbn);
