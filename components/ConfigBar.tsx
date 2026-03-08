@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Settings, Lock, Eye, EyeOff, Save, Moon, Sun, X, Info } from 'lucide-react';
 import { ApiConfig } from '../types';
+import { AboutPage } from './AboutPage';
 
 interface Props {
   config: ApiConfig;
@@ -13,6 +14,7 @@ export const ConfigBar: React.FC<Props> = ({ config, onConfigChange, theme, togg
   const [showKeys, setShowKeys] = useState(false);
   const [localConfig, setLocalConfig] = useState(config);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isAboutOpen, setIsAboutOpen] = useState(false);
 
   const handleSave = () => {
     onConfigChange(localConfig);
@@ -27,12 +29,19 @@ export const ConfigBar: React.FC<Props> = ({ config, onConfigChange, theme, togg
             <div className="bg-blue-600 p-2 rounded-lg">
               <Eye className="text-white" size={20} />
             </div>
-            <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-emerald-600 dark:from-blue-400 dark:to-emerald-400 bg-clip-text text-transparent">
-              Mitsuketa
+            <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-emerald-600 dark:from-blue-400 dark:to-emerald-400 bg-clip-text text-transparent flex items-baseline gap-2">
+              Mitsuketa <span className="text-sm font-normal text-slate-500 dark:text-slate-400">見つけた</span>
             </h1>
           </div>
 
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsAboutOpen(true)}
+              className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors"
+              title="About Mitsuketa"
+            >
+              <Info size={20} />
+            </button>
             <button
               onClick={toggleTheme}
               className="p-2 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors"
@@ -167,6 +176,10 @@ export const ConfigBar: React.FC<Props> = ({ config, onConfigChange, theme, togg
             </div>
           </div>
         </div>
+      )}
+
+      {isAboutOpen && (
+        <AboutPage onClose={() => setIsAboutOpen(false)} />
       )}
     </>
   );

@@ -35,6 +35,8 @@ export interface NodeData {
   sourceRegisterUniqueId?: string; // NZCN - Company number for Companies Office register
   type: NodeType;
   status?: string;
+  entityTypeCode?: string; // e.g. "LimitedPartnershipNz"
+  entityTypeDescription?: string; // e.g. "Limited Partnership"
   isTarget?: boolean; // To identify the center of the "butterfly"
   isHighlighted?: boolean;
   // Visibility/collapse tracking
@@ -171,6 +173,20 @@ export interface NZBNFullEntity {
       }>;
     };
   };
+  roles?: Array<{
+    roleType: string;
+    roleStatus: string;
+    rolePerson?: {
+      firstName?: string;
+      lastName?: string;
+      middleName?: string;
+      fullName?: string;
+    };
+    roleEntity?: {
+      name?: string;
+      nzbn?: string;
+    };
+  }>;
 }
 
 // From /search (Companies Office)

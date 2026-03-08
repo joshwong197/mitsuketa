@@ -109,6 +109,7 @@ function App() {
   const [contextMenu, setContextMenu] = useState<{
     nodeId: string;
     nodeLabel: string;
+    nodeType: string;
     nzbn?: string;
     sourceRegisterUniqueId?: string;
     position: { x: number; y: number };
@@ -145,8 +146,23 @@ function App() {
   // Tab System State
   const MAX_TABS = 10;
   const [activeMainTab, setActiveMainTab] = useState<'company' | 'individual'>('company');
-  const [companyTabs, setCompanyTabs] = useState<CompanyTab[]>([]);
+  const [graphTabs, setGraphTabs] = useState<CompanyTab[]>([]);
   const [individualTabs, setIndividualTabs] = useState<IndividualTab[]>([]);
+
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Global Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+K or Cmd+K to focus search
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
   const [activeCompanyTabId, setActiveCompanyTabId] = useState<string | null>(null);
   const [activeIndividualTabId, setActiveIndividualTabId] = useState<string | null>(null);
 
@@ -361,7 +377,7 @@ function App() {
       isLoading: true
     };
 
-    setCompanyTabs(prev => {
+    setGraphTabs(prev => {
       const updated = prev.length >= MAX_TABS ? [...prev.slice(1), newTab] : [...prev, newTab];
       return updated;
     });
@@ -394,7 +410,7 @@ function App() {
   const handleSubTabClick = (tabId: string) => {
     if (activeMainTab === 'company') {
       setActiveCompanyTabId(tabId);
-      const tab = companyTabs.find(t => t.id === tabId);
+      const tab = graphTabs.find(t => t.id === tabId);
       if (tab) {
         setSearchQuery(tab.searchQuery);
         // Restore graph data from tab
@@ -416,7 +432,7 @@ function App() {
 
   const handleSubTabClose = (tabId: string) => {
     if (activeMainTab === 'company') {
-      setCompanyTabs(prev => {
+      setGraphTabs(prev => {
         const updated = prev.filter(t => t.id !== tabId);
         if (activeCompanyTabId === tabId) {
           const newActive = updated.length > 0 ? updated[updated.length - 1].id : null;
@@ -464,7 +480,7 @@ function App() {
   // Save current graph state back to the active company tab whenever nodes/edges change
   useEffect(() => {
     if (activeCompanyTabId && nodes.length > 0) {
-      setCompanyTabs(prev => prev.map(t =>
+      setGraphTabs(prev => prev.map(t =>
         t.id === activeCompanyTabId
           ? { ...t, nodes: nodes as any, edges: edges as any, allNodesInMemory, isLoading: false }
           : t
@@ -804,6 +820,7 @@ function App() {
     setContextMenu({
       nodeId: node.id,
       nodeLabel: node.data.label,
+      nodeType: node.type || 'companyNode',
       nzbn: node.data.nzbn,
       sourceRegisterUniqueId: node.data.sourceRegisterUniqueId,
       position: { x: event.clientX, y: event.clientY }
@@ -1112,7 +1129,7 @@ function App() {
         toggleTheme={toggleTheme}
       />
 
-      <div className="flex-1 flex mt-16 relative overflow-hidden">
+      <main className="flex-1 flex mt-16 relative overflow-hidden">
         {/* Sidebar Toggle Button - positioned on the edge of the sidebar */}
         <button
           onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
@@ -1168,8 +1185,9 @@ function App() {
             </div>
 
             <form onSubmit={handleSearch} className="flex gap-2 relative">
-              <div className="relative flex-1">
+              <div className="relative flex-1 group">
                 <input
+                  ref={searchInputRef}
                   type="text"
                   placeholder={searchMode === 'person' ? 'Search by director/shareholder name...' : 'Search companies by name or NZBN...'}
                   className="w-full bg-slate-100 dark:bg-slate-800 text-gray-900 dark:text-white rounded-l px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 focus:border-blue-500 focus:outline-none placeholder-slate-500 transition-colors"
@@ -1363,7 +1381,7 @@ function App() {
           <TabBar
             activeMainTab={activeMainTab}
             onMainTabChange={handleMainTabChange}
-            companyTabs={companyTabs.map(t => ({ id: t.id, label: t.label, isLoading: t.isLoading }))}
+            companyTabs={graphTabs.map(t => ({ id: t.id, label: t.label, isLoading: t.isLoading }))}
             individualTabs={individualTabs.map(t => ({ id: t.id, label: t.label, isLoading: t.isEnriching }))}
             activeSubTabId={activeMainTab === 'company' ? activeCompanyTabId : activeIndividualTabId}
             onSubTabClick={handleSubTabClick}
@@ -1387,6 +1405,24 @@ function App() {
                   setSearchQuery('');
                 }}
               />
+            ) : nodes.length === 0 && !isLoading ? (
+              <div className="absolute inset-0 flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-6 text-center">
+                <div className="max-w-md space-y-4">
+                  <div className="mx-auto w-16 h-16 bg-blue-100 dark:bg-blue-900/40 rounded-full flex items-center justify-center mb-6">
+                    <Search className="text-blue-600 dark:text-blue-400" size={32} />
+                  </div>
+                  <h3 className="text-2xl font-bold text-slate-800 dark:text-white">Begin your investigation</h3>
+                  <p className="text-slate-600 dark:text-slate-400 text-sm">
+                    Enter a company name or NZBN in the search bar above to map its corporate structure, or switch to Person Mode to find an individual's directorships.
+                  </p>
+                  <div className="pt-4 flex justify-center gap-2 text-xs text-slate-500 dark:text-slate-500">
+                    <span className="bg-slate-200 dark:bg-slate-800 px-2 py-1 rounded border border-slate-300 dark:border-slate-700">Ctrl</span>
+                    <span>+</span>
+                    <span className="bg-slate-200 dark:bg-slate-800 px-2 py-1 rounded border border-slate-300 dark:border-slate-700">K</span>
+                    <span>to focus search</span>
+                  </div>
+                </div>
+              </div>
             ) : (
               <ReactFlow
                 nodes={nodes}
@@ -1450,6 +1486,7 @@ function App() {
               <NodeContextMenu
                 nodeId={contextMenu.nodeId}
                 nodeLabel={contextMenu.nodeLabel}
+                nodeType={contextMenu.nodeType}
                 nzbn={contextMenu.nzbn}
                 sourceRegisterUniqueId={contextMenu.sourceRegisterUniqueId}
                 position={contextMenu.position}
@@ -1460,6 +1497,11 @@ function App() {
                 onShowDirectors={handleShowDirectors}
                 onExpandStructure={handleExpandStructure}
                 onCollapseBranch={handleCollapseBranch}
+                onSearchPerson={(name: string) => {
+                  setContextMenu(null);
+                  setSearchMode('person');
+                  handlePersonSearch(name);
+                }}
               />
             )}
 
@@ -1528,7 +1570,14 @@ function App() {
             )}
           </div>
         </div>
-      </div>
+      </main>
+
+      {/* Footer Disclaimer */}
+      <footer className="bg-slate-100 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-2 px-4 text-center">
+        <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">
+          <strong>Mitsuketa 見つけた</strong> &bull; Data sourced from MBIE registers &bull; Not for unlawful commercial use
+        </p>
+      </footer>
     </div>
   );
 }

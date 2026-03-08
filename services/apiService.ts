@@ -298,6 +298,80 @@ class OrgSpider {
                     }
                 }
             }
+        } else if (details.roles && details.roles.length > 0) {
+            // Processing non-company roles (e.g. General Partners of a Limited Partnership)
+            for (const role of details.roles) {
+                // Ignore resigned/inactive roles
+                if (role.roleStatus && role.roleStatus.toLowerCase() !== 'active') continue;
+
+                let holderId = '';
+                let holderLabel = '';
+                let isPerson = false;
+                let parentNzbn = '';
+                let parentSourceRegisterUniqueId: string | undefined = undefined;
+
+                if (role.rolePerson?.fullName || role.rolePerson?.firstName) {
+                    holderLabel = role.rolePerson.fullName || `${role.rolePerson.firstName} ${role.rolePerson.lastName}`;
+                    holderId = `IND-${holderLabel.replace(/\s+/g, '-')}-${Math.random().toString(36).substr(2, 5)}`;
+                    isPerson = true;
+                } else if (role.roleEntity?.name || role.roleEntity?.nzbn) {
+                    holderLabel = role.roleEntity.name || 'Unknown Entity';
+                    parentNzbn = role.roleEntity.nzbn || '';
+                    holderId = parentNzbn || `ORG-${Math.random().toString(36).substr(2, 5)}`;
+                    isPerson = false;
+
+                    if (parentNzbn) {
+                        try {
+                            const parentData = await fetchEntityStatusOnly(parentNzbn, this.config, this.nzbnBaseUrl, this.logger);
+                            const isInactive = parentData.status.toLowerCase().includes('removed') ||
+                                parentData.status.toLowerCase().includes('deleted') ||
+                                parentData.status.toLowerCase().includes('liquidat');
+
+                            if (isInactive && !this.config.includeInactive) {
+                                console.log(`[Role Entity: ${holderLabel}] ⏭️ Skipped: Entity is ${parentData.status}`);
+                                continue;
+                            }
+                            parentSourceRegisterUniqueId = parentData.sourceRegisterUniqueId;
+                        } catch (e) {
+                            console.warn(`Failed to verify role entity status for ${parentNzbn}`, e);
+                            continue;
+                        }
+                    }
+                } else {
+                    continue; // Skip if no person or entity details
+                }
+
+                if (!holderId || this.nodes.has(holderId)) continue;
+
+                this.addNode({
+                    id: holderId,
+                    type: isPerson ? 'personNode' : 'companyNode',
+                    data: {
+                        label: holderLabel,
+                        nzbn: parentNzbn,
+                        sourceRegisterUniqueId: parentSourceRegisterUniqueId,
+                        type: isPerson ? NodeType.PERSON : NodeType.COMPANY,
+                        status: role.roleType || 'Entity Role',
+                        entityTypeDescription: isPerson ? undefined : 'Role Entity'
+                    },
+                    position: { x: 0, y: 0 }
+                });
+
+                this.addEdge(holderId, details.nzbn, role.roleType, 'parent');
+
+                if (!isPerson && parentNzbn && !this.visited.has(parentNzbn)) {
+                    this.visited.add(parentNzbn);
+                    try {
+                        if (holderLabel) {
+                            await this.crawlSiblings(parentNzbn, holderLabel, details.nzbn);
+                        }
+                        const parentDetails = await fetchEntityDetails(parentNzbn, this.config, this.nzbnBaseUrl, this.logger);
+                        await this.crawlUpstream(parentDetails, depth + 1);
+                    } catch (e) {
+                        console.warn(`Failed upstream/sibling fetch for role ${parentNzbn}`, e);
+                    }
+                }
+            }
         }
     }
 

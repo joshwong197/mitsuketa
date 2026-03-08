@@ -4,6 +4,7 @@ import { Users, Maximize2, Eye, Minimize2, ExternalLink } from 'lucide-react';
 interface NodeContextMenuProps {
     nodeId: string;
     nodeLabel: string;
+    nodeType: string;
     nzbn?: string;
     sourceRegisterUniqueId?: string; // NZCN - Company number
     position: { x: number; y: number };
@@ -14,11 +15,13 @@ interface NodeContextMenuProps {
     onShowDirectors: (nodeId: string, nzbn: string, label: string) => void;
     onExpandStructure: (nodeId: string, nzbn: string, label: string) => void;
     onCollapseBranch: (nodeId: string, nzbn: string, label: string) => void;
+    onSearchPerson: (name: string) => void;
 }
 
 export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
     nodeId,
     nodeLabel,
+    nodeType,
     nzbn,
     sourceRegisterUniqueId,
     position,
@@ -29,6 +32,7 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
     onShowDirectors,
     onExpandStructure,
     onCollapseBranch,
+    onSearchPerson,
 }) => {
     const menuItems = [
         {
@@ -77,8 +81,20 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
                 onClose();
             },
             disabled: !nzbn,
+            hide: nodeType !== 'companyNode' && nodeType !== 'summaryNode',
         },
+        {
+            icon: Users,
+            label: 'Search as Individual',
+            onClick: () => {
+                onSearchPerson(nodeLabel);
+                onClose();
+            },
+            hide: nodeType !== 'personNode',
+        }
     ];
+
+    const visibleItems = menuItems.filter(item => !item.hide);
 
     return (
         <>
@@ -110,7 +126,7 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
 
                 {/* Menu Items */}
                 <div className="py-1">
-                    {menuItems.map((item, index) => {
+                    {visibleItems.map((item, index) => {
                         const Icon = item.icon;
                         return (
                             <button

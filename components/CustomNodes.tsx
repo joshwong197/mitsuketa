@@ -63,6 +63,13 @@ export const CompanyNode = memo(({ data, selected }: NodeProps<NodeData>) => {
                 </span>
               )}
 
+              {/* Entity Type Badge (for non-company entities) */}
+              {data.entityTypeDescription && data.entityTypeCode !== 'NZCompany' && (
+                <span className="inline-block px-2 py-0.5 text-[10px] uppercase tracking-wide rounded-full font-bold max-w-full truncate bg-purple-100 dark:bg-purple-900/60 text-purple-700 dark:text-purple-400" title={data.entityTypeDescription}>
+                  {data.entityTypeDescription}
+                </span>
+              )}
+
               {/* External Administration Alert */}
               {data.isInExternalAdmin && data.externalAdminType && (
                 <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/40 border border-orange-200 dark:border-orange-800 shrink-0" title={data.externalAdminType}>
