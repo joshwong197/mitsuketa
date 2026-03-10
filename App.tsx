@@ -540,11 +540,17 @@ function App() {
           }))
         );
 
-        // Store ALL nodes in memory
-        setAllNodesInMemory(processedNodes);
+        // Enrich nodes with insolvency/admin status BEFORE rendering
+        // so all badges (PREV: IN LIQUIDATION, external admin, Removed, etc.) appear instantly
+        console.log('🔍 Enriching nodes with NZBN status data before render...');
+        const enrichedNodes = await enrichGraphNodes(processedNodes, { ...config, includeInactive }, handleLog);
+        console.log('✅ Enrichment complete, rendering graph with full status data');
+
+        // Store ALL enriched nodes in memory
+        setAllNodesInMemory(enrichedNodes);
 
         // Filter to show only visible nodes
-        const visibleNodes = processedNodes.filter(n => n.data.isVisible);
+        const visibleNodes = enrichedNodes.filter(n => n.data.isVisible);
         console.log('👁️ VISIBLE NODES:', visibleNodes.map(n => n.data.label));
 
         const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
@@ -554,7 +560,7 @@ function App() {
         setNodes(layoutedNodes);
         setEdges(layoutedEdges);
 
-        // AUTO-TIDY: Optimize layout after one paint frame (not 300ms artificial delay)
+        // AUTO-TIDY: Optimize layout after one paint frame
         console.log('🎨 Auto-Tidy: Scheduling automatic layout optimization...');
         requestAnimationFrame(() => {
           console.log('🎨 Auto-Tidy: Running now...');
@@ -562,15 +568,6 @@ function App() {
           setNodes(optimized.nodes);
           setEdges(optimized.edges);
           console.log('✨ Auto-Tidy: Complete!');
-        });
-
-        // OPTIMIZATION: Start enrichment immediately — don't gate behind tidy-up
-        enrichGraphNodes(processedNodes, { ...config, includeInactive }, handleLog).then(enrichedNodes => {
-          setAllNodesInMemory(enrichedNodes);
-          setNodes(prevVars => prevVars.map(n => {
-            const enriched = enrichedNodes.find(en => en.id === n.id);
-            return enriched ? { ...n, data: enriched.data } : n;
-          }) as any);
         });
       }
     } catch (err: any) {

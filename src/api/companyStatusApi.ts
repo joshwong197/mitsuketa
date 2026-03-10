@@ -160,11 +160,12 @@ async function fetchCompanyStatus(
         }
         // ---------------------
 
-        // FALLBACK: If the main API response has no insolvency data, check the entity status history.
-        // This catches companies that were previously in liquidation but are now Registered again
-        // (e.g. Mender Construction Limited — in liquidation May-Jul 2024, now Registered).
-        // Skip only for entities already flagged as in external admin (they already show the orange badge).
-        if (!hasHistoricInsolvency && !isInExternalAdmin) {
+        // FALLBACK: If we still have no historic insolvency data, check the entity status history.
+        // This catches:
+        //   - Companies previously in liquidation but now Registered (e.g. Mender Construction)
+        //   - Companies currently in admin with DIFFERENT past admin types (e.g. Evergreen Modular:
+        //     currently In Liquidation, previously in Voluntary Administration)
+        if (!hasHistoricInsolvency) {
             try {
                 const historyProxyPath = `${API_PATHS.nzbn}/entities/${nzbn}/history/entity-statuses`;
                 const historyUrl = `/api/proxy?path=${encodeURIComponent(historyProxyPath)}`;
@@ -180,15 +181,28 @@ async function fetchCompanyStatus(
                     const historyData = await historyResponse.json();
 
                     if (Array.isArray(historyData)) {
-                        // Look for any past status that matches an external administration status
-                        const insolvencyStatus = historyData.find(statusObj => {
+                        // Look for past statuses that match external administration,
+                        // but exclude the CURRENT admin type (avoid "PREV: IN LIQUIDATION"
+                        // for a company that is currently In Liquidation)
+                        const currentTypeLC = (externalAdminType || '').toLowerCase();
+
+                        const pastInsolvencies = historyData.filter(statusObj => {
                             const desc = (statusObj.entityStatusDescription || '').toLowerCase();
-                            return EXTERNAL_ADMIN_STATUSES.some(adminStatus => desc.includes(adminStatus.toLowerCase()));
+                            // Must match an admin status
+                            const isAdmin = EXTERNAL_ADMIN_STATUSES.some(
+                                adminStatus => desc.includes(adminStatus.toLowerCase())
+                            );
+                            if (!isAdmin) return false;
+                            // Exclude if it matches the current admin type
+                            if (currentTypeLC && desc === currentTypeLC) return false;
+                            return true;
                         });
 
-                        if (insolvencyStatus) {
+                        if (pastInsolvencies.length > 0) {
                             hasHistoricInsolvency = true;
-                            historicInsolvencyType = insolvencyStatus.entityStatusDescription;
+                            // Deduplicate types
+                            const types = [...new Set(pastInsolvencies.map(s => s.entityStatusDescription))];
+                            historicInsolvencyType = types.join(' & ');
                             console.log(`[DEBUG] Found historic insolvency via Status History API for ${nzbn}:`, historicInsolvencyType);
                         }
                     }
