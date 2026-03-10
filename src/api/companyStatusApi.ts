@@ -16,6 +16,12 @@ const EXTERNAL_ADMIN_STATUSES = [
  */
 const INSOLVENCY_TYPES = ['Liquidation', 'Receivership', 'Voluntary Administration', 'Statutory Management'];
 
+/**
+ * Core keywords for matching admin/insolvency statuses in history data.
+ * Works for both "In Liquidation" and "Liquidation" (NZBN API returns inconsistent formats).
+ */
+const ADMIN_KEYWORDS = ['receivership', 'liquidation', 'voluntary administration', 'statutory administration'];
+
 interface NZBNCompanyDetails {
     removalCommenced?: boolean;
     insolvencyDetails?: {
@@ -181,20 +187,22 @@ async function fetchCompanyStatus(
                     const historyData = await historyResponse.json();
 
                     if (Array.isArray(historyData)) {
-                        // Look for past statuses that match external administration,
-                        // but exclude the CURRENT admin type (avoid "PREV: IN LIQUIDATION"
-                        // for a company that is currently In Liquidation)
+                        // Look for past statuses that match admin/insolvency keywords,
+                        // but exclude the CURRENT admin type.
+                        // Uses ADMIN_KEYWORDS for flexible matching — handles both
+                        // "In Voluntary Administration" and "Voluntary Administration"
                         const currentTypeLC = (externalAdminType || '').toLowerCase();
+
+                        // Find which keyword matches the current type (if any)
+                        const currentKeyword = ADMIN_KEYWORDS.find(kw => currentTypeLC.includes(kw));
 
                         const pastInsolvencies = historyData.filter(statusObj => {
                             const desc = (statusObj.entityStatusDescription || '').toLowerCase();
-                            // Must match an admin status
-                            const isAdmin = EXTERNAL_ADMIN_STATUSES.some(
-                                adminStatus => desc.includes(adminStatus.toLowerCase())
-                            );
-                            if (!isAdmin) return false;
-                            // Exclude if it matches the current admin type
-                            if (currentTypeLC && desc === currentTypeLC) return false;
+                            // Must match an admin keyword
+                            const matchedKeyword = ADMIN_KEYWORDS.find(kw => desc.includes(kw));
+                            if (!matchedKeyword) return false;
+                            // Exclude if it matches the same keyword as current admin type
+                            if (currentKeyword && matchedKeyword === currentKeyword) return false;
                             return true;
                         });
 

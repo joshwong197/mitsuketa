@@ -302,7 +302,7 @@ class OrgSpider {
                     });
 
                     // Add Edge (Parent -> Child)
-                    this.addEdge(holderId, details.nzbn, 'Parent Of', 'parent');
+                    this.addEdge(holderId, details.nzbn, 'Shareholder', 'parent');
 
                     // Recursive Upstream for Corporate Parents
                     if (!isPerson && parentNzbn && !this.visited.has(parentNzbn)) {
@@ -632,7 +632,7 @@ class OrgSpider {
                     position: { x: 0, y: 0 }
                 });
 
-                this.addEdge(parentNzbn, siblingNzbn, 'Common Owner', 'sibling');
+                this.addEdge(parentNzbn, siblingNzbn, 'Sibling', 'sibling');
                 siblingCount++;
             }
         }
