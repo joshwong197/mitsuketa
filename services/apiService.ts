@@ -539,10 +539,9 @@ class OrgSpider {
                 }
 
                 // Get Share Percentage for Edge Label
-                let shareLabel = '';
-                if (holding.sharePercentage !== undefined) {
-                    shareLabel = `▼ ${holding.sharePercentage}%`;
-                }
+                const shareLabel = holding.sharePercentage !== undefined && holding.sharePercentage > 0
+                    ? `▼ Shareholder (${holding.sharePercentage}%)`
+                    : '▼ Shareholder';
 
                 // Visual Debugging Console Log
                 console.log(`%c[GraphBuilder] Creating Subsidiary Node: ${childNameRaw} (${childNzbn})`, "color: lime; font-weight: bold");
