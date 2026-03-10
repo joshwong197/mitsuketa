@@ -661,7 +661,6 @@ class OrgSpider {
             id,
             source,
             target,
-            label,
             data: { percentage: 0, label, relationshipType: type },
             animated: type === 'subsidiary',
             style: { stroke: type === 'sibling' ? '#94a3b8' : '#2563eb' },
