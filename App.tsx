@@ -1472,8 +1472,11 @@ function App() {
                     <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur border border-slate-200 dark:border-slate-700 p-8 rounded-xl text-center max-w-md shadow-xl">
                       <MousePointer2 className="w-12 h-12 text-slate-400 dark:text-slate-600 mx-auto mb-4" />
                       <h3 className="text-xl font-bold text-slate-800 dark:text-slate-200 mb-2">Ready to Map</h3>
-                      <p className="text-slate-600 dark:text-slate-400">
+                      <p className="text-slate-600 dark:text-slate-400 mb-4">
                         Search for a company by name or NZBN in the sidebar to begin.
+                      </p>
+                      <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight">
+                        Data sourced from NZ Government registers (MBIE). Provided for informational purposes only.
                       </p>
                     </div>
                   </Panel>

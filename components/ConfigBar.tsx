@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, Lock, Eye, EyeOff, Save, Moon, Sun, X, Info } from 'lucide-react';
+import { Settings, Lock, Eye, EyeOff, Save, Moon, Sun, X, Info, Shield } from 'lucide-react';
 import { ApiConfig } from '../types';
 import { AboutPage } from './AboutPage';
 
@@ -66,7 +66,7 @@ export const ConfigBar: React.FC<Props> = ({ config, onConfigChange, theme, togg
             <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
               <h2 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
                 <Settings size={20} className="text-blue-600" />
-                Configuration & Settings
+                Settings
               </h2>
               <button
                 onClick={() => setIsSettingsOpen(false)}
@@ -77,24 +77,26 @@ export const ConfigBar: React.FC<Props> = ({ config, onConfigChange, theme, togg
             </div>
 
             <div className="p-6 overflow-y-auto">
-              <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-100 dark:border-blue-800">
-                <h3 className="flex items-center gap-2 text-sm font-bold text-blue-800 dark:text-blue-300 mb-2">
-                  <Info size={16} />
-                  About Mitsuketa
+              {/* Data Source & Terms of Use */}
+              <div className="mb-6 bg-amber-50 dark:bg-amber-900/10 rounded-lg p-4 border-l-4 border-amber-500">
+                <h3 className="flex items-center gap-2 text-sm font-bold text-amber-800 dark:text-amber-500 mb-2">
+                  <Shield size={16} /> Data Source & Terms of Use
                 </h3>
-                <p className="text-sm text-blue-900/80 dark:text-blue-200/80 leading-relaxed mb-2">
-                  Mitsuketa automatically traces corporate ownership and shareholding data across New Zealand's registers.
-                  It visualizes company structures, uncovers hidden lineage, and enriches records with real-time status updates.
+                <p className="text-xs text-amber-900/80 dark:text-amber-200/80 leading-relaxed mb-2">
+                  All data is sourced from publicly accessible New Zealand Government registers (NZBN, Companies Office,
+                  Insolvency Register, Disqualified Directors) administered by MBIE.
+                  Mitsuketa does not guarantee the accuracy or completeness of this data.
+                  This tool is provided for informational and analytical purposes only.
                 </p>
-                <ul className="list-disc pl-5 text-xs text-blue-900/70 dark:text-blue-200/70 space-y-1">
-                  <li><strong>Company Mode:</strong> Search any NZ company to generate an interactive map of its shareholders, subsidiaries, and corporate siblings.</li>
-                  <li><strong>Individual Mode:</strong> Search for a person to find all companies they act as a Director or Shareholder for.</li>
-                  <li><strong>Risk Intelligence:</strong> Mitsuketa flags companies in external administration (Receivership/Liquidation), removed companies, disqualified directors, and historic insolvency.</li>
-                </ul>
               </div>
 
               <div className="space-y-4">
-                <h3 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider mb-2">API Keys</h3>
+                <div className="flex items-baseline justify-between mb-2">
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">API Keys</h3>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 -mt-2 mb-3">
+                  Mitsuketa works out of the box — no API keys required. If you have your own MBIE API keys and want to track your own usage, you can add them here.
+                </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1">
