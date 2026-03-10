@@ -235,7 +235,14 @@ class OrgSpider {
                 ));
             }
 
+            const totalShares = shareholdings.numberOfShares || 0;
+
             for (const alloc of shareholdings.shareAllocation) {
+                // Calculate share percentage for this allocation
+                const allocShares = alloc.allocation || 0;
+                const sharePercent = (totalShares > 0 && allocShares > 0)
+                    ? Math.round((allocShares / totalShares) * 100)
+                    : 0;
 
                 for (const holder of alloc.shareholder) {
                     // Process all shareholders, even if extensive
@@ -301,8 +308,11 @@ class OrgSpider {
                         position: { x: 0, y: 0 }
                     });
 
-                    // Add Edge (Parent -> Child)
-                    this.addEdge(holderId, details.nzbn, '▼ Shareholder', 'parent');
+                    // Add Edge (Parent -> Child) with share percentage if available
+                    const edgeLabel = sharePercent > 0
+                        ? `▼ Shareholder (${sharePercent}%)`
+                        : '▼ Shareholder';
+                    this.addEdge(holderId, details.nzbn, edgeLabel, 'parent');
 
                     // Recursive Upstream for Corporate Parents
                     if (!isPerson && parentNzbn && !this.visited.has(parentNzbn)) {
