@@ -52,7 +52,7 @@ export const CompanyNode = memo(({ data, selected }: NodeProps<NodeData>) => {
             </p>
             {/* Status Badge */}
             <div className="flex flex-wrap gap-1 mt-2">
-              {data.status && (
+              {data.status && !data.isInExternalAdmin && (
                 <span className={`
                   inline-block px-2 py-0.5 text-[10px] uppercase tracking-wide rounded-full font-bold max-w-full truncate
                   ${data.status.toLowerCase().includes('registered')

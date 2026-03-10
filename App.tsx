@@ -1230,6 +1230,9 @@ function App() {
               />
               <label htmlFor="include-inactive" className="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
                 Include inactive/removed entities
+                <span className="block text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 leading-tight">
+                  Expands graph to show removed parents and subsidiaries
+                </span>
               </label>
             </div>
 

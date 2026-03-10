@@ -129,6 +129,19 @@ async function fetchCompanyStatus(
             });
         }
 
+        // If currently in external admin, remove the matching current insolvency type
+        // so the PREV badge only shows genuinely different past types.
+        // E.g. "In Liquidation" + insolvencies ["Liquidation", "Voluntary Administration"]
+        //   → remove "Liquidation" → PREV shows only "VOLUNTARY ADMINISTRATION"
+        if (isInExternalAdmin && externalAdminType) {
+            const currentType = externalAdminType.toLowerCase();
+            for (const insType of allInsolvencies) {
+                if (currentType.includes(insType.toLowerCase())) {
+                    allInsolvencies.delete(insType);
+                }
+            }
+        }
+
         if (allInsolvencies.size > 0) {
             hasHistoricInsolvency = true;
             historicInsolvencyType = Array.from(allInsolvencies).join(' & ');
@@ -321,7 +334,9 @@ export async function enrichGraphNodes(
                 removalCommenced: status.removalCommenced,
                 hasHistoricInsolvency: status.hasHistoricInsolvency,
                 historicInsolvencyType: status.historicInsolvencyType,
-                // Do not override basic status if we don't want it, but maybe map it
+                // Update display status so parent/child nodes show their real status
+                // (e.g. "Removed" instead of "Parent")
+                status: status.entityStatusDescription || node.data.status,
             }
         };
     });
