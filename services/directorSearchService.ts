@@ -57,8 +57,8 @@ export async function searchByPersonName(
 
         console.log(`✅ Found ${data.roles?.length || 0} role(s) for "${personName}"`);
 
-        // Process and deduplicate results
-        return processPersonSearchResults(data);
+        // Process and deduplicate results (pass search name for client-side filtering)
+        return processPersonSearchResults(data, personName);
 
     } catch (error: any) {
         logEntry.message = `❌ Error: ${error.message}`;
@@ -71,17 +71,47 @@ export async function searchByPersonName(
 /**
  * Process raw API results into PersonCompanyResult format
  * Deduplicates companies where person has multiple roles
+ * @param searchName Optional search name for client-side exact name filtering
  */
-function processPersonSearchResults(data: CompaniesRoleSearchResult): PersonCompanyResult[] {
+function processPersonSearchResults(data: CompaniesRoleSearchResult, searchName?: string): PersonCompanyResult[] {
     if (!data.roles || data.roles.length === 0) {
         return [];
+    }
+
+    let roles = data.roles;
+
+    // Client-side name filtering: The Companies Office API does substring matching,
+    // so "Yang, Yang" returns thousands of results for anyone with "Yang" anywhere in name.
+    // Filter to only roles where the person name closely matches the search query.
+    if (searchName) {
+        const normalizedSearch = searchName.toLowerCase().replace(/[,.\-]/g, ' ').trim();
+        const searchParts = normalizedSearch.split(/\s+/).filter(Boolean);
+
+        if (searchParts.length > 0) {
+            roles = roles.filter(role => {
+                const first = (role.firstName || '').toLowerCase().trim();
+                const middle = (role.middleName || '').toLowerCase().trim();
+                const last = (role.lastName || '').toLowerCase().trim();
+
+                // Build list of name parts from the API role
+                const nameParts = [first, middle, last].filter(Boolean);
+
+                // Every search term must match a complete name part (first, middle, or last)
+                // or be a prefix of a name part (to handle abbreviations like "Rob" → "Robert")
+                return searchParts.every(part =>
+                    nameParts.some(np => np === part || np.startsWith(part))
+                );
+            });
+
+            console.log(`🎯 Name filter: ${data.roles.length} → ${roles.length} roles (search: "${searchName}")`);
+        }
     }
 
     // Group by company NZBN
     const companyMap = new Map<string, PersonCompanyResult>();
 
-    console.log(`📋 Processing ${data.roles.length} role(s) from API`);
-    data.roles.forEach((role, index) => {
+    console.log(`📋 Processing ${roles.length} role(s) from API`);
+    roles.forEach((role, index) => {
         console.log(`  Role ${index + 1}: ${role.associatedCompanyName} (${role.associatedCompanyNzbn}) - ${role.roleType}`);
         if (!role.associatedCompanyName || !role.associatedCompanyNzbn) {
             console.log(`    🔍 Full role object:`, JSON.stringify(role, null, 2));

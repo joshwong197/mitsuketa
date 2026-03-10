@@ -147,9 +147,11 @@ async function fetchCompanyStatus(
         }
         // ---------------------
 
-        // FALLBACK FOR REMOVED COMPANIES: If the main API response doesn't have an insolvencies array,
-        // we can fetch the entity status history to see if it was previously in liquidation/receivership.
-        if (isRemoved && !hasHistoricInsolvency) {
+        // FALLBACK: If the main API response has no insolvency data, check the entity status history.
+        // This catches companies that were previously in liquidation but are now Registered again
+        // (e.g. Mender Construction Limited — in liquidation May-Jul 2024, now Registered).
+        // Skip only for entities already flagged as in external admin (they already show the orange badge).
+        if (!hasHistoricInsolvency && !isInExternalAdmin) {
             try {
                 const historyProxyPath = `${API_PATHS.nzbn}/entities/${nzbn}/history/entity-statuses`;
                 const historyUrl = `/api/proxy?path=${encodeURIComponent(historyProxyPath)}`;
