@@ -302,7 +302,7 @@ class OrgSpider {
                     });
 
                     // Add Edge (Parent -> Child)
-                    this.addEdge(holderId, details.nzbn, 'Shareholder', 'parent');
+                    this.addEdge(holderId, details.nzbn, '▼ Shareholder', 'parent');
 
                     // Recursive Upstream for Corporate Parents
                     if (!isPerson && parentNzbn && !this.visited.has(parentNzbn)) {
@@ -389,7 +389,7 @@ class OrgSpider {
                     position: { x: 0, y: 0 }
                 });
 
-                this.addEdge(holderId, details.nzbn, role.roleType, 'parent');
+                this.addEdge(holderId, details.nzbn, `▼ ${role.roleType}`, 'parent');
 
                 if (!isPerson && parentNzbn && !this.visited.has(parentNzbn)) {
                     this.visited.add(parentNzbn);
@@ -531,7 +531,7 @@ class OrgSpider {
                 // Get Share Percentage for Edge Label
                 let shareLabel = '';
                 if (holding.sharePercentage !== undefined) {
-                    shareLabel = `${holding.sharePercentage}%`;
+                    shareLabel = `▼ ${holding.sharePercentage}%`;
                 }
 
                 // Visual Debugging Console Log
