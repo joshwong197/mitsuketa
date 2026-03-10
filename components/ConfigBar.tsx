@@ -36,7 +36,7 @@ export const ConfigBar: React.FC<Props> = ({ config, onConfigChange, theme, togg
 
           <button
             onClick={() => setIsAboutOpen(true)}
-            className="text-[10px] text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors cursor-pointer hidden md:block"
+            className="text-xs text-amber-600/70 dark:text-amber-500/60 hover:text-amber-700 dark:hover:text-amber-400 transition-colors cursor-pointer hidden md:block"
             title="View Data Source & Terms of Use"
           >
             Data sourced from MBIE registers. Not for unlawful commercial use.

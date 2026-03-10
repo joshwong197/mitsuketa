@@ -1575,10 +1575,10 @@ function App() {
         </div>
       </main>
 
-      {/* Footer Disclaimer */}
+      {/* Footer */}
       <footer className="bg-slate-100 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-2 px-4 text-center">
         <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">
-          <strong>Mitsuketa 見つけた</strong> &bull; Data sourced from MBIE registers &bull; Not for unlawful commercial use
+          <strong>Mitsuketa</strong> 見つけた
         </p>
       </footer>
     </div>
