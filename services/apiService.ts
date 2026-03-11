@@ -932,19 +932,9 @@ async function fetchDirectorsByEntityName(name: string, config: ApiConfig, baseU
 export const searchEntities = async (term: string, config: ApiConfig, logger?: LoggerCallback, page: number = 0): Promise<EntitySearchResponse> => {
     const baseUrl = `/api/proxy`;
     const trimmed = term.trim();
-
-    // If purely numeric and NOT a 13-digit NZBN, treat as a registration/company number
-    const isRegistrationNumber = /^\d+$/.test(trimmed) && trimmed.length !== 13;
-
-    let proxyPath: string;
-    if (isRegistrationNumber) {
-        const encodedId = encodeURIComponent(trimmed);
-        proxyPath = `${API_PATHS.nzbn}/entities?source-register-unique-id=${encodedId}&page-size=10&page=${page}`;
-    } else {
-        // Name or NZBN – use quoted exact-match search
-        const encodedTerm = encodeURIComponent(`"${trimmed}"`);
-        proxyPath = `${API_PATHS.nzbn}/entities?search-term=${encodedTerm}&page-size=10&page=${page}`;
-    }
+    // Use quoted search-term for all inputs (names, NZBNs, company/registration numbers)
+    const encodedTerm = encodeURIComponent(`"${trimmed}"`);
+    const proxyPath = `${API_PATHS.nzbn}/entities?search-term=${encodedTerm}&page-size=10&page=${page}`;
     const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
 
     const response = await safeFetch(url, {
