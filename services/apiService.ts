@@ -465,23 +465,18 @@ class OrgSpider {
             });
         }
 
-        // --- Mega-node detection for trustee/nominee entities ---
-        const TRUSTEE_KEYWORDS = ['TRUSTEE', 'NOMINEE', 'CUSTODIAN'];
-        const upperOwnerName = ownerName.toUpperCase();
-        const isTrusteeEntity = TRUSTEE_KEYWORDS.some(kw => upperOwnerName.includes(kw));
-
+        // --- Mega-node detection: cap ANY entity with too many subsidiaries ---
+        // Not restricted to trustee/nominee names — holding companies, capital firms, etc. can be just as explosive
         let totalHoldings = 0;
-        if (isTrusteeEntity) {
-            for (const r of results.roles) {
-                const isOrg = r.roleType?.includes('Shareholder') && !r.roleType?.includes('Individual') && !r.roleType?.includes('Director');
-                if (isOrg && r.shareholdings) {
-                    totalHoldings += r.shareholdings.length;
-                }
+        for (const r of results.roles) {
+            const isOrg = r.roleType?.includes('Shareholder') && !r.roleType?.includes('Individual') && !r.roleType?.includes('Director');
+            if (isOrg && r.shareholdings) {
+                totalHoldings += r.shareholdings.length;
             }
         }
-        const isMegaNode = isTrusteeEntity && totalHoldings > 50;
+        const isMegaNode = totalHoldings > 50;
         if (isMegaNode) {
-            console.log(`%c[Mega-Node] ${ownerName} detected as trustee mega-node with ${totalHoldings} subsidiaries — recursion halted`, "color: #ff6600; font-weight: bold");
+            console.log(`%c[Mega-Node] ${ownerName} detected as mega-node with ${totalHoldings} subsidiaries — skipped entirely`, "color: #ff6600; font-weight: bold");
             // Mark the owner node as capped
             const ownerNode = this.nodes.get(ownerNzbn);
             if (ownerNode) {
