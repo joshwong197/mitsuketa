@@ -6,6 +6,7 @@ interface NodeContextMenuProps {
     nodeLabel: string;
     nodeType: string;
     nzbn?: string;
+    isCapped?: boolean;
     sourceRegisterUniqueId?: string; // NZCN - Company number
     position: { x: number; y: number };
     onClose: () => void;
@@ -23,6 +24,7 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
     nodeLabel,
     nodeType,
     nzbn,
+    isCapped,
     sourceRegisterUniqueId,
     position,
     onClose,
@@ -66,7 +68,7 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
         },
         {
             icon: Maximize2,
-            label: 'Expand Full Structure',
+            label: isCapped ? 'Fetch & Expand Structure' : 'Expand Full Structure',
             onClick: () => {
                 if (nzbn) onExpandStructure(nodeId, nzbn, nodeLabel);
                 onClose();

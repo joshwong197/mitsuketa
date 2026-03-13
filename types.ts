@@ -44,6 +44,9 @@ export interface NodeData {
   isDirectLineage?: boolean;    // Is this in direct path from search root?
   isBranchExpanded?: boolean;   // Has this node's hidden branch been expanded?
   hiddenDescendantCount?: number; // Total hidden descendants (for badge)
+  isCapped?: boolean;           // Node was truncated during crawl (mega-node trustee)
+  cappedChildCount?: number;    // Total subsidiaries that were capped
+  isExpanding?: boolean;        // Currently being lazy-loaded via expand
   appointmentDate?: string; // ISO Date string
   vacationDate?: string; // ISO Date string
   // Insolvency Status properties

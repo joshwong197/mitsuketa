@@ -177,12 +177,12 @@ class OrgSpider {
                     parentNode.data.label.replace(/^\d+\s*-\s*/, '').trim();
 
                 console.log(`🔍 API search name: "${cleanName}" (original label: "${parentNode.data.label}")`);
-                await this.crawlDownstream(parentNzbn, cleanName, 0, onDebug);
+                await this.crawlDownstream(parentNzbn, cleanName, 0, onDebug, 1);
             }
         });
 
         // Phase 3 runs IN PARALLEL with all Phase 2 parent expansions
-        const phase3Promise = this.crawlDownstream(rootDetails.nzbn, rootDetails.entityName, 0, onDebug);
+        const phase3Promise = this.crawlDownstream(rootDetails.nzbn, rootDetails.entityName, 0, onDebug, 2);
 
         await Promise.all([...phase2Promises, phase3Promise]);
 
@@ -416,8 +416,8 @@ class OrgSpider {
     }
 
     // --- Downstream: Find who the target owns ---
-    private async crawlDownstream(ownerNzbn: string, ownerName: string, depth: number = 0, onDebug?: DebugCallback) {
-        if (depth > 2) return;
+    private async crawlDownstream(ownerNzbn: string, ownerName: string, depth: number = 0, onDebug?: DebugCallback, maxDepth: number = 2) {
+        if (depth > maxDepth) return;
         // OPTIMIZATION: Use smart rate limiting instead of hardcoded 150ms delay.
         // Since Roles API takes ~11s per call, we never hit 10 req/s — this becomes a no-op.
         await this.smartDelay();
@@ -463,6 +463,31 @@ class OrgSpider {
                 orgShareholderCount: orgShareholders.length,
                 firstMatch: firstAssociated
             });
+        }
+
+        // --- Mega-node detection for trustee/nominee entities ---
+        const TRUSTEE_KEYWORDS = ['TRUSTEE', 'NOMINEE', 'CUSTODIAN'];
+        const upperOwnerName = ownerName.toUpperCase();
+        const isTrusteeEntity = TRUSTEE_KEYWORDS.some(kw => upperOwnerName.includes(kw));
+
+        let totalHoldings = 0;
+        if (isTrusteeEntity) {
+            for (const r of results.roles) {
+                const isOrg = r.roleType?.includes('Shareholder') && !r.roleType?.includes('Individual') && !r.roleType?.includes('Director');
+                if (isOrg && r.shareholdings) {
+                    totalHoldings += r.shareholdings.length;
+                }
+            }
+        }
+        const isMegaNode = isTrusteeEntity && totalHoldings > 50;
+        if (isMegaNode) {
+            console.log(`%c[Mega-Node] ${ownerName} detected as trustee mega-node with ${totalHoldings} subsidiaries — recursion halted`, "color: #ff6600; font-weight: bold");
+            // Mark the owner node as capped
+            const ownerNode = this.nodes.get(ownerNzbn);
+            if (ownerNode) {
+                ownerNode.data.isCapped = true;
+                ownerNode.data.cappedChildCount = totalHoldings;
+            }
         }
 
         for (const role of results.roles) {
@@ -587,8 +612,10 @@ class OrgSpider {
                         position: { x: 0, y: (depth + 1) * 200 }
                     });
 
-                    // Recurse downstream
-                    await this.crawlDownstream(childNzbn, childLabel, depth + 1, onDebug);
+                    // Recurse downstream (skip for mega-node trustees to avoid 900+ API calls)
+                    if (!isMegaNode) {
+                        await this.crawlDownstream(childNzbn, childLabel, depth + 1, onDebug, maxDepth);
+                    }
 
                 } catch (e) {
                     console.warn(`Failed to fetch details for subsidiary ${childNzbn}`, e);
@@ -666,6 +693,23 @@ class OrgSpider {
             style: { stroke: type === 'sibling' ? '#94a3b8' : '#2563eb' },
             markerEnd: 'arrowclosed' as any // Fix: Use string instead of object
         });
+    }
+
+    // Public method for lazy-load expansion of a capped/depth-limited node
+    public async expandNode(targetNzbn: string, targetName: string, existingNodeIds: string[], maxDepth: number = 2) {
+        // Pre-populate visited set with all existing nodes to avoid re-fetching
+        for (const id of existingNodeIds) {
+            this.visited.add(id);
+        }
+        // Remove the target itself so its children can be discovered
+        this.visited.delete(targetNzbn);
+
+        await this.crawlDownstream(targetNzbn, targetName, 0, undefined, maxDepth);
+
+        return {
+            nodes: Array.from(this.nodes.values()),
+            edges: this.edges,
+        };
     }
 }
 
@@ -956,6 +1000,19 @@ export const searchEntities = async (term: string, config: ApiConfig, logger?: L
 export const generateOrgChart = async (rootNzbn: string, config: ApiConfig, onDebug?: DebugCallback, onLog?: LoggerCallback) => {
     const spider = new OrgSpider(config, onLog);
     return await spider.buildGraph(rootNzbn, onDebug);
+};
+
+// Lazy-load expansion: crawl downstream from a specific node that was capped or depth-limited
+export const expandNodeDownstream = async (
+    targetNzbn: string,
+    targetName: string,
+    existingNodeIds: string[],
+    config: ApiConfig,
+    onLog?: LoggerCallback,
+    maxDepth: number = 2
+) => {
+    const spider = new OrgSpider(config, onLog);
+    return await spider.expandNode(targetNzbn, targetName, existingNodeIds, maxDepth);
 };
 
 export const getDirectors = fetchDirectorsByEntityName;

@@ -20,7 +20,7 @@ import { enrichCompanyResults, enrichGraphNodes } from './src/api/companyStatusA
 import { markDirectLineage, calculateHiddenDescendants, expandNodeSubtree, collapseNodeSubtree } from './utils/graphVisibility';
 import { getLayoutedElements } from './services/layoutService';
 import { tidyUpLayout } from './services/layoutOptimizer';
-import { generateOrgChart, searchEntities } from './services/apiService';
+import { generateOrgChart, searchEntities, expandNodeDownstream } from './services/apiService';
 import { extractDirectorsFromEntity } from './services/directorService';
 import { ApiConfig, EntitySearchResultItem, EntitySearchResponse, GraphSnapshot, GraphNode, GraphEdge, LogEntry, NodeType, NZBNFullEntity, PersonCompanyResult, CompanyTab, IndividualTab } from './types';
 import { searchByPersonName } from './services/directorSearchService';
@@ -114,6 +114,7 @@ function App() {
     nodeLabel: string;
     nodeType: string;
     nzbn?: string;
+    isCapped?: boolean;
     sourceRegisterUniqueId?: string;
     position: { x: number; y: number };
   } | null>(null);
@@ -854,6 +855,7 @@ function App() {
       nodeLabel: node.data.label,
       nodeType: node.type || 'companyNode',
       nzbn: node.data.nzbn,
+      isCapped: node.data.isCapped,
       sourceRegisterUniqueId: node.data.sourceRegisterUniqueId,
       position: { x: event.clientX, y: event.clientY }
     });
@@ -1067,20 +1069,82 @@ function App() {
     }
   };
 
-  const handleExpandStructure = (nodeId: string, nzbn: string, label: string) => {
+  const handleExpandStructure = async (nodeId: string, nzbn: string, label: string) => {
     setContextMenu(null);
 
+    // Check if this node was capped (mega-node) — needs lazy-load from API
+    const memoryNode = allNodesInMemory.find(n => n.id === nodeId);
+    if (memoryNode?.data.isCapped) {
+      console.log(`🔄 Lazy-loading capped node: ${label} (${nzbn})`);
+
+      // Show expanding spinner on the node
+      setNodes(prev => prev.map(n =>
+        n.id === nodeId ? { ...n, data: { ...n.data, isExpanding: true } } : n
+      ));
+
+      try {
+        const existingNodeIds = allNodesInMemory.map(n => n.id);
+        const entityName = memoryNode.data.entityName || label.replace(/^\d+\s*-\s*/, '').trim();
+
+        const result = await expandNodeDownstream(
+          nzbn,
+          entityName,
+          existingNodeIds,
+          config,
+          handleLog
+        );
+
+        // Merge new nodes into memory (skip duplicates)
+        const existingIds = new Set(allNodesInMemory.map(n => n.id));
+        const newNodes = result.nodes.filter(n => !existingIds.has(n.id));
+        // Mark new nodes as visible
+        for (const n of newNodes) {
+          n.data.isVisible = true;
+        }
+
+        // Merge new edges (skip duplicates)
+        const existingEdgeIds = new Set(edges.map(e => e.id));
+        const newEdges = result.edges.filter(e => !existingEdgeIds.has(e.id));
+
+        console.log(`✅ Lazy-load complete: ${newNodes.length} new nodes, ${newEdges.length} new edges`);
+
+        // Clear capped flag on the expanded node
+        const updatedMemory = allNodesInMemory.map(n =>
+          n.id === nodeId ? { ...n, data: { ...n.data, isCapped: false, cappedChildCount: undefined, isExpanding: false, isBranchExpanded: true } } : n
+        );
+        const mergedMemory = [...updatedMemory, ...newNodes];
+        const mergedEdges = [...edges, ...newEdges];
+
+        // Recalculate hidden counts
+        const withHiddenCounts = calculateHiddenDescendants(mergedMemory, mergedEdges);
+
+        setAllNodesInMemory(withHiddenCounts);
+
+        // Filter visible nodes and re-layout
+        const visibleNodes = withHiddenCounts.filter(n => n.data.isVisible);
+        const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+          visibleNodes,
+          mergedEdges
+        );
+
+        setNodes(layoutedNodes);
+        setEdges(layoutedEdges);
+      } catch (err) {
+        console.error('Failed to lazy-load node:', err);
+        setError(`Failed to expand structure: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        // Clear spinner
+        setNodes(prev => prev.map(n =>
+          n.id === nodeId ? { ...n, data: { ...n.data, isExpanding: false } } : n
+        ));
+      }
+      return;
+    }
+
+    // Standard expand: reveal already-in-memory hidden nodes
     console.log('🚀 EXPANDING:', { nodeId, nzbn, label });
-    console.log('📦 NODES IN MEMORY:', allNodesInMemory.length);
-    console.log('📦 ALL NODE LABELS:', allNodesInMemory.map(n => ({ id: n.id, label: n.data.label, isVisible: n.data.isVisible })));
-    console.log('📦 CURRENTLY VISIBLE:', nodes.length);
 
     // Expand the subtree in memory
     let expandedNodes = expandNodeSubtree(allNodesInMemory, edges, nodeId);
-
-    const newlyVisible = expandedNodes.filter(n => n.data.isVisible).length;
-    console.log('✨ AFTER EXPAND, VISIBLE COUNT:', newlyVisible);
-    console.log('✨ NEWLY VISIBLE NODES:', expandedNodes.filter(n => n.data.isVisible).map(n => ({ id: n.id, label: n.data.label })));
 
     // Recalculate hidden counts after expansion
     expandedNodes = calculateHiddenDescendants(expandedNodes, edges);
@@ -1563,6 +1627,7 @@ function App() {
                 nodeLabel={contextMenu.nodeLabel}
                 nodeType={contextMenu.nodeType}
                 nzbn={contextMenu.nzbn}
+                isCapped={contextMenu.isCapped}
                 sourceRegisterUniqueId={contextMenu.sourceRegisterUniqueId}
                 position={contextMenu.position}
                 onClose={() => setContextMenu(null)}

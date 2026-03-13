@@ -105,9 +105,23 @@ export const CompanyNode = memo(({ data, selected }: NodeProps<NodeData>) => {
       </div>
 
       {/* Hidden Descendants Badge (bottom-right) */}
-      {data.hiddenDescendantCount && data.hiddenDescendantCount > 0 && (
+      {data.hiddenDescendantCount && data.hiddenDescendantCount > 0 && !data.isCapped && (
         <div className="absolute -bottom-2 -right-2 bg-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-md border-2 border-white dark:border-slate-900">
           +{data.hiddenDescendantCount}
+        </div>
+      )}
+
+      {/* Capped Mega-Node Badge (bottom-right) */}
+      {data.isCapped && (
+        <div className="absolute -bottom-2 -right-2 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-md border-2 border-white dark:border-slate-900" title="Trustee mega-node — right-click to expand">
+          {data.cappedChildCount || '?'} capped
+        </div>
+      )}
+
+      {/* Expanding spinner overlay */}
+      {data.isExpanding && (
+        <div className="absolute inset-0 bg-slate-900/50 rounded-lg flex items-center justify-center z-10">
+          <div className="animate-spin w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full" />
         </div>
       )}
 
