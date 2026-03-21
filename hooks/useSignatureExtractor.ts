@@ -33,7 +33,7 @@ export function useSignatureExtractor() {
     const ensurePdfjs = async () => {
         if (!pdfjsRef.current) {
             const pdfjsLib = await import('pdfjs-dist');
-            pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+            pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
             pdfjsRef.current = pdfjsLib;
         }
         return pdfjsRef.current;
