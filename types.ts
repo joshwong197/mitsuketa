@@ -92,10 +92,21 @@ export interface GraphSnapshot {
   personResults?: PersonCompanyResult[]; // NEW: For person search snapshots
 }
 
+// Physical address from Companies Office Entity Roles API
+export interface PhysicalAddress {
+  addressLines: string[];
+  postCode?: string;
+  countryCode?: string;
+}
+
 // NEW: Processed person search result
 export interface PersonCompanyResult {
   companyName: string;
   nzbn: string;
+  companyNumber?: string; // NZCN - Companies Office company number
+  firstName?: string; // Director's first name from API
+  lastName?: string; // Director's last name from API
+  physicalAddress?: PhysicalAddress; // Residential address from API
   isDirector: boolean;
   shareholding: number; // 0-100 percentage
   status: string;
@@ -219,6 +230,11 @@ export interface CompaniesRoleSearchResult {
     firstName?: string;
     lastName?: string;
     middleName?: string;
+    physicalAddress?: {
+      addressLines?: string[];
+      postCode?: string;
+      countryCode?: string;
+    };
     shareholdings?: Array<{
       sharePercentage?: number;
       numberOfShares?: number;
