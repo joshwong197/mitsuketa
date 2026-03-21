@@ -1,7 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { User, Building2, ArrowUpDown, Filter, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
+import { User, Building2, ArrowUpDown, Filter, ChevronLeft, ChevronRight, AlertTriangle, Shield } from 'lucide-react';
 import { PersonCompanyResult } from '../types';
 import { CompanyRoleCard } from './CompanyRoleCard';
+import { KydVerificationPanel } from './KydVerificationPanel';
 import { DisqualifiedDirector } from '../src/api/disqualifiedDirectorsApi';
 import { InsolvencyRecord } from '../src/api/insolvencyApi';
 
@@ -31,6 +32,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
     const [filterMode, setFilterMode] = useState<FilterMode>('all');
     const [currentPage, setCurrentPage] = useState(1);
     const [headerVisible, setHeaderVisible] = useState(true);
+    const [showKyd, setShowKyd] = useState(false);
     const lastScrollY = useRef(0);
 
     const handleResultsScroll = (e: React.UIEvent<HTMLDivElement>) => {
@@ -126,7 +128,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                     <div className="p-3 bg-purple-500 rounded-full">
                         <User className="text-white" size={24} />
                     </div>
-                    <div>
+                    <div className="flex-1">
                         <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                             {personName}
                         </h2>
@@ -134,6 +136,13 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                             {results.length} {results.length === 1 ? 'company' : 'companies'} found
                         </p>
                     </div>
+                    <button
+                        onClick={() => setShowKyd(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
+                    >
+                        <Shield size={16} />
+                        KYD Verification
+                    </button>
                 </div>
 
                 {/* COMBINED ALERT: DISQUALIFIED DIRECTORS & BANKRUPTCY */}
@@ -394,6 +403,15 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                         Page {currentPage} of {totalPages}
                     </span>
                 </div>
+            )}
+
+            {/* KYD Verification Panel */}
+            {showKyd && (
+                <KydVerificationPanel
+                    personName={personName}
+                    results={results}
+                    onClose={() => setShowKyd(false)}
+                />
             )}
         </div>
     );

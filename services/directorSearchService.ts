@@ -171,6 +171,14 @@ function processPersonSearchResults(data: CompaniesRoleSearchResult, searchName?
                     }
                     existing.entityStatusCode = statusCode;
                     existing.status = companyStatus;
+                    // Capture address if not yet set
+                    if (!existing.physicalAddress && role.physicalAddress?.addressLines) {
+                        existing.physicalAddress = {
+                            addressLines: role.physicalAddress.addressLines,
+                            postCode: role.physicalAddress.postCode,
+                            countryCode: role.physicalAddress.countryCode,
+                        };
+                    }
 
                     // Update role type
                     if (existing.isDirector && existing.shareholding > 0) {
@@ -192,6 +200,14 @@ function processPersonSearchResults(data: CompaniesRoleSearchResult, searchName?
                     companyMap.set(nzbn, {
                         companyName: companyName || 'Unknown Company',
                         nzbn,
+                        companyNumber: shareholding.associatedCompanyNumber,
+                        firstName: role.firstName,
+                        lastName: role.lastName,
+                        physicalAddress: role.physicalAddress?.addressLines ? {
+                            addressLines: role.physicalAddress.addressLines,
+                            postCode: role.physicalAddress.postCode,
+                            countryCode: role.physicalAddress.countryCode,
+                        } : undefined,
                         isDirector,
                         shareholding: shareholdingPercentage,
                         status: companyStatus,
@@ -245,6 +261,14 @@ function processPersonSearchResults(data: CompaniesRoleSearchResult, searchName?
                 // Update status code (use the most recent/accurate one)
                 existing.entityStatusCode = statusCode;
                 existing.status = companyStatus;
+                // Capture address if not yet set
+                if (!existing.physicalAddress && role.physicalAddress?.addressLines) {
+                    existing.physicalAddress = {
+                        addressLines: role.physicalAddress.addressLines,
+                        postCode: role.physicalAddress.postCode,
+                        countryCode: role.physicalAddress.countryCode,
+                    };
+                }
 
                 // Update role type
                 if (existing.isDirector && existing.shareholding > 0) {
@@ -271,6 +295,14 @@ function processPersonSearchResults(data: CompaniesRoleSearchResult, searchName?
                 companyMap.set(nzbn, {
                     companyName: companyName || 'Unknown Company',
                     nzbn,
+                    companyNumber: role.associatedCompanyNumber,
+                    firstName: role.firstName,
+                    lastName: role.lastName,
+                    physicalAddress: role.physicalAddress?.addressLines ? {
+                        addressLines: role.physicalAddress.addressLines,
+                        postCode: role.physicalAddress.postCode,
+                        countryCode: role.physicalAddress.countryCode,
+                    } : undefined,
                     isDirector,
                     shareholding,
                     status: companyStatus,
