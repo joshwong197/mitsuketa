@@ -10,8 +10,10 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^1.1.8",
+    "cheerio": "^1.2.0",
     "html-to-image": "^1.11.13",
     "lucide-react": "^0.562.0",
+    "pdfjs-dist": "^5.5.207",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "reactflow": "^11.11.4"
