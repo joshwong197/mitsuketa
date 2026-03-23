@@ -1267,7 +1267,7 @@ function App() {
                   setSearchQuery('');
                   setError(null);
                 }}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${searchMode === 'company'
+                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all active:scale-[0.97] flex items-center justify-center gap-2 ${searchMode === 'company'
                   ? 'bg-blue-500 text-white shadow-md'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                   }`}
@@ -1284,7 +1284,7 @@ function App() {
                   setSearchQuery('');
                   setError(null);
                 }}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${searchMode === 'person'
+                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all active:scale-[0.97] flex items-center justify-center gap-2 ${searchMode === 'person'
                   ? 'bg-purple-500 text-white shadow-md'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                   }`}
@@ -1317,7 +1317,7 @@ function App() {
               <button
                 type="submit"
                 disabled={isLoading || isGraphLoading}
-                className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-r transition-colors disabled:opacity-50 flex items-center justify-center min-w-[44px]"
+                className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-r transition-colors active:scale-95 disabled:opacity-50 flex items-center justify-center min-w-[44px]"
               >
                 {isLoading ? <Loader2 className="animate-spin" size={18} /> : <Search size={18} />}
               </button>
@@ -1479,7 +1479,7 @@ function App() {
               <button
                 onClick={exportAsPNG}
                 disabled={nodes.length === 0 && personSearchResults.length === 0}
-                className="w-full px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded flex items-center justify-center gap-2 transition-colors"
+                className="w-full px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 active:scale-[0.97] disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded flex items-center justify-center gap-2 transition-all"
               >
                 <FileDown size={16} />
                 Export as PNG
@@ -1487,7 +1487,7 @@ function App() {
               <button
                 onClick={exportAsPDF}
                 disabled={nodes.length === 0 && personSearchResults.length === 0}
-                className="w-full px-3 py-2 text-sm bg-red-600 hover:bg-red-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded flex items-center justify-center gap-2 transition-colors"
+                className="w-full px-3 py-2 text-sm bg-red-600 hover:bg-red-700 active:scale-[0.97] disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded flex items-center justify-center gap-2 transition-all"
               >
                 <FileDown size={16} />
                 Export as PDF
@@ -1495,7 +1495,7 @@ function App() {
               <button
                 onClick={exportAllSnapshots}
                 disabled={snapshots.length === 0}
-                className="w-full px-3 py-2 text-sm bg-slate-600 hover:bg-slate-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded flex items-center justify-center gap-2 transition-colors"
+                className="w-full px-3 py-2 text-sm bg-slate-600 hover:bg-slate-700 active:scale-[0.97] disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded flex items-center justify-center gap-2 transition-all"
               >
                 <Database size={16} />
                 Export Snapshots
@@ -1508,8 +1508,24 @@ function App() {
         <div className="flex-1 flex flex-col h-full bg-slate-50 dark:bg-slate-950 relative transition-colors duration-300">
           {isGraphLoading && (
             <div className="absolute inset-0 z-50 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm flex items-center justify-center flex-col gap-4">
-              <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
-              <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Mapping Corporate Structure...</p>
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-48 h-12 rounded-lg skeleton animate-shimmer" />
+                <div className="w-px h-6 bg-slate-300 dark:bg-slate-700" />
+                <div className="flex gap-8">
+                  <div className="w-36 h-10 rounded-lg skeleton animate-shimmer" />
+                  <div className="w-36 h-10 rounded-lg skeleton animate-shimmer" />
+                </div>
+                <div className="flex gap-16">
+                  <div className="w-px h-6 bg-slate-300 dark:bg-slate-700" />
+                  <div className="w-px h-6 bg-slate-300 dark:bg-slate-700" />
+                </div>
+                <div className="flex gap-6">
+                  <div className="w-28 h-8 rounded-lg skeleton animate-shimmer" />
+                  <div className="w-28 h-8 rounded-lg skeleton animate-shimmer" />
+                  <div className="w-28 h-8 rounded-lg skeleton animate-shimmer" />
+                </div>
+              </div>
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-4">Mapping corporate structure...</p>
             </div>
           )}
 

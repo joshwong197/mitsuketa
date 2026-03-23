@@ -118,9 +118,10 @@ export const CompanyNode = memo(({ data, selected }: NodeProps<NodeData>) => {
         </div>
       )}
 
-      {/* Expanding spinner overlay */}
+      {/* Expanding shimmer overlay */}
       {data.isExpanding && (
-        <div className="absolute inset-0 bg-slate-900/50 rounded-lg flex items-center justify-center z-10">
+        <div className="absolute inset-0 bg-slate-900/30 rounded-lg flex items-center justify-center z-10">
+          <div className="absolute inset-0 rounded-lg skeleton animate-shimmer opacity-30" />
           <div className="animate-spin w-5 h-5 border-2 border-blue-400 border-t-transparent rounded-full" />
         </div>
       )}

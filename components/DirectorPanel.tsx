@@ -81,7 +81,7 @@ export const DirectorPanel: React.FC<DirectorPanelProps> = ({
                                 return (
                                     <div
                                         key={idx}
-                                        className={`p-3 rounded-lg border transition-all ${isActive
+                                        className={`p-3 rounded-lg border transition-all hover:translate-x-0.5 ${isActive
                                             ? 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800'
                                             : 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 opacity-60'
                                             }`}

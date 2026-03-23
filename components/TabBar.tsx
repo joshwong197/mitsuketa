@@ -76,7 +76,7 @@ export const TabBar: React.FC<TabBarProps> = ({
                     {activeTabs.map(tab => (
                         <div
                             key={tab.id}
-                            className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-all whitespace-nowrap max-w-[200px] ${activeSubTabId === tab.id
+                            className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-all active:scale-[0.97] whitespace-nowrap max-w-[200px] ${activeSubTabId === tab.id
                                     ? activeMainTab === 'company'
                                         ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 ring-1 ring-blue-300 dark:ring-blue-700'
                                         : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 ring-1 ring-purple-300 dark:ring-purple-700'
