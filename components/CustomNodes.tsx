@@ -25,7 +25,7 @@ export const CompanyNode = memo(({ data, selected }: NodeProps<NodeData>) => {
       className={`
         rounded-lg shadow-soft-md dark:shadow-dark-soft border-2 transition-all duration-300 relative
         ${isTarget ? 'border-blue-600 dark:border-blue-400 ring-4 ring-blue-500/20' : ''}
-        ${selected ? 'border-blue-400 ring-2 ring-blue-500/50' : 'border-slate-200 dark:border-slate-700'}
+        ${selected ? 'border-blue-400 ring-2 ring-blue-500/50' : 'border-slate-200/80 dark:border-slate-700/60'}
         ${isHighlighted ? 'ring-2 ring-yellow-400 bg-yellow-50 dark:bg-slate-800/90' : 'bg-white dark:bg-slate-900'}
       `}
       style={{ width: `${dynamicWidth}px` }}
@@ -136,7 +136,7 @@ export const PersonNode = memo(({ data, selected }: NodeProps<NodeData>) => {
   return (
     <div className={`
       min-w-[180px] px-4 py-2 rounded-full shadow-soft-md dark:shadow-dark-soft border-2 transition-all duration-300 flex items-center gap-3
-      ${selected ? 'border-green-400 ring-2 ring-green-500/50' : 'border-slate-200 dark:border-slate-700'}
+      ${selected ? 'border-green-400 ring-2 ring-green-500/50' : 'border-slate-200/80 dark:border-slate-700/60'}
       ${isHighlighted ? 'ring-2 ring-yellow-400 bg-yellow-50 dark:bg-slate-800/90' : 'bg-white dark:bg-slate-900'}
     `}>
       <Handle type="target" position={Position.Top} className="!bg-green-500" />

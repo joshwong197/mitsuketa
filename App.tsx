@@ -1248,7 +1248,7 @@ function App() {
         )}
 
         {/* Sidebar */}
-        <div className={`bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col shadow-soft-lg dark:shadow-dark-soft-lg transition-all duration-300 ease-in-out overflow-hidden ${
+        <div className={`bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col shadow-soft-lg dark:shadow-dark-soft-lg transition-all duration-300 ease-in-out overflow-hidden surface-grain ${
           isMobile
             ? `absolute inset-y-0 left-0 z-40 w-[85vw] ${isSidebarCollapsed ? '-translate-x-full' : 'translate-x-0'}`
             : `relative z-20 ${isSidebarCollapsed ? 'w-0' : 'w-96'}`
@@ -1573,7 +1573,7 @@ function App() {
                 className="bg-slate-50 dark:bg-slate-950"
                 minZoom={0.1}
               >
-                <Background color={theme === 'dark' ? "#1e293b" : "#e2e8f0"} gap={16} />
+                <Background color={theme === 'dark' ? "#1e293b40" : "#cbd5e140"} gap={20} />
                 <Controls className="!bg-white dark:!bg-slate-800 !border-slate-200 dark:!border-slate-700 [&>button]:!fill-slate-600 dark:[&>button]:!fill-slate-300 hover:[&>button]:!fill-black dark:hover:[&>button]:!fill-white" />
 
                 {/* Tidy Up Controls - Only show after graph loads */}
