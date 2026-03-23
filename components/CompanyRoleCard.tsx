@@ -65,7 +65,7 @@ export const CompanyRoleCard: React.FC<CompanyRoleCardProps> = ({ result, onClic
         if (status === 'REGISTERED') {
             return 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 font-bold';
         }
-        return 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 font-bold';
+        return 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold';
     };
 
     return (
@@ -81,11 +81,11 @@ export const CompanyRoleCard: React.FC<CompanyRoleCardProps> = ({ result, onClic
                     <Building2 className="text-blue-600 dark:text-blue-400" size={24} />
                 </div>
                 <div className="flex-1 min-w-0">
-                    <h3 className={`text-lg font-bold text-gray-900 dark:text-gray-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors ${isCompanyRemoved && !isInExternalAdmin ? 'line-through opacity-70' : ''
+                    <h3 className={`text-lg font-bold text-slate-900 dark:text-slate-100 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors ${isCompanyRemoved && !isInExternalAdmin ? 'line-through opacity-70' : ''
                         }`}>
                         {companyName}
                     </h3>
-                    <p className="text-sm font-mono font-tabular text-gray-500 dark:text-gray-400">
+                    <p className="text-sm font-mono font-tabular text-slate-500 dark:text-slate-400">
                         NZBN: {nzbn}
                     </p>
                 </div>
@@ -146,7 +146,7 @@ export const CompanyRoleCard: React.FC<CompanyRoleCardProps> = ({ result, onClic
                     <div className="flex items-center justify-between mb-1">
                         <div className="flex items-center gap-1.5">
                             <TrendingUp size={14} className="text-blue-600 dark:text-blue-400" />
-                            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                            <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
                                 Shareholding
                             </span>
                         </div>

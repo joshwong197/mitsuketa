@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc --noEmit)",
+      "Bash(git checkout:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(node -e \"console.log\\(require\\(''pdfjs-dist/package.json''\\).version\\)\")",
+      "Bash(curl -sI \"https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.5.207/pdf.worker.min.mjs\")",
+      "Bash(mkdir -p C:/Users/break/Downloads/orgview/public)",
+      "Bash(cp C:/Users/break/Downloads/orgview/node_modules/pdfjs-dist/build/pdf.worker.min.mjs C:/Users/break/Downloads/orgview/public/pdf.worker.min.mjs)",
+      "Bash(npx skills:*)",
+      "Bash(ls:*)",
+      "Bash(cat .agents/skills/redesign-existing-projects/*.md)",
+      "Bash(cat .claude/skills/redesign-existing-projects/*.md)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(for file:*)",
+      "Bash(do sed:*)",
+      "Bash(done)"
+    ]
+  }
+}

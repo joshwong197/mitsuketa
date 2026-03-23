@@ -36,7 +36,7 @@ export const TabBar: React.FC<TabBarProps> = ({
                     onClick={() => onMainTabChange('company')}
                     className={`flex items-center gap-2 px-4 py-2 rounded-t-lg text-sm font-semibold transition-all border border-b-0 ${activeMainTab === 'company'
                             ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 border-slate-200 dark:border-slate-700 shadow-sm'
-                            : 'bg-slate-50 dark:bg-slate-900/50 text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-700 dark:hover:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                            : 'bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                         }`}
                 >
                     <Building2 size={16} />
@@ -54,7 +54,7 @@ export const TabBar: React.FC<TabBarProps> = ({
                     onClick={() => onMainTabChange('individual')}
                     className={`flex items-center gap-2 px-4 py-2 rounded-t-lg text-sm font-semibold transition-all border border-b-0 ${activeMainTab === 'individual'
                             ? 'bg-white dark:bg-slate-800 text-purple-600 dark:text-purple-400 border-slate-200 dark:border-slate-700 shadow-sm'
-                            : 'bg-slate-50 dark:bg-slate-900/50 text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-700 dark:hover:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+                            : 'bg-slate-50 dark:bg-slate-900/50 text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
                         }`}
                 >
                     <User size={16} />
@@ -80,7 +80,7 @@ export const TabBar: React.FC<TabBarProps> = ({
                                     ? activeMainTab === 'company'
                                         ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 ring-1 ring-blue-300 dark:ring-blue-700'
                                         : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 ring-1 ring-purple-300 dark:ring-purple-700'
-                                    : 'bg-slate-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
                                 }`}
                             onClick={() => onSubTabClick(tab.id)}
                         >
@@ -99,7 +99,7 @@ export const TabBar: React.FC<TabBarProps> = ({
                                     e.stopPropagation();
                                     onSubTabClose(tab.id);
                                 }}
-                                className="ml-1 p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-400 hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                                className="ml-1 p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-slate-400 hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
                             >
                                 <X size={10} />
                             </button>

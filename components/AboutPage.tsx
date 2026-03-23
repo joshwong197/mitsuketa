@@ -8,17 +8,17 @@ interface Props {
 export const AboutPage: React.FC<Props> = ({ onClose }) => {
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white dark:bg-slate-900 w-full max-w-3xl rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="bg-white dark:bg-slate-900 w-full max-w-3xl rounded-xl shadow-soft-lg dark:shadow-dark-soft-lg border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col max-h-[90vh]">
 
                 {/* Header */}
-                <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-blue-50 to-emerald-50 dark:from-slate-800 dark:to-slate-800/80">
+                <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
                     <div className="flex items-center gap-3">
-                        <div className="bg-blue-600 p-2 rounded-lg">
-                            <Eye className="text-white" size={24} />
+                        <div className="bg-slate-900 dark:bg-white p-2 rounded-lg">
+                            <Eye className="text-white dark:text-slate-900" size={24} />
                         </div>
                         <div>
-                            <h2 className="text-xl font-semibold tracking-tight bg-gradient-to-r from-blue-600 to-emerald-600 dark:from-blue-400 dark:to-emerald-400 bg-clip-text text-transparent flex items-baseline gap-2">
-                                Mitsuketa <span className="text-sm font-light text-slate-500 dark:text-slate-400">見つけた</span>
+                            <h2 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-white flex items-baseline gap-2">
+                                Mitsuketa <span className="text-sm font-light text-slate-400 dark:text-slate-500">見つけた</span>
                             </h2>
                             <p className="text-xs text-slate-600 dark:text-slate-400 italic">"I found it."</p>
                         </div>

@@ -23,7 +23,7 @@ export const CompanyNode = memo(({ data, selected }: NodeProps<NodeData>) => {
   return (
     <div
       className={`
-        rounded-lg shadow-lg border-2 transition-all duration-300 relative
+        rounded-lg shadow-soft-md dark:shadow-dark-soft border-2 transition-all duration-300 relative
         ${isTarget ? 'border-blue-600 dark:border-blue-400 ring-4 ring-blue-500/20' : ''}
         ${selected ? 'border-blue-400 ring-2 ring-blue-500/50' : 'border-slate-200 dark:border-slate-700'}
         ${isHighlighted ? 'ring-2 ring-yellow-400 bg-yellow-50 dark:bg-slate-800/90' : 'bg-white dark:bg-slate-900'}
@@ -44,7 +44,7 @@ export const CompanyNode = memo(({ data, selected }: NodeProps<NodeData>) => {
             <Building2 size={20} />
           </div>
           <div className="overflow-hidden flex-1">
-            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 break-words" title={data.label}>
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 break-words" title={data.label}>
               {data.label}
             </h3>
             <p className="text-xs text-blue-600 dark:text-blue-300 font-mono font-tabular mt-0.5">
@@ -135,7 +135,7 @@ export const PersonNode = memo(({ data, selected }: NodeProps<NodeData>) => {
 
   return (
     <div className={`
-      min-w-[180px] px-4 py-2 rounded-full shadow-lg border-2 transition-all duration-300 flex items-center gap-3
+      min-w-[180px] px-4 py-2 rounded-full shadow-soft-md dark:shadow-dark-soft border-2 transition-all duration-300 flex items-center gap-3
       ${selected ? 'border-green-400 ring-2 ring-green-500/50' : 'border-slate-200 dark:border-slate-700'}
       ${isHighlighted ? 'ring-2 ring-yellow-400 bg-yellow-50 dark:bg-slate-800/90' : 'bg-white dark:bg-slate-900'}
     `}>
@@ -145,8 +145,8 @@ export const PersonNode = memo(({ data, selected }: NodeProps<NodeData>) => {
         <User size={16} className="text-green-600 dark:text-green-400" />
       </div>
       <div>
-        <p className="text-sm font-semibold text-gray-900 dark:text-gray-200">{data.label}</p>
-        <p className="text-[10px] text-gray-500 dark:text-gray-400">Individual</p>
+        <p className="text-sm font-semibold text-slate-900 dark:text-slate-200">{data.label}</p>
+        <p className="text-[10px] text-slate-500 dark:text-slate-400">Individual</p>
       </div>
 
       <Handle type="source" position={Position.Bottom} className="!bg-green-500" />
@@ -158,17 +158,17 @@ export const SummaryNode = memo(({ data, selected }: NodeProps<NodeData>) => {
   return (
     <div className={`
       w-[220px] px-3 py-2 rounded-md border-2 border-dashed transition-all duration-300 flex items-center gap-3
-      ${selected ? 'border-gray-400' : 'border-gray-300 dark:border-gray-600'}
-      bg-gray-50 dark:bg-gray-800/50 opacity-80 hover:opacity-100
+      ${selected ? 'border-slate-400' : 'border-slate-300 dark:border-slate-600'}
+      bg-slate-50 dark:bg-slate-800/50 opacity-80 hover:opacity-100
     `}>
-      <Handle type="target" position={Position.Top} className="!bg-gray-400" />
+      <Handle type="target" position={Position.Top} className="!bg-slate-400" />
 
-      <div className="p-1.5 bg-gray-200 dark:bg-gray-700 rounded-md">
-        <Users size={16} className="text-gray-600 dark:text-gray-400" />
+      <div className="p-1.5 bg-slate-200 dark:bg-slate-700 rounded-md">
+        <Users size={16} className="text-slate-600 dark:text-slate-400" />
       </div>
       <div>
-        <p className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-tight">{data.label}</p>
-        <p className="text-[9px] text-gray-500 dark:text-gray-400">Minor shareholders hidden</p>
+        <p className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-tight">{data.label}</p>
+        <p className="text-[9px] text-slate-500 dark:text-slate-400">Minor shareholders hidden</p>
       </div>
     </div>
   );

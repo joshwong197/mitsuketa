@@ -1236,7 +1236,7 @@ function App() {
             }`}
           title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
         >
-          {isSidebarCollapsed ? <ChevronRight size={16} className="text-gray-600 dark:text-gray-300" /> : <ChevronLeft size={16} className="text-gray-600 dark:text-gray-300" />}
+          {isSidebarCollapsed ? <ChevronRight size={16} className="text-slate-600 dark:text-slate-300" /> : <ChevronLeft size={16} className="text-slate-600 dark:text-slate-300" />}
         </button>
 
         {/* Mobile backdrop - tap outside to close sidebar */}
@@ -1248,7 +1248,7 @@ function App() {
         )}
 
         {/* Sidebar */}
-        <div className={`bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col shadow-xl transition-all duration-300 ease-in-out overflow-hidden ${
+        <div className={`bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col shadow-soft-lg dark:shadow-dark-soft-lg transition-all duration-300 ease-in-out overflow-hidden ${
           isMobile
             ? `absolute inset-y-0 left-0 z-40 w-[85vw] ${isSidebarCollapsed ? '-translate-x-full' : 'translate-x-0'}`
             : `relative z-20 ${isSidebarCollapsed ? 'w-0' : 'w-96'}`
@@ -1256,7 +1256,7 @@ function App() {
 
           {/* Search Section */}
           <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex-shrink-0 relative">
-            <h2 className="text-gray-500 dark:text-gray-400 text-xs font-semibold uppercase tracking-[0.15em] mb-3">Search</h2>
+            <h2 className="text-slate-500 dark:text-slate-400 text-xs font-semibold uppercase tracking-[0.15em] mb-3">Search</h2>
 
             {/* Search Mode Toggle */}
             <div className="flex gap-2 mb-3">
@@ -1269,7 +1269,7 @@ function App() {
                 }}
                 className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${searchMode === 'company'
                   ? 'bg-blue-500 text-white shadow-md'
-                  : 'bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                   }`}
               >
                 <Building2 size={16} />
@@ -1286,7 +1286,7 @@ function App() {
                 }}
                 className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${searchMode === 'person'
                   ? 'bg-purple-500 text-white shadow-md'
-                  : 'bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                   }`}
               >
                 <User size={16} />
@@ -1300,7 +1300,7 @@ function App() {
                   ref={searchInputRef}
                   type="text"
                   placeholder={searchMode === 'person' ? 'Search by director/shareholder name...' : 'Search companies by name or NZBN...'}
-                  className="w-full bg-slate-100 dark:bg-slate-800 text-gray-900 dark:text-white rounded-l px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 focus:border-blue-500 focus:outline-none placeholder-slate-500 transition-colors"
+                  className="w-full bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-l px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 focus:border-blue-500 focus:outline-none placeholder-slate-500 transition-colors"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -1308,7 +1308,7 @@ function App() {
                   <button
                     type="button"
                     onClick={clearSearch}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                   >
                     <X size={14} />
                   </button>
@@ -1336,11 +1336,11 @@ function App() {
                     setIncludeInactive(false);
                   }
                 }}
-                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
+                className="w-4 h-4 text-blue-600 bg-slate-100 border-slate-300 rounded focus:ring-blue-500 cursor-pointer"
               />
-              <label htmlFor="include-inactive" className="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+              <label htmlFor="include-inactive" className="text-sm text-slate-700 dark:text-slate-300 cursor-pointer select-none">
                 Include inactive/removed entities
-                <span className="block text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 leading-tight">
+                <span className="block text-[10px] text-slate-400 dark:text-slate-500 mt-0.5 leading-tight">
                   Expands graph to show removed parents and subsidiaries
                 </span>
               </label>
@@ -1356,7 +1356,7 @@ function App() {
             {/* Dropdown Results */}
             {showDropdown && searchResults.length > 0 && (
               <div className="absolute top-full left-0 right-0 mx-4 mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl z-50 max-h-80 overflow-y-auto">
-                <div className="sticky top-0 bg-slate-50 dark:bg-slate-900/90 backdrop-blur px-3 py-2 border-b border-slate-200 dark:border-slate-700 text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold flex justify-between items-center">
+                <div className="sticky top-0 bg-slate-50 dark:bg-slate-900/90 backdrop-blur px-3 py-2 border-b border-slate-200 dark:border-slate-700 text-[10px] text-slate-500 dark:text-slate-400 uppercase font-bold flex justify-between items-center">
                   <span>Matches found ({searchTotalItems || searchResults.length})</span>
                   <button onClick={() => setShowDropdown(false)} className="hover:text-blue-500"><X size={12} /></button>
                 </div>
@@ -1370,11 +1370,11 @@ function App() {
                       <Building2 size={16} />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate group-hover:text-blue-700 dark:group-hover:text-blue-300">
+                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate group-hover:text-blue-700 dark:group-hover:text-blue-300">
                         {entity.entityName}
                       </p>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-xs font-mono text-gray-500 dark:text-gray-400">{entity.nzbn}</span>
+                        <span className="text-xs font-mono text-slate-500 dark:text-slate-400">{entity.nzbn}</span>
                         <span className={`text-[9px] px-1.5 py-0.5 rounded-full uppercase font-bold ${entity.entityStatusDescription.toLowerCase().includes('registered')
                           ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400'
                           : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
@@ -1412,7 +1412,7 @@ function App() {
           {/* Snapshots */}
           <div className="flex-1 overflow-y-auto p-4 min-h-0">
             <div className="flex justify-between items-center mb-3">
-              <h2 className="text-gray-500 dark:text-gray-400 text-xs font-semibold uppercase tracking-[0.15em]">Snapshots</h2>
+              <h2 className="text-slate-500 dark:text-slate-400 text-xs font-semibold uppercase tracking-[0.15em]">Snapshots</h2>
               <div className="flex items-center gap-1">
                 <input
                   type="file"
@@ -1440,8 +1440,8 @@ function App() {
                   className="p-3 bg-white dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-blue-500/50 rounded transition-all group relative"
                 >
                   <div onClick={() => loadSnapshot(snap)} className="cursor-pointer">
-                    <p className="text-sm text-gray-700 dark:text-gray-300 font-medium truncate group-hover:text-blue-600 dark:group-hover:text-blue-300">{snap.name}</p>
-                    <p className="text-[10px] text-gray-500">
+                    <p className="text-sm text-slate-700 dark:text-slate-300 font-medium truncate group-hover:text-blue-600 dark:group-hover:text-blue-300">{snap.name}</p>
+                    <p className="text-[10px] text-slate-500">
                       {new Date(snap.dateCreated).toLocaleDateString()}
                       {snap.searchType === 'person' && (
                         <span className="ml-1.5 text-[9px] text-amber-600 dark:text-amber-400 font-medium">Session only</span>
@@ -1450,14 +1450,14 @@ function App() {
                   </div>
                   <button
                     onClick={(e) => deleteSnapshot(snap.id, e)}
-                    className="absolute top-2 right-2 p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute top-2 right-2 p-1 text-slate-400 hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
                     title="Delete snapshot"
                   >
                     <Trash2 size={14} />
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); exportSnapshot(snap); }}
-                    className="absolute bottom-2 right-2 p-1 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute bottom-2 right-2 p-1 text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity"
                     title="Export Snapshot (JSON)"
                   >
                     <Download size={14} />
@@ -1474,12 +1474,12 @@ function App() {
 
           {/* Export Section */}
           <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex-shrink-0">
-            <h2 className="text-gray-500 dark:text-gray-400 text-xs font-semibold uppercase tracking-[0.15em] mb-3">Export</h2>
+            <h2 className="text-slate-500 dark:text-slate-400 text-xs font-semibold uppercase tracking-[0.15em] mb-3">Export</h2>
             <div className="space-y-2">
               <button
                 onClick={exportAsPNG}
                 disabled={nodes.length === 0 && personSearchResults.length === 0}
-                className="w-full px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white rounded flex items-center justify-center gap-2 transition-colors"
+                className="w-full px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded flex items-center justify-center gap-2 transition-colors"
               >
                 <FileDown size={16} />
                 Export as PNG
@@ -1487,7 +1487,7 @@ function App() {
               <button
                 onClick={exportAsPDF}
                 disabled={nodes.length === 0 && personSearchResults.length === 0}
-                className="w-full px-3 py-2 text-sm bg-red-600 hover:bg-red-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white rounded flex items-center justify-center gap-2 transition-colors"
+                className="w-full px-3 py-2 text-sm bg-red-600 hover:bg-red-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded flex items-center justify-center gap-2 transition-colors"
               >
                 <FileDown size={16} />
                 Export as PDF
@@ -1495,7 +1495,7 @@ function App() {
               <button
                 onClick={exportAllSnapshots}
                 disabled={snapshots.length === 0}
-                className="w-full px-3 py-2 text-sm bg-slate-600 hover:bg-slate-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white rounded flex items-center justify-center gap-2 transition-colors"
+                className="w-full px-3 py-2 text-sm bg-slate-600 hover:bg-slate-700 disabled:bg-slate-300 dark:disabled:bg-slate-700 text-white rounded flex items-center justify-center gap-2 transition-colors"
               >
                 <Database size={16} />
                 Export Snapshots
@@ -1505,7 +1505,7 @@ function App() {
         </div>
 
         {/* Graph Area & Network Console */}
-        <div className="flex-1 flex flex-col h-full bg-slate-50 dark:bg-gray-950 relative transition-colors duration-300">
+        <div className="flex-1 flex flex-col h-full bg-slate-50 dark:bg-slate-950 relative transition-colors duration-300">
           {isGraphLoading && (
             <div className="absolute inset-0 z-50 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm flex items-center justify-center flex-col gap-4">
               <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
@@ -1574,7 +1574,7 @@ function App() {
                 minZoom={0.1}
               >
                 <Background color={theme === 'dark' ? "#1e293b" : "#e2e8f0"} gap={16} />
-                <Controls className="!bg-white dark:!bg-slate-800 !border-slate-200 dark:!border-slate-700 [&>button]:!fill-gray-600 dark:[&>button]:!fill-gray-300 hover:[&>button]:!fill-black dark:hover:[&>button]:!fill-white" />
+                <Controls className="!bg-white dark:!bg-slate-800 !border-slate-200 dark:!border-slate-700 [&>button]:!fill-slate-600 dark:[&>button]:!fill-slate-300 hover:[&>button]:!fill-black dark:hover:[&>button]:!fill-white" />
 
                 {/* Tidy Up Controls - Only show after graph loads */}
                 {nodes.length > 0 && (
@@ -1582,7 +1582,7 @@ function App() {
                     <div className="flex flex-col gap-2">
                       <button
                         onClick={handleTidyUp}
-                        className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300"
+                        className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300"
                         title="Optimize layout into compact pyramid shape"
                       >
                         <Sparkles size={18} className="text-blue-500" />
@@ -1592,7 +1592,7 @@ function App() {
                       {originalLayout && (
                         <button
                           onClick={handleUndoTidyUp}
-                          className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300"
+                          className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-300"
                           title="Revert to original layout"
                         >
                           <Undo size={18} className="text-orange-500" />
@@ -1605,7 +1605,7 @@ function App() {
 
                 {nodes.length === 0 && !isLoading && !isGraphLoading && !error && (
                   <Panel position="top-center" className="mt-20">
-                    <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur border border-slate-200 dark:border-slate-700 p-8 rounded-xl text-center max-w-md shadow-xl">
+                    <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur border border-slate-200 dark:border-slate-700 p-8 rounded-xl text-center max-w-md shadow-soft-lg dark:shadow-dark-soft-lg">
                       <MousePointer2 className="w-12 h-12 text-slate-400 dark:text-slate-600 mx-auto mb-4" />
                       <h3 className="text-xl font-bold text-slate-800 dark:text-slate-200 mb-2">Ready to Map</h3>
                       <p className="text-slate-600 dark:text-slate-400 mb-4">
@@ -1679,11 +1679,11 @@ function App() {
                   <div className="flex items-start gap-3 mb-4">
                     <AlertTriangle className="text-yellow-500 shrink-0 mt-1" size={24} />
                     <div>
-                      <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">Warning</h3>
-                      <p className="text-sm text-gray-700 dark:text-gray-300">
+                      <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">Warning</h3>
+                      <p className="text-sm text-slate-700 dark:text-slate-300">
                         This will display ALL inactive entities associated with your search, which could potentially result in a longer search time and a more complicated graph depending on the search.
                       </p>
-                      <p className="text-sm text-gray-700 dark:text-gray-300 mt-2 font-semibold">
+                      <p className="text-sm text-slate-700 dark:text-slate-300 mt-2 font-semibold">
                         Do you still wish to proceed?
                       </p>
                     </div>
@@ -1691,7 +1691,7 @@ function App() {
                   <div className="flex gap-3 justify-end">
                     <button
                       onClick={() => setShowInactiveWarning(false)}
-                      className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded"
+                      className="px-4 py-2 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded"
                     >
                       Cancel
                     </button>

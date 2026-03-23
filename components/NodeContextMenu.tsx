@@ -108,7 +108,7 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
 
             {/* Context Menu */}
             <div
-                className="fixed z-50 bg-white dark:bg-slate-800 rounded-lg shadow-2xl border border-slate-200 dark:border-slate-700 py-1 min-w-[200px]"
+                className="fixed z-50 bg-white dark:bg-slate-800 rounded-xl shadow-soft-lg dark:shadow-dark-soft-lg border border-slate-200 dark:border-slate-700 py-1 min-w-[200px]"
                 style={{
                     left: `${position.x}px`,
                     top: `${position.y}px`,
@@ -116,11 +116,11 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
             >
                 {/* Header */}
                 <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700">
-                    <p className="text-xs font-semibold text-gray-900 dark:text-gray-100 truncate">
+                    <p className="text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">
                         {nodeLabel}
                     </p>
                     {nzbn && (
-                        <p className="text-[10px] text-gray-500 dark:text-gray-400 font-mono">
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-mono">
                             {nzbn}
                         </p>
                     )}
@@ -139,8 +139,8 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
                   w-full px-3 py-2 text-left text-sm flex items-center gap-2
                   transition-colors
                   ${item.disabled
-                                        ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
-                                        : 'text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-slate-700'
+                                        ? 'text-slate-400 dark:text-slate-600 cursor-not-allowed'
+                                        : 'text-slate-700 dark:text-slate-200 hover:bg-blue-50 dark:hover:bg-slate-700'
                                     }
                 `}
                             >

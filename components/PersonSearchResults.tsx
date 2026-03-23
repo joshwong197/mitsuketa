@@ -116,7 +116,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
             <div className="p-6 bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 border-b border-slate-200 dark:border-slate-700">
                 <button
                     onClick={onBack}
-                    className="mb-4 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+                    className="mb-4 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-colors"
                 >
                     <ChevronLeft size={16} />
                     Back to search
@@ -127,10 +127,10 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                         <User className="text-white" size={24} />
                     </div>
                     <div>
-                        <h2 className="text-2xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">
+                        <h2 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
                             {personName}
                         </h2>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                        <p className="text-sm text-slate-600 dark:text-slate-400">
                             {results.length} {results.length === 1 ? 'company' : 'companies'} found
                         </p>
                     </div>
@@ -172,11 +172,11 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                                                     <div key={idx} className="bg-white dark:bg-slate-800 p-3 rounded border border-red-200 dark:border-red-800/50">
                                                         <div className="flex items-start justify-between mb-2">
                                                             <div>
-                                                                <p className="font-semibold text-gray-900 dark:text-white text-sm">
+                                                                <p className="font-semibold text-slate-900 dark:text-white text-sm">
                                                                     {director.firstName} {director.middleName} {director.lastName}
                                                                 </p>
                                                                 {director.aliases && director.aliases.aliases && director.aliases.aliases.length > 0 && (
-                                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                                                                         Also known as: {director.aliases.aliases.join(', ')}
                                                                     </p>
                                                                 )}
@@ -189,15 +189,15 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                                                         {/* Disqualification Criteria */}
                                                         {director.disqualificationCriteria?.criteria?.map((c, i) => (
                                                             <div key={i} className="mt-2 pl-3 border-l-2 border-red-300 dark:border-red-700">
-                                                                <p className="text-xs text-gray-700 dark:text-gray-300">
+                                                                <p className="text-xs text-slate-700 dark:text-slate-300">
                                                                     <span className="font-medium text-red-600 dark:text-red-400">Reason:</span> {c.criteria || 'Section 385 Companies Act 1993'}
                                                                 </p>
-                                                                <p className="text-xs text-gray-700 dark:text-gray-300 mt-1">
+                                                                <p className="text-xs text-slate-700 dark:text-slate-300 mt-1">
                                                                     <span className="font-medium text-red-600 dark:text-red-400">Disqualification Period:</span>{' '}
                                                                     {formatDate(c.startDate)} - {c.endDate ? formatDate(c.endDate) : 'Indefinite'}
                                                                 </p>
                                                                 {c.comments && (
-                                                                    <p className="text-xs text-gray-600 dark:text-gray-400 italic mt-1.5 bg-gray-50 dark:bg-slate-900/50 p-2 rounded">
+                                                                    <p className="text-xs text-slate-600 dark:text-slate-400 italic mt-1.5 bg-slate-50 dark:bg-slate-900/50 p-2 rounded">
                                                                         "{c.comments}"
                                                                     </p>
                                                                 )}
@@ -216,11 +216,11 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                                                     <div key={idx} className="bg-white dark:bg-slate-800 p-3 rounded border border-red-200 dark:border-red-800/50">
                                                         <div className="flex items-start justify-between mb-2">
                                                             <div>
-                                                                <p className="font-semibold text-gray-900 dark:text-white text-sm">
+                                                                <p className="font-semibold text-slate-900 dark:text-white text-sm">
                                                                     {record.estateName}
                                                                 </p>
                                                                 {record.alternateNames && record.alternateNames.length > 0 && (
-                                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                                                                         Also known as: {record.alternateNames.join(', ')}
                                                                     </p>
                                                                 )}
@@ -234,15 +234,15 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                                                         </div>
 
                                                         <div className="mt-2 pl-3 border-l-2 border-red-300 dark:border-red-700">
-                                                            <p className="text-xs text-gray-700 dark:text-gray-300">
+                                                            <p className="text-xs text-slate-700 dark:text-slate-300">
                                                                 <span className="font-medium text-red-600 dark:text-red-400">Type:</span> {record.insolvencyTypeDescription}
                                                             </p>
-                                                            <p className="text-xs text-gray-700 dark:text-gray-300 mt-1">
+                                                            <p className="text-xs text-slate-700 dark:text-slate-300 mt-1">
                                                                 <span className="font-medium text-red-600 dark:text-red-400">Adjudication Date:</span>{' '}
                                                                 {formatDate(record.adjudicationOrLiquidationDate)}
                                                             </p>
                                                             {record.dischargeOrCompletionDate && (
-                                                                <p className="text-xs text-gray-700 dark:text-gray-300 mt-1">
+                                                                <p className="text-xs text-slate-700 dark:text-slate-300 mt-1">
                                                                     <span className="font-medium text-red-600 dark:text-red-400">Discharge/Completion Date:</span>{' '}
                                                                     {formatDate(record.dischargeOrCompletionDate)}
                                                                 </p>
@@ -267,11 +267,11 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                 {/* Stats */}
                 <div className="flex gap-4 mt-4">
                     <div className="px-3 py-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Directorships</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Directorships</p>
                         <p className="text-lg font-bold font-tabular text-purple-600 dark:text-purple-400">{directorCount}</p>
                     </div>
                     <div className="px-3 py-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Shareholdings</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">Shareholdings</p>
                         <p className="text-lg font-bold font-tabular text-blue-600 dark:text-blue-400">{shareholderCount}</p>
                     </div>
                 </div>
@@ -283,8 +283,8 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
             <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700 flex flex-wrap gap-3 items-center">
                 {/* Sort */}
                 <div className="flex items-center gap-2">
-                    <ArrowUpDown size={16} className="text-gray-500 dark:text-gray-400" />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">Sort:</span>
+                    <ArrowUpDown size={16} className="text-slate-500 dark:text-slate-400" />
+                    <span className="text-sm text-slate-700 dark:text-slate-300">Sort:</span>
                     <select
                         value={sortMode}
                         onChange={(e) => {
@@ -301,8 +301,8 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
 
                 {/* Filter */}
                 <div className="flex items-center gap-2">
-                    <Filter size={16} className="text-gray-500 dark:text-gray-400" />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">Filter:</span>
+                    <Filter size={16} className="text-slate-500 dark:text-slate-400" />
+                    <span className="text-sm text-slate-700 dark:text-slate-300">Filter:</span>
                     <select
                         value={filterMode}
                         onChange={(e) => {
@@ -318,7 +318,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                     </select>
                 </div>
 
-                <div className="ml-auto text-sm text-gray-500 dark:text-gray-400">
+                <div className="ml-auto text-sm text-slate-500 dark:text-slate-400">
                     Showing {startIndex + 1}-{Math.min(endIndex, sortedResults.length)} of {sortedResults.length}
                 </div>
             </div>
@@ -327,8 +327,8 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
             <div className="flex-1 overflow-y-auto p-6" onScroll={handleResultsScroll}>
                 {paginatedResults.length === 0 ? (
                     <div className="text-center py-12">
-                        <Building2 className="mx-auto mb-4 text-gray-300 dark:text-gray-600" size={48} />
-                        <p className="text-gray-500 dark:text-gray-400">No companies found with selected filters</p>
+                        <Building2 className="mx-auto mb-4 text-slate-300 dark:text-slate-600" size={48} />
+                        <p className="text-slate-500 dark:text-slate-400">No companies found with selected filters</p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -373,7 +373,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                                     onClick={() => setCurrentPage(pageNum)}
                                     className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${currentPage === pageNum
                                         ? 'bg-blue-500 text-white'
-                                        : 'hover:bg-slate-200 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-300'
+                                        : 'hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
                                         }`}
                                 >
                                     {pageNum}
@@ -390,7 +390,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                         <ChevronRight size={20} />
                     </button>
 
-                    <span className="ml-4 text-sm text-gray-500 dark:text-gray-400">
+                    <span className="ml-4 text-sm text-slate-500 dark:text-slate-400">
                         Page {currentPage} of {totalPages}
                     </span>
                 </div>
