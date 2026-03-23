@@ -29,8 +29,8 @@ export const ConfigBar: React.FC<Props> = ({ config, onConfigChange, theme, togg
             <div className="bg-blue-600 p-2 rounded-lg">
               <Eye className="text-white" size={20} />
             </div>
-            <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-emerald-600 dark:from-blue-400 dark:to-emerald-400 bg-clip-text text-transparent flex items-baseline gap-2">
-              Mitsuketa <span className="text-sm font-normal text-slate-500 dark:text-slate-400">見つけた</span>
+            <h1 className="text-xl font-semibold tracking-tight bg-gradient-to-r from-blue-600 to-emerald-600 dark:from-blue-400 dark:to-emerald-400 bg-clip-text text-transparent flex items-baseline gap-2">
+              Mitsuketa <span className="text-sm font-light text-slate-500 dark:text-slate-400">見つけた</span>
             </h1>
           </div>
 
@@ -100,7 +100,7 @@ export const ConfigBar: React.FC<Props> = ({ config, onConfigChange, theme, togg
 
               <div className="space-y-4">
                 <div className="flex items-baseline justify-between mb-2">
-                  <h3 className="text-sm font-bold text-slate-800 dark:text-white uppercase tracking-wider">API Keys</h3>
+                  <h3 className="text-sm font-semibold text-slate-800 dark:text-white uppercase tracking-[0.15em]">API Keys</h3>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 -mt-2 mb-3">
                   Mitsuketa works out of the box — no API keys required. If you have your own MBIE API keys and want to track your own usage, you can add them here.

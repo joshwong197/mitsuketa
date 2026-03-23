@@ -1256,7 +1256,7 @@ function App() {
 
           {/* Search Section */}
           <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex-shrink-0 relative">
-            <h2 className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-wider mb-3">Search</h2>
+            <h2 className="text-gray-500 dark:text-gray-400 text-xs font-semibold uppercase tracking-[0.15em] mb-3">Search</h2>
 
             {/* Search Mode Toggle */}
             <div className="flex gap-2 mb-3">
@@ -1412,7 +1412,7 @@ function App() {
           {/* Snapshots */}
           <div className="flex-1 overflow-y-auto p-4 min-h-0">
             <div className="flex justify-between items-center mb-3">
-              <h2 className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-wider">Snapshots</h2>
+              <h2 className="text-gray-500 dark:text-gray-400 text-xs font-semibold uppercase tracking-[0.15em]">Snapshots</h2>
               <div className="flex items-center gap-1">
                 <input
                   type="file"
@@ -1474,7 +1474,7 @@ function App() {
 
           {/* Export Section */}
           <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex-shrink-0">
-            <h2 className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-wider mb-3">Export</h2>
+            <h2 className="text-gray-500 dark:text-gray-400 text-xs font-semibold uppercase tracking-[0.15em] mb-3">Export</h2>
             <div className="space-y-2">
               <button
                 onClick={exportAsPNG}

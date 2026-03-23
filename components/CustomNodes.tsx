@@ -44,10 +44,10 @@ export const CompanyNode = memo(({ data, selected }: NodeProps<NodeData>) => {
             <Building2 size={20} />
           </div>
           <div className="overflow-hidden flex-1">
-            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 break-words" title={data.label}>
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 break-words" title={data.label}>
               {data.label}
             </h3>
-            <p className="text-xs text-blue-600 dark:text-blue-300 font-mono mt-0.5">
+            <p className="text-xs text-blue-600 dark:text-blue-300 font-mono font-tabular mt-0.5">
               {data.nzbn ? `NZBN: ${data.nzbn}` : 'Overseas / Unreg'}
             </p>
             {/* Status Badge */}

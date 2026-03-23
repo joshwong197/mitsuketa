@@ -17,8 +17,8 @@ export const AboutPage: React.FC<Props> = ({ onClose }) => {
                             <Eye className="text-white" size={24} />
                         </div>
                         <div>
-                            <h2 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-emerald-600 dark:from-blue-400 dark:to-emerald-400 bg-clip-text text-transparent flex items-baseline gap-2">
-                                Mitsuketa <span className="text-sm font-normal text-slate-500 dark:text-slate-400">見つけた</span>
+                            <h2 className="text-xl font-semibold tracking-tight bg-gradient-to-r from-blue-600 to-emerald-600 dark:from-blue-400 dark:to-emerald-400 bg-clip-text text-transparent flex items-baseline gap-2">
+                                Mitsuketa <span className="text-sm font-light text-slate-500 dark:text-slate-400">見つけた</span>
                             </h2>
                             <p className="text-xs text-slate-600 dark:text-slate-400 italic">"I found it."</p>
                         </div>
@@ -35,7 +35,7 @@ export const AboutPage: React.FC<Props> = ({ onClose }) => {
                 <div className="p-6 overflow-y-auto space-y-8">
 
                     <section>
-                        <h3 className="text-2xl font-bold text-slate-800 dark:text-white mb-3">A visual corporate investigation tool.</h3>
+                        <h3 className="text-2xl font-semibold tracking-tight text-slate-800 dark:text-white mb-3">A visual corporate investigation tool.</h3>
                         <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
                             Mitsuketa is a powerful visual workspace designed for investigators, researchers, credit managers, and corporate analysts.
                             It automatically aggregates data from key New Zealand public registers to transform complex corporate landscapes into intuitive, interactive maps.

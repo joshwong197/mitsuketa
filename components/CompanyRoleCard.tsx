@@ -85,7 +85,7 @@ export const CompanyRoleCard: React.FC<CompanyRoleCardProps> = ({ result, onClic
                         }`}>
                         {companyName}
                     </h3>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <p className="text-sm font-mono font-tabular text-gray-500 dark:text-gray-400">
                         NZBN: {nzbn}
                     </p>
                 </div>
@@ -150,7 +150,7 @@ export const CompanyRoleCard: React.FC<CompanyRoleCardProps> = ({ result, onClic
                                 Shareholding
                             </span>
                         </div>
-                        <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                        <span className="text-sm font-bold font-tabular text-blue-600 dark:text-blue-400">
                             {shareholding.toFixed(2)}%
                         </span>
                     </div>
