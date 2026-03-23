@@ -71,7 +71,7 @@ export const CompanyRoleCard: React.FC<CompanyRoleCardProps> = ({ result, onClic
     return (
         <div
             onClick={onClick}
-            className={`p-4 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 hover:shadow-soft-lg dark:hover:shadow-dark-soft-lg active:scale-[0.98] transition-all cursor-pointer group ${isCompanyRemoved && !isInExternalAdmin ? 'opacity-60 hover:opacity-80' : ''
+            className={`p-4 bg-white dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl hover:border-blue-500 dark:hover:border-blue-400 hover:shadow-soft-lg dark:hover:shadow-dark-soft-lg active:scale-[0.98] transition-all cursor-pointer group ${isCompanyRemoved && !isInExternalAdmin ? 'opacity-60 hover:opacity-80' : ''
                 }`}
         >
             {/* Company Header */}

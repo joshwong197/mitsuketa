@@ -113,7 +113,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
             {/* Header - collapses on scroll down, reappears on scroll up */}
             <div className={`grid transition-all duration-300 ease-in-out ${headerVisible ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
             <div className="overflow-hidden">
-            <div className="p-6 bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 border-b border-slate-200 dark:border-slate-700">
+            <div className="p-6 bg-gradient-to-r from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800/80 border-b border-slate-200 dark:border-slate-700">
                 <button
                     onClick={onBack}
                     className="mb-4 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 transition-colors"
@@ -331,7 +331,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                         <p className="text-slate-500 dark:text-slate-400">No companies found with selected filters</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
                         {paginatedResults.map((result) => (
                             <CompanyRoleCard
                                 key={result.nzbn}

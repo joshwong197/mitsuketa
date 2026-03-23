@@ -36,7 +36,7 @@ export const DirectorPanel: React.FC<DirectorPanelProps> = ({
             />
 
             {/* Slide-out Panel from Right */}
-            <div className="fixed right-0 top-0 h-full w-full sm:w-96 bg-white dark:bg-slate-900 shadow-soft-lg dark:shadow-dark-soft-lg z-50 flex flex-col border-l-2 border-blue-500 dark:border-blue-400 transition-transform duration-300">
+            <div className="fixed right-0 top-0 h-full w-full sm:w-[400px] bg-white dark:bg-slate-900 shadow-soft-lg dark:shadow-dark-soft-lg z-50 flex flex-col border-l-[3px] border-slate-900 dark:border-slate-100 transition-transform duration-300">
                 {/* Header */}
                 <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20">
                     <div className="flex items-center gap-2">
