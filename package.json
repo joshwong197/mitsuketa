@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^1.1.8",
+    "@vercel/analytics": "^2.0.1",
     "cheerio": "^1.2.0",
     "html-to-image": "^1.11.13",
     "lucide-react": "^0.562.0",

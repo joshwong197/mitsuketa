@@ -27,6 +27,7 @@ import { searchByPersonName } from './services/directorSearchService';
 import { searchDisqualifiedDirectors, DisqualifiedDirector } from './src/api/disqualifiedDirectorsApi';
 import { searchInsolvency, InsolvencyRecord } from './src/api/insolvencyApi';
 import { BASE_API_URL, API_PATHS } from './constants';
+import { Analytics } from '@vercel/analytics/react';
 
 
 const DEFAULT_CONFIG: ApiConfig = {
@@ -1718,6 +1719,7 @@ function App() {
           <strong>Mitsuketa</strong> 見つけた
         </p>
       </footer>
+      <Analytics />
     </div>
   );
 }
