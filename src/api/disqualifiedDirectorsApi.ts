@@ -105,9 +105,9 @@ export async function searchDisqualifiedDirectors(
     config: ApiConfig,
     logger?: LoggerCallback,
     pageSize: number = 10,
-    page: number = 0
+    page: number = 0,
+    baseUrl: string = '/api/proxy'
 ): Promise<DisqualifiedDirectorSearchResult> {
-    const baseUrl = `/api/proxy`;
     const proxyPath = `${DISQUALIFIED_DIRECTORS_PATH}/search?name=${encodeURIComponent(name)}&page=${page}&page-size=${pageSize}`;
     const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
 

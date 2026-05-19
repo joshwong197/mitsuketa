@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { resolveApiKey } from '../mcp/lib/keys';
 
 // Simple in-memory rate limiting (Soft limit)
 const rateLimit = new Map<string, { count: number; reset: number }>();
@@ -38,17 +39,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 2. Determine which key to use
     // Priority: User Provided Key > Your Secret Org Key
-    let finalKey = userKey;
-
-    if (!finalKey || finalKey.trim() === '') {
-        const secrets: Record<string, string | undefined> = {
-            'nzbn': process.env.ORG_NZBN_KEY,
-            'companies': process.env.ORG_COMPANIES_KEY,
-            'disqualified': process.env.ORG_DISQUALIFIED_KEY,
-            'insolvency': process.env.ORG_INSOLVENCY_KEY
-        };
-        finalKey = secrets[apiType] || '';
-    }
+    const finalKey = resolveApiKey(apiType, userKey);
 
     // 3. Construct target Government API URL
     // We enforce the production gateway URL here

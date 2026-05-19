@@ -10,9 +10,9 @@ const BASE_URL_PROD = 'https://api.business.govt.nz/gateway';
 export async function searchByPersonName(
     personName: string,
     apiKey: string,
-    onLog?: (entry: LogEntry) => void
+    onLog?: (entry: LogEntry) => void,
+    baseUrl: string = '/api/proxy'
 ): Promise<PersonCompanyResult[]> {
-    const baseUrl = `/api/proxy`;
     const proxyPath = `/companies-office/companies-register/entity-roles/v3/search?name=${encodeURIComponent(personName)}&role-type=ALL&page-size=1000`;
     const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
 

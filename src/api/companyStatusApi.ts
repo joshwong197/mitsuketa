@@ -44,24 +44,63 @@ interface NZBNEntityResponse {
     'company-details'?: NZBNCompanyDetails;
 }
 
-/**
- * Fetch a single company's NZBN entity details to extract insolvency/admin status.
- */
-async function fetchCompanyStatus(
-    nzbn: string,
-    config: ApiConfig,
-    logger?: LoggerCallback
-): Promise<{
+export interface CompanyStatusResult {
     entityStatusDescription: string;
     isInExternalAdmin: boolean;
     externalAdminType?: string;
     removalCommenced: boolean;
     hasHistoricInsolvency: boolean;
     historicInsolvencyType?: string;
-} | null> {
+}
+
+/**
+ * Fetch entity status history (chronological list of past entity statuses).
+ * Exported so the MCP server can wrap it as a standalone tool.
+ */
+export async function fetchEntityStatusHistory(
+    nzbn: string,
+    config: ApiConfig,
+    baseUrl: string = '/api/proxy',
+    logger?: LoggerCallback
+): Promise<Array<{ entityStatusDescription: string; effectiveFrom?: string; effectiveTo?: string }>> {
+    const proxyPath = `${API_PATHS.nzbn}/entities/${nzbn}/history/entity-statuses`;
+    const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
+    const response = await fetch(url, {
+        headers: {
+            'x-user-api-key': config.nzbnKey || '',
+            'x-api-type': 'nzbn',
+            'Accept': 'application/json'
+        }
+    });
+    if (logger) {
+        logger({
+            timestamp: new Date().toISOString(),
+            method: 'GET',
+            url: proxyPath,
+            headers: {},
+            status: response.status,
+            message: response.statusText
+        });
+    }
+    if (!response.ok) {
+        return [];
+    }
+    const data = await response.json();
+    return Array.isArray(data) ? data : [];
+}
+
+/**
+ * Fetch a single company's NZBN entity details to extract insolvency/admin status.
+ */
+export async function fetchCompanyStatus(
+    nzbn: string,
+    config: ApiConfig,
+    logger?: LoggerCallback,
+    baseUrl: string = '/api/proxy'
+): Promise<CompanyStatusResult | null> {
     // Use secure proxy
     const proxyPath = `${API_PATHS.nzbn}/entities/${nzbn}`;
-    const url = `/api/proxy?path=${encodeURIComponent(proxyPath)}`;
+    const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
 
     if (logger) {
         logger({
@@ -174,7 +213,7 @@ async function fetchCompanyStatus(
         if (!hasHistoricInsolvency) {
             try {
                 const historyProxyPath = `${API_PATHS.nzbn}/entities/${nzbn}/history/entity-statuses`;
-                const historyUrl = `/api/proxy?path=${encodeURIComponent(historyProxyPath)}`;
+                const historyUrl = `${baseUrl}?path=${encodeURIComponent(historyProxyPath)}`;
                 const historyResponse = await fetch(historyUrl, {
                     headers: {
                         'x-user-api-key': config.nzbnKey || '',
@@ -259,7 +298,8 @@ export async function enrichCompanyResults(
     config: ApiConfig,
     logger?: LoggerCallback,
     concurrency: number = 5,
-    onProgress?: (completed: number, total: number) => void
+    onProgress?: (completed: number, total: number) => void,
+    baseUrl: string = '/api/proxy'
 ): Promise<PersonCompanyResult[]> {
 
 
@@ -274,7 +314,7 @@ export async function enrichCompanyResults(
     for (let i = 0; i < uniqueNzbns.length; i += concurrency) {
         const batch = uniqueNzbns.slice(i, i + concurrency);
         const batchResults = await Promise.all(
-            batch.map(nzbn => fetchCompanyStatus(nzbn, config, logger))
+            batch.map(nzbn => fetchCompanyStatus(nzbn, config, logger, baseUrl))
         );
 
         batch.forEach((nzbn, idx) => {
@@ -311,7 +351,8 @@ export async function enrichGraphNodes(
     nodes: GraphNode[],
     config: ApiConfig,
     logger?: LoggerCallback,
-    concurrency: number = 5
+    concurrency: number = 5,
+    baseUrl: string = '/api/proxy'
 ): Promise<GraphNode[]> {
 
 
@@ -328,7 +369,7 @@ export async function enrichGraphNodes(
         const batch = uniqueNzbns.slice(i, i + concurrency);
 
         const promises = batch.map(async (nzbn) => {
-            const status = await fetchCompanyStatus(nzbn, config, logger);
+            const status = await fetchCompanyStatus(nzbn, config, logger, baseUrl);
             if (status) {
                 statusMap.set(nzbn, status);
             }

@@ -33,10 +33,10 @@ class OrgSpider {
     // OPTIMIZATION: Roles API response cache (prevents redundant ~11s calls)
     private rolesCache: Map<string, CompaniesRoleSearchResult>;
 
-    constructor(config: ApiConfig, logger?: LoggerCallback) {
+    constructor(config: ApiConfig, logger?: LoggerCallback, baseUrls?: { nzbn?: string; companies?: string }) {
         this.config = config;
-        this.nzbnBaseUrl = `/api/proxy`;
-        this.companiesBaseUrl = `/api/proxy`;
+        this.nzbnBaseUrl = baseUrls?.nzbn ?? `/api/proxy`;
+        this.companiesBaseUrl = baseUrls?.companies ?? `/api/proxy`;
         this.visited = new Set();
         this.nodes = new Map();
         this.edges = [];
@@ -878,7 +878,7 @@ async function fetchEntitySummaryLight(nzbn: string, config: ApiConfig, baseUrl:
 }
 
 // Smart wrapper: Uses lightweight or full endpoint based on feature flag
-async function fetchEntityDetails(nzbn: string, config: ApiConfig, baseUrl: string, logger?: LoggerCallback): Promise<NZBNFullEntity> {
+export async function fetchEntityDetails(nzbn: string, config: ApiConfig, baseUrl: string = '/api/proxy', logger?: LoggerCallback): Promise<NZBNFullEntity> {
     if (USE_LIGHTWEIGHT_ENDPOINTS) {
         // Fetch lightweight summary
         const summary = await fetchEntitySummary(nzbn, config, baseUrl, logger);
@@ -905,7 +905,7 @@ async function fetchEntityDetails(nzbn: string, config: ApiConfig, baseUrl: stri
     }
 }
 
-async function fetchRolesByEntityName(name: string, config: ApiConfig, baseUrl: string, logger?: LoggerCallback): Promise<CompaniesRoleSearchResult> {
+export async function fetchRolesByEntityName(name: string, config: ApiConfig, baseUrl: string = '/api/proxy', logger?: LoggerCallback): Promise<CompaniesRoleSearchResult> {
     try {
         // Enclose in double quotes to force exact match and prevent MBIE from doing slow fuzzy searching/OR matching.
         // Without this MBIE will `OR` query every common word across 700k records, taking 30 seconds.
@@ -971,8 +971,7 @@ async function fetchDirectorsByEntityName(name: string, config: ApiConfig, baseU
     }
 }
 
-export const searchEntities = async (term: string, config: ApiConfig, logger?: LoggerCallback, page: number = 0): Promise<EntitySearchResponse> => {
-    const baseUrl = `/api/proxy`;
+export const searchEntities = async (term: string, config: ApiConfig, logger?: LoggerCallback, page: number = 0, baseUrl: string = '/api/proxy'): Promise<EntitySearchResponse> => {
     // Enclose in double quotes to force exact match
     const encodedTerm = encodeURIComponent(`"${term}"`);
     const proxyPath = `${API_PATHS.nzbn}/entities?search-term=${encodedTerm}&page-size=10&page=${page}`;
@@ -995,8 +994,8 @@ export const searchEntities = async (term: string, config: ApiConfig, logger?: L
     };
 };
 
-export const generateOrgChart = async (rootNzbn: string, config: ApiConfig, onDebug?: DebugCallback, onLog?: LoggerCallback) => {
-    const spider = new OrgSpider(config, onLog);
+export const generateOrgChart = async (rootNzbn: string, config: ApiConfig, onDebug?: DebugCallback, onLog?: LoggerCallback, baseUrls?: { nzbn?: string; companies?: string }) => {
+    const spider = new OrgSpider(config, onLog, baseUrls);
     return await spider.buildGraph(rootNzbn, onDebug);
 };
 
@@ -1007,10 +1006,14 @@ export const expandNodeDownstream = async (
     existingNodeIds: string[],
     config: ApiConfig,
     onLog?: LoggerCallback,
-    maxDepth: number = 2
+    maxDepth: number = 2,
+    baseUrls?: { nzbn?: string; companies?: string }
 ) => {
-    const spider = new OrgSpider(config, onLog);
+    const spider = new OrgSpider(config, onLog, baseUrls);
     return await spider.expandNode(targetNzbn, targetName, existingNodeIds, maxDepth);
 };
+
+// Expose the OrgSpider class for MCP tools that need direct access (e.g. upstream-only crawls).
+export { OrgSpider };
 
 export const getDirectors = fetchDirectorsByEntityName;

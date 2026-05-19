@@ -114,9 +114,9 @@ export async function searchInsolvency(
     config: ApiConfig,
     logger?: LoggerCallback,
     pageSize: number = 1000,
-    page: number = 1
+    page: number = 1,
+    baseUrl: string = '/api/proxy'
 ): Promise<InsolvencySearchResult> {
-    const baseUrl = `/api/proxy`;
     const proxyPath = `${INSOLVENCY_PATH}/insolvencies?name=${encodeURIComponent(name)}&page=${page}&page-size=${pageSize}`;
     const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
 
