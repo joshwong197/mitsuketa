@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{{TITLE}}</title>
+<style>
+  *,*::before,*::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  #graph { width: 100vw; height: 100vh; }
+  #header { position: fixed; top: 16px; left: 16px; z-index: 10; padding: 10px 14px; background: rgba(255,255,255,0.9); border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); font-size: 13px; max-width: 60vw; }
+  #header h1 { margin: 0; font-size: 14px; font-weight: 600; }
+  #header p { margin: 4px 0 0; font-size: 11px; color: #64748b; }
+  body.dark #header { background: rgba(30,41,59,0.9); color: #f1f5f9; }
+  body.dark #header p { color: #94a3b8; }
+</style>
+</head>
+<body>
+<header id="header">
+  <h1>{{TITLE}}</h1>
+  <p>{{SUBTITLE}} · Click a node for details · Double-click a node to collapse/expand its branch · Scroll to zoom</p>
+</header>
+<div id="graph"></div>
+<script>{{BUNDLE}}</script>
+<script>
+  (function(){
+    var data = {{DATA}};
+    var hashTheme = (location.hash.match(/theme=(\w+)/) || [])[1];
+    var theme = hashTheme === 'dark' ? 'dark' : hashTheme === 'light' ? 'light' : '{{THEME}}';
+    if (theme === 'dark') document.body.classList.add('dark');
+    window.MitsuketaGraph.render(document.getElementById('graph'), data, { theme: theme });
+  })();
+</script>
+</body>
+</html>

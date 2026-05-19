@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "api/mcp/index.ts": {
+      "includeFiles": "mcp/templates/**"
+    }
+  }
+}
