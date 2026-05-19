@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^1.1.8",
+    "@modelcontextprotocol/sdk": "^1.29.0",
     "@vercel/analytics": "^2.0.1",
     "cheerio": "^1.2.0",
     "html-to-image": "^1.11.13",
@@ -17,7 +18,8 @@
     "pdfjs-dist": "^5.5.207",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "reactflow": "^11.11.4"
+    "reactflow": "^11.11.4",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
