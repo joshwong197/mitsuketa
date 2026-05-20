@@ -6,10 +6,7 @@
 // into our handlers. Rate limiting is applied before dispatch.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-
-import { createMcpServer } from '../../mcp/server';
-import { checkRateLimit } from '../../mcp/lib/rateLimit';
+import { checkRateLimit } from '../mcp/lib/rateLimit';
 
 export const config = {
     // Allow up to 60s for slow tools like build_ownership_graph.
@@ -17,6 +14,22 @@ export const config = {
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+    // Dynamic imports so a module-load failure surfaces as a clean JSON error,
+    // not a Vercel FUNCTION_INVOCATION_FAILED with no message visible to the client.
+    let StreamableHTTPServerTransport: any;
+    let createMcpServer: any;
+    try {
+        ({ StreamableHTTPServerTransport } = await import('@modelcontextprotocol/sdk/server/streamableHttp.js'));
+        ({ createMcpServer } = await import('../mcp/server'));
+    } catch (err: any) {
+        console.error('MCP import error:', err);
+        return res.status(500).json({
+            jsonrpc: '2.0',
+            error: { code: -32000, message: `MCP import failed: ${err?.message || String(err)}`, data: { stack: err?.stack } },
+            id: null,
+        });
+    }
+
     const clientIp = (req.headers['x-forwarded-for'] as string) || 'anonymous';
     const rl = checkRateLimit(clientIp);
     if (!rl.allowed) {
@@ -30,18 +43,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
     }
 
-    const server = createMcpServer({ req });
-    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
-
+    let server: any;
+    let transport: any;
     try {
+        server = createMcpServer({ req });
+        transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
         await server.connect(transport);
         await transport.handleRequest(req as any, res as any, req.body);
     } catch (err: any) {
-        console.error('MCP transport error:', err);
+        console.error('MCP runtime error:', err);
         if (!res.headersSent) {
             res.status(500).json({
                 jsonrpc: '2.0',
-                error: { code: -32000, message: err?.message || 'Internal MCP error' },
+                error: { code: -32000, message: err?.message || 'Internal MCP error', data: { stack: err?.stack } },
                 id: null,
             });
         }
