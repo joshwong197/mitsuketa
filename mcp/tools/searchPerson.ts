@@ -1,8 +1,8 @@
-import { searchByPersonName } from '../../services/directorSearchService';
-import { enrichCompanyResults } from '../../src/api/companyStatusApi';
-import { buildApiConfig, getProxyBaseUrl } from '../lib/config';
-import { SearchPersonInput } from '../schemas';
-import type { ToolContext } from './shared';
+import { searchByPersonName } from '../../services/directorSearchService.js';
+import { enrichCompanyResults } from '../../src/api/companyStatusApi.js';
+import { buildApiConfig, getProxyBaseUrl } from '../lib/config.js';
+import { SearchPersonInput } from '../schemas.js';
+import type { ToolContext } from './shared.js';
 
 export const searchPerson = {
     name: 'mitsuketa_search_person',

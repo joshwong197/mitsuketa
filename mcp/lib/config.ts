@@ -7,7 +7,7 @@
 //     ORG_*_KEY env vars (same fallback the browser uses today).
 //   - baseUrl is a fully-qualified URL to this deployment's /api/proxy.
 
-import type { ApiConfig } from '../../types';
+import type { ApiConfig } from '../../types.js';
 
 export function getProxyBaseUrl(req?: { headers?: Record<string, string | string[] | undefined> }): string {
     // 1. Explicit override (useful for tests / local dev pointing at a remote proxy).

@@ -1,5 +1,5 @@
-import { ApiConfig, PersonCompanyResult, LoggerCallback, GraphNode } from '../../types';
-import { BASE_API_URL, API_PATHS } from '../../constants';
+import { ApiConfig, PersonCompanyResult, LoggerCallback, GraphNode } from '../../types.js';
+import { BASE_API_URL, API_PATHS } from '../../constants.js';
 
 /**
  * External administration status types from NZBN API entityStatusDescription

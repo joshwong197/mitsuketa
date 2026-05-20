@@ -1,9 +1,9 @@
-import { generateOrgChart } from '../../services/apiService';
-import { enrichGraphNodes } from '../../src/api/companyStatusApi';
-import { buildApiConfig, getProxyBaseUrl } from '../lib/config';
-import { BuildOwnershipGraphInput } from '../schemas';
-import { generateGraphHtml } from '../lib/htmlExport';
-import type { ToolContext } from './shared';
+import { generateOrgChart } from '../../services/apiService.js';
+import { enrichGraphNodes } from '../../src/api/companyStatusApi.js';
+import { buildApiConfig, getProxyBaseUrl } from '../lib/config.js';
+import { BuildOwnershipGraphInput } from '../schemas.js';
+import { generateGraphHtml } from '../lib/htmlExport.js';
+import type { ToolContext } from './shared.js';
 
 type Args = {
     nzbn: string;

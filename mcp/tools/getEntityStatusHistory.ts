@@ -1,7 +1,7 @@
-import { fetchEntityStatusHistory } from '../../src/api/companyStatusApi';
-import { buildApiConfig, getProxyBaseUrl } from '../lib/config';
-import { GetEntityStatusHistoryInput } from '../schemas';
-import type { ToolContext } from './shared';
+import { fetchEntityStatusHistory } from '../../src/api/companyStatusApi.js';
+import { buildApiConfig, getProxyBaseUrl } from '../lib/config.js';
+import { GetEntityStatusHistoryInput } from '../schemas.js';
+import type { ToolContext } from './shared.js';
 
 export const getEntityStatusHistory = {
     name: 'mitsuketa_get_entity_status_history',

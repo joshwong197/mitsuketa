@@ -1,4 +1,4 @@
-import { CompaniesRoleSearchResult, PersonCompanyResult, LogEntry } from '../types';
+import { CompaniesRoleSearchResult, PersonCompanyResult, LogEntry } from '../types.js';
 
 // Production URL (no longer used directly - routed through /api/proxy)
 const BASE_URL_PROD = 'https://api.business.govt.nz/gateway';

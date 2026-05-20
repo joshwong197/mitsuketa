@@ -1,7 +1,7 @@
-import { searchDisqualifiedDirectors } from '../../src/api/disqualifiedDirectorsApi';
-import { buildApiConfig, getProxyBaseUrl } from '../lib/config';
-import { CheckDisqualificationInput } from '../schemas';
-import type { ToolContext } from './shared';
+import { searchDisqualifiedDirectors } from '../../src/api/disqualifiedDirectorsApi.js';
+import { buildApiConfig, getProxyBaseUrl } from '../lib/config.js';
+import { CheckDisqualificationInput } from '../schemas.js';
+import type { ToolContext } from './shared.js';
 
 export const checkDisqualification = {
     name: 'mitsuketa_check_disqualification',

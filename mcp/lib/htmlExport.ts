@@ -5,7 +5,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
-import type { GraphNode, GraphEdge } from '../../types';
+import type { GraphNode, GraphEdge } from '../../types.js';
 
 export interface GenerateGraphHtmlOptions {
     title: string;

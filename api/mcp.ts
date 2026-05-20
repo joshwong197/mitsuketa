@@ -6,7 +6,7 @@
 // into our handlers. Rate limiting is applied before dispatch.
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { checkRateLimit } from '../mcp/lib/rateLimit';
+import { checkRateLimit } from '../mcp/lib/rateLimit.js';
 
 export const config = {
     // Allow up to 60s for slow tools like build_ownership_graph.
@@ -20,7 +20,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let createMcpServer: any;
     try {
         ({ StreamableHTTPServerTransport } = await import('@modelcontextprotocol/sdk/server/streamableHttp.js'));
-        ({ createMcpServer } = await import('../mcp/server'));
+        ({ createMcpServer } = await import('../mcp/server.js'));
     } catch (err: any) {
         console.error('MCP import error:', err);
         return res.status(500).json({

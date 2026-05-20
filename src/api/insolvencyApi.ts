@@ -1,5 +1,5 @@
-import { ApiConfig, LoggerCallback } from '../../types';
-import { BASE_API_URL } from '../../constants';
+import { ApiConfig, LoggerCallback } from '../../types.js';
+import { BASE_API_URL } from '../../constants.js';
 
 const INSOLVENCY_PATH = '/insolvency-trustee-services/v5';
 

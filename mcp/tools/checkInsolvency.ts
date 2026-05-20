@@ -1,7 +1,7 @@
-import { searchInsolvency } from '../../src/api/insolvencyApi';
-import { buildApiConfig, getProxyBaseUrl } from '../lib/config';
-import { CheckInsolvencyInput } from '../schemas';
-import type { ToolContext } from './shared';
+import { searchInsolvency } from '../../src/api/insolvencyApi.js';
+import { buildApiConfig, getProxyBaseUrl } from '../lib/config.js';
+import { CheckInsolvencyInput } from '../schemas.js';
+import type { ToolContext } from './shared.js';
 
 export const checkInsolvency = {
     name: 'mitsuketa_check_insolvency',

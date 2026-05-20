@@ -1,5 +1,5 @@
 // Director extraction using NZBN API /entities/{nzbn}/roles endpoint
-import { ApiConfig } from '../types';
+import { ApiConfig } from '../types.js';
 
 export interface Director {
     firstName?: string;

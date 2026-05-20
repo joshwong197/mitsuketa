@@ -4,16 +4,16 @@
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-import { getEntityFull } from './tools/getEntityFull';
-import { getEntityStatusHistory } from './tools/getEntityStatusHistory';
-import { searchPerson } from './tools/searchPerson';
-import { getCompanyDirectors } from './tools/getCompanyDirectors';
-import { checkDisqualification } from './tools/checkDisqualification';
-import { checkInsolvency } from './tools/checkInsolvency';
-import { getCompanyStatus } from './tools/getCompanyStatus';
-import { buildOwnershipGraph } from './tools/buildOwnershipGraph';
+import { getEntityFull } from './tools/getEntityFull.js';
+import { getEntityStatusHistory } from './tools/getEntityStatusHistory.js';
+import { searchPerson } from './tools/searchPerson.js';
+import { getCompanyDirectors } from './tools/getCompanyDirectors.js';
+import { checkDisqualification } from './tools/checkDisqualification.js';
+import { checkInsolvency } from './tools/checkInsolvency.js';
+import { getCompanyStatus } from './tools/getCompanyStatus.js';
+import { buildOwnershipGraph } from './tools/buildOwnershipGraph.js';
 
-import type { ToolContext } from './tools/shared';
+import type { ToolContext } from './tools/shared.js';
 
 const SERVER_INFO = {
     name: 'mitsuketa',

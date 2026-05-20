@@ -1,7 +1,7 @@
-import { fetchCompanyStatus } from '../../src/api/companyStatusApi';
-import { buildApiConfig, getProxyBaseUrl } from '../lib/config';
-import { GetCompanyStatusInput } from '../schemas';
-import type { ToolContext } from './shared';
+import { fetchCompanyStatus } from '../../src/api/companyStatusApi.js';
+import { buildApiConfig, getProxyBaseUrl } from '../lib/config.js';
+import { GetCompanyStatusInput } from '../schemas.js';
+import type { ToolContext } from './shared.js';
 
 export const getCompanyStatus = {
     name: 'mitsuketa_get_company_status',

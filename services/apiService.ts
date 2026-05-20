@@ -1,5 +1,5 @@
-import { ApiConfig, GraphEdge, GraphNode, NodeType, NZBNFullEntity, EntitySearchResultItem, EntitySearchResponse, CompaniesRoleSearchResult, DebugCallback, LoggerCallback } from '../types';
-import { BASE_API_URL, API_PATHS } from '../constants';
+import { ApiConfig, GraphEdge, GraphNode, NodeType, NZBNFullEntity, EntitySearchResultItem, EntitySearchResponse, CompaniesRoleSearchResult, DebugCallback, LoggerCallback } from '../types.js';
+import { BASE_API_URL, API_PATHS } from '../constants.js';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 

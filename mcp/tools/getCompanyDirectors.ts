@@ -1,7 +1,7 @@
-import { fetchDirectorsFromRolesEndpoint } from '../../services/directorService';
-import { getProxyBaseUrl } from '../lib/config';
-import { GetCompanyDirectorsInput } from '../schemas';
-import type { ToolContext } from './shared';
+import { fetchDirectorsFromRolesEndpoint } from '../../services/directorService.js';
+import { getProxyBaseUrl } from '../lib/config.js';
+import { GetCompanyDirectorsInput } from '../schemas.js';
+import type { ToolContext } from './shared.js';
 
 export const getCompanyDirectors = {
     name: 'mitsuketa_get_company_directors',

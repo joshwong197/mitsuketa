@@ -1,7 +1,7 @@
-import { fetchEntityDetails } from '../../services/apiService';
-import { buildApiConfig, getProxyBaseUrl } from '../lib/config';
-import { GetEntityFullInput } from '../schemas';
-import type { ToolContext } from './shared';
+import { fetchEntityDetails } from '../../services/apiService.js';
+import { buildApiConfig, getProxyBaseUrl } from '../lib/config.js';
+import { GetEntityFullInput } from '../schemas.js';
+import type { ToolContext } from './shared.js';
 
 export const getEntityFull = {
     name: 'mitsuketa_get_entity_full',

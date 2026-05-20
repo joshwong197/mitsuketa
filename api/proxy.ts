@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { resolveApiKey } from '../mcp/lib/keys';
+import { resolveApiKey } from '../mcp/lib/keys.js';
 
 // Simple in-memory rate limiting (Soft limit)
 const rateLimit = new Map<string, { count: number; reset: number }>();
