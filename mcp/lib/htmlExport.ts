@@ -2,7 +2,7 @@
 // Inlines the prebuilt Cytoscape bundle plus a minimal HTML template so the
 // resulting .html file opens offline with full pan/zoom/click/collapse.
 
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, resolve } from 'path';
 import type { GraphNode, GraphEdge } from '../../types';
@@ -13,13 +13,54 @@ export interface GenerateGraphHtmlOptions {
     subtitle?: string;
 }
 
-// __dirname-equivalent in ESM. The build artifacts live next to this file's
-// source (`mcp/lib/` -> `mcp/templates/`).
-const here = dirname(fileURLToPath(import.meta.url));
+// Vercel bundles each serverless function, so `import.meta.url` at runtime
+// points to the bundled location — not this source file. Resolving relative
+// to it would miss the templates. We try a series of candidate roots and
+// take the first one that contains the bundle file.
+function findTemplatesDir(): string {
+    const here = (() => {
+        try {
+            return dirname(fileURLToPath(import.meta.url));
+        } catch {
+            return process.cwd();
+        }
+    })();
 
-// Read once, at module load, so cold-start cost is paid once per function instance.
-const BUNDLE_JS = readFileSync(resolve(here, '..', 'templates', 'graph-bundle.js'), 'utf-8');
-const TEMPLATE = readFileSync(resolve(here, '..', 'templates', 'graph-template.html'), 'utf-8');
+    const candidates = [
+        resolve(here, '..', 'templates'),                // dev: mcp/lib/ -> mcp/templates/
+        resolve(process.cwd(), 'mcp', 'templates'),      // Vercel: cwd is project root
+        resolve(here, '..', '..', 'mcp', 'templates'),   // bundled near api/mcp
+        resolve(here, '..', '..', '..', 'mcp', 'templates'),
+        '/var/task/mcp/templates',                       // Vercel Lambda fixed root
+    ];
+
+    for (const dir of candidates) {
+        if (existsSync(resolve(dir, 'graph-bundle.js'))) return dir;
+    }
+    throw new Error(
+        `Cannot locate mcp/templates/graph-bundle.js. Searched: ${candidates.join(', ')}. ` +
+        `Confirm vercel.json includeFiles is shipping mcp/templates/ with the function.`,
+    );
+}
+
+// Lazy initialisation — if templates aren't shipped, the other 7 tools still
+// work; only build_ownership_graph with format='html'|'both' will fail.
+let cachedBundle: string | null = null;
+let cachedTemplate: string | null = null;
+
+function getBundle(): string {
+    if (cachedBundle === null) {
+        const dir = findTemplatesDir();
+        cachedBundle = readFileSync(resolve(dir, 'graph-bundle.js'), 'utf-8');
+        cachedTemplate = readFileSync(resolve(dir, 'graph-template.html'), 'utf-8');
+    }
+    return cachedBundle!;
+}
+
+function getTemplate(): string {
+    if (cachedTemplate === null) getBundle();
+    return cachedTemplate!;
+}
 
 function escapeHtml(s: string): string {
     return s.replace(/[<>&"]/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -75,10 +116,10 @@ export function generateGraphHtml(
 
     const subtitle = opts.subtitle ?? `${nodes.length} entities · ${edges.length} relationships`;
 
-    return TEMPLATE
+    return getTemplate()
         .replaceAll('{{TITLE}}', escapeHtml(opts.title))
         .replaceAll('{{SUBTITLE}}', escapeHtml(subtitle))
         .replace('{{THEME}}', opts.theme ?? 'light')
-        .replace('{{BUNDLE}}', () => BUNDLE_JS)
+        .replace('{{BUNDLE}}', () => getBundle())
         .replace('{{DATA}}', () => data);
 }
