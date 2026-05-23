@@ -4,6 +4,7 @@
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
+import { lookupNzbn } from './tools/lookupNzbn.js';
 import { getEntityFull } from './tools/getEntityFull.js';
 import { getEntityStatusHistory } from './tools/getEntityStatusHistory.js';
 import { searchPerson } from './tools/searchPerson.js';
@@ -21,6 +22,7 @@ const SERVER_INFO = {
 };
 
 const TOOLS = [
+    lookupNzbn,
     getEntityFull,
     getEntityStatusHistory,
     searchPerson,

@@ -11,6 +11,11 @@ const NzbnString = z
 
 const NameString = z.string().trim().min(2, 'name must be at least 2 characters');
 
+export const LookupNzbnInput = {
+    name: NameString.describe('Company name (full or partial), e.g. "8 Homes Limited" or "8 Homes"'),
+    page: z.number().int().min(0).optional().describe('Page number, 0-indexed (default 0; page size is 10)'),
+};
+
 export const GetEntityFullInput = {
     nzbn: NzbnString.describe('13-digit NZ Business Number'),
 };
