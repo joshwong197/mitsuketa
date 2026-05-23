@@ -7,6 +7,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { checkRateLimit } from '../mcp/lib/rateLimit.js';
+import { getGraph } from '../mcp/lib/graphStore.js';
 
 export const config = {
     // Allow up to 60s for slow tools like build_ownership_graph.
@@ -14,6 +15,27 @@ export const config = {
 };
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+    // Short-circuit: GET /api/mcp?graphId=X serves a previously-generated
+    // ownership graph HTML. Same function = same module memory as the tool
+    // that wrote it. See mcp/lib/graphStore.ts for the durability caveats.
+    if (req.method === 'GET' && typeof req.query.graphId === 'string') {
+        const html = getGraph(req.query.graphId);
+        if (!html) {
+            res.status(404).setHeader('Content-Type', 'text/html; charset=utf-8');
+            return res.send(
+                `<!doctype html><meta charset="utf-8"><title>Graph expired</title>` +
+                `<div style="font:16px/1.5 system-ui;max-width:560px;margin:80px auto;padding:0 24px;color:#333">` +
+                `<h1 style="margin:0 0 8px">Graph not found</h1>` +
+                `<p>This ownership graph link has expired or the serving function instance was recycled.</p>` +
+                `<p>Ask Claude to regenerate it — re-run the same prompt and a fresh link will be issued.</p>` +
+                `</div>`,
+            );
+        }
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Cache-Control', 'private, max-age=3600');
+        return res.send(html);
+    }
+
     // Dynamic imports so a module-load failure surfaces as a clean JSON error,
     // not a Vercel FUNCTION_INVOCATION_FAILED with no message visible to the client.
     let StreamableHTTPServerTransport: any;

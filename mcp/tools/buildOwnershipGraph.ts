@@ -3,7 +3,25 @@ import { enrichGraphNodes } from '../../src/api/companyStatusApi.js';
 import { buildApiConfig, getProxyBaseUrl } from '../lib/config.js';
 import { BuildOwnershipGraphInput } from '../schemas.js';
 import { generateGraphHtml } from '../lib/htmlExport.js';
+import { putGraph } from '../lib/graphStore.js';
 import type { ToolContext } from './shared.js';
+
+// Derive the public URL of /api/mcp (where GET ?graphId=X serves stored HTML)
+// from the same request headers getProxyBaseUrl uses.
+function getMcpPublicUrl(req?: { headers?: Record<string, string | string[] | undefined> }): string {
+    if (process.env.MITSUKETA_MCP_URL) return process.env.MITSUKETA_MCP_URL;
+    if (req?.headers) {
+        const pick = (n: string) => {
+            const v = req.headers![n];
+            return Array.isArray(v) ? v[0] : v;
+        };
+        const proto = pick('x-forwarded-proto') || 'https';
+        const host = pick('x-forwarded-host') || pick('host');
+        if (host) return `${proto}://${host}/api/mcp`;
+    }
+    if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}/api/mcp`;
+    return 'http://localhost:3000/api/mcp';
+}
 
 type Args = {
     nzbn: string;
@@ -80,18 +98,13 @@ export const buildOwnershipGraph = {
 
         if (format === 'html' || format === 'both') {
             const html = generateGraphHtml(result.nodes, result.edges, { title: `Mitsuketa — ${rootName}` });
-            const base64 = Buffer.from(html, 'utf-8').toString('base64');
-            responseContent.push({
-                type: 'resource',
-                resource: {
-                    uri: `mitsuketa://graph/${args.nzbn}.html`,
-                    mimeType: 'text/html',
-                    blob: base64,
-                },
-            });
+            const id = putGraph(html);
+            const url = `${getMcpPublicUrl(ctx.req)}?graphId=${id}`;
             responseContent.unshift({
                 type: 'text',
-                text: `Ownership graph for ${rootName} (${args.nzbn}) — ${result.nodes.length} nodes, ${result.edges.length} edges. Open the attached HTML to view interactively.`,
+                text:
+                    `Ownership graph for ${rootName} (${args.nzbn}) — ${result.nodes.length} nodes, ${result.edges.length} edges.\n\n` +
+                    `Interactive view (opens in browser, valid ~1 hour): ${url}`,
             });
         }
 
