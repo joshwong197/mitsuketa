@@ -2,14 +2,14 @@ import { generateOrgChart } from '../../services/apiService.js';
 import { enrichGraphNodes } from '../../src/api/companyStatusApi.js';
 import { buildApiConfig, getProxyBaseUrl } from '../lib/config.js';
 import { BuildOwnershipGraphInput } from '../schemas.js';
-import { generateGraphHtml } from '../lib/htmlExport.js';
-import { putGraph } from '../lib/graphStore.js';
+import { putGraphData } from '../lib/graphStore.js';
 import type { ToolContext } from './shared.js';
 
-// Derive the public URL of /api/mcp (where GET ?graphId=X serves stored HTML)
-// from the same request headers getProxyBaseUrl uses.
-function getMcpPublicUrl(req?: { headers?: Record<string, string | string[] | undefined> }): string {
-    if (process.env.MITSUKETA_MCP_URL) return process.env.MITSUKETA_MCP_URL;
+// Derive the public origin (scheme + host) of this deployment so we can
+// build URLs back to /graph.html (the React viewer) and /api/mcp (the data
+// fetch endpoint the viewer hits).
+function getPublicOrigin(req?: { headers?: Record<string, string | string[] | undefined> }): string {
+    if (process.env.MITSUKETA_PUBLIC_ORIGIN) return process.env.MITSUKETA_PUBLIC_ORIGIN;
     if (req?.headers) {
         const pick = (n: string) => {
             const v = req.headers![n];
@@ -17,10 +17,10 @@ function getMcpPublicUrl(req?: { headers?: Record<string, string | string[] | un
         };
         const proto = pick('x-forwarded-proto') || 'https';
         const host = pick('x-forwarded-host') || pick('host');
-        if (host) return `${proto}://${host}/api/mcp`;
+        if (host) return `${proto}://${host}`;
     }
-    if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}/api/mcp`;
-    return 'http://localhost:3000/api/mcp';
+    if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+    return 'http://localhost:3000';
 }
 
 type Args = {
@@ -97,14 +97,19 @@ export const buildOwnershipGraph = {
         }
 
         if (format === 'html' || format === 'both') {
-            const html = generateGraphHtml(result.nodes, result.edges, { title: `Mitsuketa — ${rootName}` });
-            const id = putGraph(html);
-            const url = `${getMcpPublicUrl(ctx.req)}?graphId=${id}`;
+            const payload = {
+                title: `Mitsuketa — ${rootName}`,
+                rootNzbn: args.nzbn,
+                nodes: result.nodes,
+                edges: result.edges,
+            };
+            const id = putGraphData(JSON.stringify(payload));
+            const url = `${getPublicOrigin(ctx.req)}/graph.html?id=${id}`;
             responseContent.unshift({
                 type: 'text',
                 text:
                     `Ownership graph for ${rootName} (${args.nzbn}) — ${result.nodes.length} nodes, ${result.edges.length} edges.\n\n` +
-                    `Interactive view (opens in browser, valid ~1 hour): ${url}`,
+                    `Interactive view (opens in browser, React Flow renderer, valid ~1 hour): ${url}`,
             });
         }
 

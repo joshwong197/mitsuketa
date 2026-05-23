@@ -7,7 +7,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { checkRateLimit } from '../mcp/lib/rateLimit.js';
-import { getGraph } from '../mcp/lib/graphStore.js';
+import { getGraph, getGraphData } from '../mcp/lib/graphStore.js';
 
 export const config = {
     // Allow up to 60s for slow tools like build_ownership_graph.
@@ -18,6 +18,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Short-circuit: GET /api/mcp?graphId=X serves a previously-generated
     // ownership graph HTML. Same function = same module memory as the tool
     // that wrote it. See mcp/lib/graphStore.ts for the durability caveats.
+    // JSON data fetch for the React-based /graph.html viewer page.
+    if (req.method === 'GET' && typeof req.query.graphData === 'string') {
+        const json = getGraphData(req.query.graphData);
+        if (!json) {
+            res.setHeader('Cache-Control', 'no-store');
+            return res.status(404).json({ error: 'Graph data not found or expired' });
+        }
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+        res.setHeader('Cache-Control', 'private, max-age=3600');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        return res.send(json);
+    }
+
     if (req.method === 'GET' && typeof req.query.graphId === 'string') {
         const html = getGraph(req.query.graphId);
         if (!html) {
