@@ -1,7 +1,6 @@
-import React, { useState, useRef } from 'react';
-import { User, Building2, ArrowUpDown, Filter, ChevronLeft, ChevronRight, AlertTriangle, Shield } from 'lucide-react';
+import React, { useState } from 'react';
+import { Building2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { PersonCompanyResult } from '../types';
-import { CompanyRoleCard } from './CompanyRoleCard';
 import { KydVerificationPanel } from './KydVerificationPanel';
 import { DisqualifiedDirector } from '../src/api/disqualifiedDirectorsApi';
 import { InsolvencyRecord } from '../src/api/insolvencyApi';
@@ -20,6 +19,158 @@ type FilterMode = 'all' | 'directors' | 'shareholders' | 'active-only';
 
 const RESULTS_PER_PAGE = 50;
 
+// 34px severity kanji square for register-check cards
+const CheckSquare: React.FC<{ tone: 'crit' | 'green'; glyph: string }> = ({ tone, glyph }) => (
+    <span
+        aria-hidden="true"
+        className={`shrink-0 flex items-center justify-center ${tone === 'crit' ? 'bg-crit' : 'bg-green'}`}
+        style={{ width: 34, height: 34, fontFamily: 'var(--serif)', fontSize: 17, color: 'var(--paper)' }}
+    >
+        {glyph}
+    </span>
+);
+
+// 19px severity kanji square for company-card flags
+const FlagSquare: React.FC<{ tone: 'crit' | 'amber'; glyph: string }> = ({ tone, glyph }) => (
+    <span
+        aria-hidden="true"
+        className={`shrink-0 flex items-center justify-center ${tone === 'crit' ? 'bg-crit' : 'bg-amber'}`}
+        style={{ width: 19, height: 19, fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--paper)' }}
+    >
+        {glyph}
+    </span>
+);
+
+// Meishi-style company role card (reskin of the previous CompanyRoleCard usage; same data, same click)
+const MeishiRoleCard: React.FC<{ result: PersonCompanyResult; onClick: () => void }> = ({ result, onClick }) => {
+    const {
+        companyName,
+        nzbn,
+        isDirector,
+        shareholding,
+        status,
+        entityStatusCode,
+        isInExternalAdmin,
+        externalAdminType,
+        removalCommenced,
+        hasHistoricInsolvency,
+        historicInsolvencyType,
+        entityStatusDescription
+    } = result;
+
+    const isCompanyRemoved = entityStatusDescription
+        ? entityStatusDescription.toLowerCase().includes('removed') || entityStatusDescription.toLowerCase() === 'inactive'
+        : (entityStatusCode || 0) >= 80;
+
+    const formatResignationDate = (dateStr?: string): string | null => {
+        if (!dateStr) return null;
+        try {
+            const date = new Date(dateStr);
+            if (isNaN(date.getTime())) return null;
+            return date.toLocaleDateString();
+        } catch {
+            return null;
+        }
+    };
+
+    const resignationDateFormatted = formatResignationDate(result.resignationDate);
+
+    const getDisplayStatus = () => {
+        if (isInExternalAdmin && externalAdminType) {
+            return externalAdminType.toUpperCase();
+        }
+        if (entityStatusDescription) {
+            return entityStatusDescription.toUpperCase();
+        }
+        return status;
+    };
+
+    const isRegistered = !isInExternalAdmin && !isCompanyRemoved && !removalCommenced && status === 'REGISTERED';
+
+    const isShareholder = shareholding > 0;
+
+    // Roles rendered as separate lines so the % only ever describes the shareholding,
+    // never the directorship (a directorship has no %).
+
+    return (
+        <div
+            onClick={onClick}
+            className={`p-4 bg-paper border border-rule hover:border-ink transition-colors cursor-pointer group ${isCompanyRemoved && !isInExternalAdmin ? 'opacity-60 hover:opacity-80' : ''}`}
+        >
+            {/* Company header */}
+            <div className="min-w-0 mb-2">
+                <h3
+                    className={`font-bold text-ink truncate ${isCompanyRemoved && !isInExternalAdmin ? 'line-through opacity-70' : ''}`}
+                    style={{ fontSize: '12.5px' }}
+                >
+                    {companyName}
+                </h3>
+                <p className="font-mono text-ink-mid" style={{ fontSize: '10.5px', fontVariantNumeric: 'tabular-nums' }}>
+                    NZBN {nzbn}
+                </p>
+            </div>
+
+            {/* Roles */}
+            {(isDirector || isShareholder) && (
+                <div className="mb-2 space-y-0.5">
+                    {isDirector && (
+                        <p className="text-accent" style={{ fontSize: '11px' }}>
+                            Director{result.isInactive ? ` · resigned${resignationDateFormatted ? ` ${resignationDateFormatted}` : ''}` : ''}
+                        </p>
+                    )}
+                    {isShareholder && (
+                        <p className="text-accent" style={{ fontSize: '11px' }}>
+                            Shareholder · {shareholding.toFixed(1)}%
+                        </p>
+                    )}
+                </div>
+            )}
+
+            {/* Flags */}
+            <div className="space-y-1.5">
+                {removalCommenced && !isCompanyRemoved && (
+                    <div className="flex items-center gap-2">
+                        <FlagSquare tone="amber" glyph="琥" />
+                        <span className="text-amber uppercase" style={{ fontSize: '10px', letterSpacing: '.04em' }}>
+                            Removal in progress
+                        </span>
+                    </div>
+                )}
+                {isCompanyRemoved && hasHistoricInsolvency && (
+                    <div className="flex items-center gap-2">
+                        <FlagSquare tone="crit" glyph="紅" />
+                        <span className="text-crit uppercase" style={{ fontSize: '10px', letterSpacing: '.04em' }}>
+                            Prev: {historicInsolvencyType ? historicInsolvencyType.replace(/^in\s+/i, '') : 'Insolvency'}
+                        </span>
+                    </div>
+                )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between gap-2 pt-3 mt-3 border-t border-rule">
+                {isInExternalAdmin ? (
+                    <span className="flex items-center gap-2">
+                        <FlagSquare tone="crit" glyph="紅" />
+                        <span className="text-crit uppercase font-bold" style={{ fontSize: '10px', letterSpacing: '.04em' }}>
+                            {getDisplayStatus()}
+                        </span>
+                    </span>
+                ) : (
+                    <span
+                        className={`uppercase ${isRegistered ? 'text-green' : 'text-ink-pale'}`}
+                        style={{ fontSize: '10px', letterSpacing: '.04em' }}
+                    >
+                        {getDisplayStatus()}
+                    </span>
+                )}
+                <span className="text-ink-pale group-hover:text-accent transition-colors" style={{ fontSize: '10.5px' }}>
+                    View org chart →
+                </span>
+            </div>
+        </div>
+    );
+};
+
 export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
     personName,
     results,
@@ -31,19 +182,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
     const [sortMode, setSortMode] = useState<SortMode>('default');
     const [filterMode, setFilterMode] = useState<FilterMode>('all');
     const [currentPage, setCurrentPage] = useState(1);
-    const [headerVisible, setHeaderVisible] = useState(true);
     const [showKyd, setShowKyd] = useState(false);
-    const lastScrollY = useRef(0);
-
-    const handleResultsScroll = (e: React.UIEvent<HTMLDivElement>) => {
-        const currentY = e.currentTarget.scrollTop;
-        if (currentY > lastScrollY.current + 5) {
-            setHeaderVisible(false);
-        } else if (currentY < lastScrollY.current - 5) {
-            setHeaderVisible(true);
-        }
-        lastScrollY.current = currentY;
-    };
 
     // Filter results
     const filteredResults = results.filter(r => {
@@ -109,240 +248,215 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
         }
     };
 
+    const hasDisqualified = !!(disqualifiedDirectors && disqualifiedDirectors.length > 0);
+    const hasInsolvency = !!(insolvencyRecords && insolvencyRecords.length > 0);
+    const registersClear = !hasDisqualified && !hasInsolvency;
+
+    const sortOptions: { value: SortMode; label: string }[] = [
+        { value: 'default', label: 'Directors first' },
+        { value: 'shareholding', label: 'Shareholding %' },
+        { value: 'alphabetical', label: 'Alphabetical' },
+    ];
+    const filterOptions: { value: FilterMode; label: string }[] = [
+        { value: 'all', label: `All (${results.length})` },
+        { value: 'active-only', label: `Active (${activeCount})` },
+        { value: 'directors', label: `Directors (${directorCount})` },
+        { value: 'shareholders', label: `Shareholders (${shareholderCount})` },
+    ];
+
+    const controlBtn = (active: boolean) =>
+        `px-3 py-1 border transition-colors ${active
+            ? 'border-ink bg-ink text-paper'
+            : 'border-rule bg-paper text-ink-mid hover:border-ink hover:text-ink'}`;
 
     return (
-        <div id="person-search-results" className="absolute inset-0 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
-            {/* Header - collapses on scroll down, reappears on scroll up */}
-            <div className={`grid transition-all duration-300 ease-in-out ${headerVisible ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'}`}>
-            <div className="overflow-hidden">
-            <div className="p-6 bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 border-b border-slate-200 dark:border-slate-700">
+        <div id="person-search-results" className="absolute inset-0 flex flex-col bg-paper overflow-hidden">
+            {/* Header - static masthead, in normal document flow */}
+            <div className="p-6 bg-paper border-b border-rule shrink-0">
                 <button
                     onClick={onBack}
-                    className="mb-4 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+                    className="mb-4 flex items-center gap-1.5 text-sm text-ink-mid hover:text-ink transition-colors"
                 >
-                    <ChevronLeft size={16} />
+                    <ChevronLeft size={16} strokeWidth={1.5} />
                     Back to search
                 </button>
 
-                <div className="flex items-center gap-3 mb-2">
-                    <div className="p-3 bg-purple-500 rounded-full">
-                        <User className="text-white" size={24} />
-                    </div>
-                    <div className="flex-1">
-                        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                <div className="flex items-end justify-between gap-4 flex-wrap mb-2">
+                    <div className="min-w-0">
+                        <h2
+                            className="text-ink"
+                            style={{ fontFamily: 'var(--serif)', fontWeight: 600, fontSize: 38, lineHeight: 1.15 }}
+                        >
                             {personName}
                         </h2>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                        <p className="text-ink-mid mt-1" style={{ fontSize: '12.5px' }}>
                             {results.length} {results.length === 1 ? 'company' : 'companies'} found
+                            {' · '}{directorCount} directorship{directorCount === 1 ? '' : 's'}
+                            {' · '}{shareholderCount} shareholding{shareholderCount === 1 ? '' : 's'}
+                            {' · '}{activeCount} active
                         </p>
                     </div>
                     <button
                         onClick={() => setShowKyd(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-semibold transition-colors shadow-sm"
+                        className="flex items-center gap-2 px-4 py-2 border border-rule bg-paper text-ink hover:border-ink text-sm font-medium transition-colors"
                     >
-                        <Shield size={16} />
+                        <span aria-hidden="true" className="text-accent" style={{ fontFamily: 'var(--serif)', fontSize: 15 }}>印</span>
                         KYD Verification
                     </button>
                 </div>
 
-                {/* COMBINED ALERT: DISQUALIFIED DIRECTORS & BANKRUPTCY */}
-                {((disqualifiedDirectors && disqualifiedDirectors.length > 0) || (insolvencyRecords && insolvencyRecords.length > 0)) && (
-                    <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 rounded-r-md shadow-sm">
-                        <div className="flex items-start gap-3">
-                            <div className="p-2 bg-red-100 dark:bg-red-800 rounded-full shrink-0">
-                                <AlertTriangle className="text-red-600 dark:text-red-300" size={20} />
-                            </div>
-                            <div className="flex-1 min-h-0">
-                                <h3 className="text-base font-bold text-red-700 dark:text-red-400 mb-1">
-                                    {disqualifiedDirectors && disqualifiedDirectors.length > 0 && insolvencyRecords && insolvencyRecords.length > 0
-                                        ? 'Disqualified Director & Bankruptcy Alert'
-                                        : disqualifiedDirectors && disqualifiedDirectors.length > 0
-                                            ? 'Disqualified Director Alert'
-                                            : 'Bankruptcy Alert'}
-                                </h3>
-                                <p className="text-sm text-red-600 dark:text-red-300 mb-3">
-                                    "{personName}" has records in the
-                                    {disqualifiedDirectors && disqualifiedDirectors.length > 0 && ' Disqualified Directors register'}
-                                    {disqualifiedDirectors && disqualifiedDirectors.length > 0 && insolvencyRecords && insolvencyRecords.length > 0 && ' and'}
-                                    {insolvencyRecords && insolvencyRecords.length > 0 && ' Insolvency register'}.
+                {/* REGISTER CHECKS: disqualified directors & insolvency. Bounded height with its own
+                    scroll so a long list of records can never push the masthead past the viewport
+                    and squeeze the company grid below into an overlapping/clipped state. */}
+                <div className="mt-4 space-y-2 max-h-[240px] overflow-y-auto">
+                    {registersClear && (
+                        <div className="flex items-start gap-3 p-3 border border-rule bg-paper2">
+                            <CheckSquare tone="green" glyph="青" />
+                            <div className="min-w-0">
+                                <p className="font-bold text-ink" style={{ fontSize: '13px' }}>
+                                    Register checks · clear
                                 </p>
-
-                                <details className="group mt-2">
-                                    <summary className="text-sm font-bold text-red-700 dark:text-red-400 cursor-pointer hover:text-red-800 flex items-center select-none outline-none">
-                                        <ChevronRight size={16} className="transition-transform group-open:rotate-90 mr-1" />
-                                        View Alert Details ({(disqualifiedDirectors?.length || 0) + (insolvencyRecords?.length || 0)} records found)
-                                    </summary>
-                                    <div className="max-h-60 overflow-y-auto pr-1 mt-3">
-                                        {/* DISQUALIFIED DIRECTORS SECTION */}
-                                        {disqualifiedDirectors && disqualifiedDirectors.length > 0 && (
-                                            <div className="space-y-3 mb-4">
-                                                <h4 className="text-sm font-semibold text-red-700 dark:text-red-400">Disqualified Director Records:</h4>
-                                                {disqualifiedDirectors.map((director, idx) => (
-                                                    <div key={idx} className="bg-white dark:bg-slate-800 p-3 rounded border border-red-200 dark:border-red-800/50">
-                                                        <div className="flex items-start justify-between mb-2">
-                                                            <div>
-                                                                <p className="font-semibold text-gray-900 dark:text-white text-sm">
-                                                                    {director.firstName} {director.middleName} {director.lastName}
-                                                                </p>
-                                                                {director.aliases && director.aliases.aliases && director.aliases.aliases.length > 0 && (
-                                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                                                        Also known as: {director.aliases.aliases.join(', ')}
-                                                                    </p>
-                                                                )}
-                                                            </div>
-                                                            <span className="text-xs px-2 py-0.5 bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400 rounded-full font-medium whitespace-nowrap">
-                                                                ID: {director.disqualifiedDirectorId}
-                                                            </span>
-                                                        </div>
-
-                                                        {/* Disqualification Criteria */}
-                                                        {director.disqualificationCriteria?.criteria?.map((c, i) => (
-                                                            <div key={i} className="mt-2 pl-3 border-l-2 border-red-300 dark:border-red-700">
-                                                                <p className="text-xs text-gray-700 dark:text-gray-300">
-                                                                    <span className="font-medium text-red-600 dark:text-red-400">Reason:</span> {c.criteria || 'Section 385 Companies Act 1993'}
-                                                                </p>
-                                                                <p className="text-xs text-gray-700 dark:text-gray-300 mt-1">
-                                                                    <span className="font-medium text-red-600 dark:text-red-400">Disqualification Period:</span>{' '}
-                                                                    {formatDate(c.startDate)} - {c.endDate ? formatDate(c.endDate) : 'Indefinite'}
-                                                                </p>
-                                                                {c.comments && (
-                                                                    <p className="text-xs text-gray-600 dark:text-gray-400 italic mt-1.5 bg-gray-50 dark:bg-slate-900/50 p-2 rounded">
-                                                                        "{c.comments}"
-                                                                    </p>
-                                                                )}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-
-                                        {/* INSOLVENCY/BANKRUPTCY SECTION */}
-                                        {insolvencyRecords && insolvencyRecords.length > 0 && (
-                                            <div className="space-y-3">
-                                                <h4 className="text-sm font-semibold text-red-700 dark:text-red-400">Bankruptcy/Insolvency Records:</h4>
-                                                {insolvencyRecords.map((record, idx) => (
-                                                    <div key={idx} className="bg-white dark:bg-slate-800 p-3 rounded border border-red-200 dark:border-red-800/50">
-                                                        <div className="flex items-start justify-between mb-2">
-                                                            <div>
-                                                                <p className="font-semibold text-gray-900 dark:text-white text-sm">
-                                                                    {record.estateName}
-                                                                </p>
-                                                                {record.alternateNames && record.alternateNames.length > 0 && (
-                                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                                                                        Also known as: {record.alternateNames.join(', ')}
-                                                                    </p>
-                                                                )}
-                                                            </div>
-                                                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${record.insolvencyStatus.includes('Current')
-                                                                ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-400'
-                                                                : 'bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-400'
-                                                                }`}>
-                                                                {record.insolvencyStatus}
-                                                            </span>
-                                                        </div>
-
-                                                        <div className="mt-2 pl-3 border-l-2 border-red-300 dark:border-red-700">
-                                                            <p className="text-xs text-gray-700 dark:text-gray-300">
-                                                                <span className="font-medium text-red-600 dark:text-red-400">Type:</span> {record.insolvencyTypeDescription}
-                                                            </p>
-                                                            <p className="text-xs text-gray-700 dark:text-gray-300 mt-1">
-                                                                <span className="font-medium text-red-600 dark:text-red-400">Adjudication Date:</span>{' '}
-                                                                {formatDate(record.adjudicationOrLiquidationDate)}
-                                                            </p>
-                                                            {record.dischargeOrCompletionDate && (
-                                                                <p className="text-xs text-gray-700 dark:text-gray-300 mt-1">
-                                                                    <span className="font-medium text-red-600 dark:text-red-400">Discharge/Completion Date:</span>{' '}
-                                                                    {formatDate(record.dischargeOrCompletionDate)}
-                                                                </p>
-                                                            )}
-                                                            {record.multipleInsolvencies && (
-                                                                <p className="text-xs text-orange-600 dark:text-orange-400 mt-1 font-medium">
-                                                                    ⚠️ Multiple insolvencies on record
-                                                                </p>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                </details>
+                                <p className="text-ink-mid" style={{ fontSize: '12px' }}>
+                                    No records for "{personName}" in the Disqualified Directors or Insolvency registers.
+                                </p>
                             </div>
                         </div>
-                    </div>
-                )}
+                    )}
 
-                {/* Stats */}
-                <div className="flex gap-4 mt-4">
-                    <div className="px-3 py-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Directorships</p>
-                        <p className="text-lg font-bold text-purple-600 dark:text-purple-400">{directorCount}</p>
-                    </div>
-                    <div className="px-3 py-2 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Shareholdings</p>
-                        <p className="text-lg font-bold text-blue-600 dark:text-blue-400">{shareholderCount}</p>
-                    </div>
+                    {hasDisqualified && disqualifiedDirectors!.map((director, idx) => (
+                        <div key={`dq-${idx}`} className="flex items-start gap-3 p-3 border border-rule bg-paper2">
+                            <CheckSquare tone="crit" glyph="紅" />
+                            <div className="min-w-0 flex-1">
+                                <p className="font-bold text-ink" style={{ fontSize: '13px' }}>
+                                    Disqualified director · {director.firstName} {director.middleName} {director.lastName}
+                                    <span className="font-mono text-ink-pale font-normal ml-2" style={{ fontSize: '10.5px', fontVariantNumeric: 'tabular-nums' }}>
+                                        ID {director.disqualifiedDirectorId}
+                                    </span>
+                                </p>
+                                {director.aliases && director.aliases.aliases && director.aliases.aliases.length > 0 && (
+                                    <p className="text-ink-mid" style={{ fontSize: '12px' }}>
+                                        Also known as: {director.aliases.aliases.join(', ')}
+                                    </p>
+                                )}
+                                {director.disqualificationCriteria?.criteria?.map((c, i) => (
+                                    <div key={i} className="mt-1.5 text-ink-mid" style={{ fontSize: '12px' }}>
+                                        <p>
+                                            <span className="text-crit">Reason:</span> {c.criteria || 'Section 385 Companies Act 1993'}
+                                        </p>
+                                        <p>
+                                            <span className="text-crit">Period:</span>{' '}
+                                            {formatDate(c.startDate)} – {c.endDate ? formatDate(c.endDate) : 'Indefinite'}
+                                        </p>
+                                        {c.comments && (
+                                            <p className="italic mt-1 p-2 bg-paper border border-rule">
+                                                "{c.comments}"
+                                            </p>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+
+                    {hasInsolvency && insolvencyRecords!.map((record, idx) => (
+                        <div key={`ins-${idx}`} className="flex items-start gap-3 p-3 border border-rule bg-paper2">
+                            <CheckSquare tone="crit" glyph="紅" />
+                            <div className="min-w-0 flex-1">
+                                <p className="font-bold text-ink" style={{ fontSize: '13px' }}>
+                                    Insolvency · {record.estateName}
+                                    <span className={`font-normal uppercase ml-2 ${record.insolvencyStatus.includes('Current') ? 'text-crit' : 'text-amber'}`} style={{ fontSize: '10px', letterSpacing: '.04em' }}>
+                                        {record.insolvencyStatus}
+                                    </span>
+                                </p>
+                                {record.alternateNames && record.alternateNames.length > 0 && (
+                                    <p className="text-ink-mid" style={{ fontSize: '12px' }}>
+                                        Also known as: {record.alternateNames.join(', ')}
+                                    </p>
+                                )}
+                                <div className="mt-1.5 text-ink-mid" style={{ fontSize: '12px' }}>
+                                    <p>
+                                        <span className="text-crit">Type:</span> {record.insolvencyTypeDescription}
+                                    </p>
+                                    <p>
+                                        <span className="text-crit">Adjudication:</span>{' '}
+                                        {formatDate(record.adjudicationOrLiquidationDate)}
+                                    </p>
+                                    {record.dischargeOrCompletionDate && (
+                                        <p>
+                                            <span className="text-crit">Discharge/completion:</span>{' '}
+                                            {formatDate(record.dischargeOrCompletionDate)}
+                                        </p>
+                                    )}
+                                    {record.multipleInsolvencies && (
+                                        <p className="text-amber uppercase mt-1" style={{ fontSize: '10px', letterSpacing: '.04em' }}>
+                                            Multiple insolvencies on record
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
                 </div>
-            </div>
-            </div>
             </div>
 
             {/* Controls */}
-            <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700 flex flex-wrap gap-3 items-center">
+            <div className="p-4 bg-paper2 border-b border-rule flex flex-wrap gap-x-6 gap-y-3 items-center">
                 {/* Sort */}
-                <div className="flex items-center gap-2">
-                    <ArrowUpDown size={16} className="text-gray-500 dark:text-gray-400" />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">Sort:</span>
-                    <select
-                        value={sortMode}
-                        onChange={(e) => {
-                            setSortMode(e.target.value as SortMode);
-                            setCurrentPage(1);
-                        }}
-                        className="px-3 py-1 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                        <option value="default">Directors First</option>
-                        <option value="shareholding">Shareholding %</option>
-                        <option value="alphabetical">Alphabetical</option>
-                    </select>
+                <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-ink-pale uppercase" style={{ fontSize: '10.5px', letterSpacing: '.08em' }}>Sort</span>
+                    <div className="flex flex-wrap gap-1 text-xs">
+                        {sortOptions.map(opt => (
+                            <button
+                                key={opt.value}
+                                onClick={() => {
+                                    setSortMode(opt.value);
+                                    setCurrentPage(1);
+                                }}
+                                className={controlBtn(sortMode === opt.value)}
+                                aria-pressed={sortMode === opt.value}
+                            >
+                                {opt.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 {/* Filter */}
-                <div className="flex items-center gap-2">
-                    <Filter size={16} className="text-gray-500 dark:text-gray-400" />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">Filter:</span>
-                    <select
-                        value={filterMode}
-                        onChange={(e) => {
-                            setFilterMode(e.target.value as FilterMode);
-                            setCurrentPage(1);
-                        }}
-                        className="px-3 py-1 text-sm bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                        <option value="all">🔄 All ({results.length})</option>
-                        <option value="active-only">✅ Active Only ({activeCount})</option>
-                        <option value="directors">👔 Directors Only ({directorCount})</option>
-                        <option value="shareholders">📊 Shareholders Only ({shareholderCount})</option>
-                    </select>
+                <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-ink-pale uppercase" style={{ fontSize: '10.5px', letterSpacing: '.08em' }}>Filter</span>
+                    <div className="flex flex-wrap gap-1 text-xs">
+                        {filterOptions.map(opt => (
+                            <button
+                                key={opt.value}
+                                onClick={() => {
+                                    setFilterMode(opt.value);
+                                    setCurrentPage(1);
+                                }}
+                                className={controlBtn(filterMode === opt.value)}
+                                aria-pressed={filterMode === opt.value}
+                            >
+                                {opt.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
-                <div className="ml-auto text-sm text-gray-500 dark:text-gray-400">
-                    Showing {startIndex + 1}-{Math.min(endIndex, sortedResults.length)} of {sortedResults.length}
+                <div className="ml-auto text-ink-pale" style={{ fontSize: '12px' }}>
+                    Showing {startIndex + 1}–{Math.min(endIndex, sortedResults.length)} of {sortedResults.length}
                 </div>
             </div>
 
             {/* Results Grid */}
-            <div className="flex-1 overflow-y-auto p-6" onScroll={handleResultsScroll}>
+            <div className="flex-1 overflow-y-auto p-6">
                 {paginatedResults.length === 0 ? (
                     <div className="text-center py-12">
-                        <Building2 className="mx-auto mb-4 text-gray-300 dark:text-gray-600" size={48} />
-                        <p className="text-gray-500 dark:text-gray-400">No companies found with selected filters</p>
+                        <Building2 className="mx-auto mb-4 text-ink-pale" size={48} strokeWidth={1.5} />
+                        <p className="text-ink-mid">No companies found with selected filters</p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
                         {paginatedResults.map((result) => (
-                            <CompanyRoleCard
+                            <MeishiRoleCard
                                 key={result.nzbn}
                                 result={result}
                                 onClick={() => onCompanyClick(result)}
@@ -354,13 +468,14 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
 
             {/* Pagination */}
             {totalPages > 1 && (
-                <div className="p-4 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-200 dark:border-slate-700 flex items-center justify-center gap-2">
+                <div className="p-4 bg-paper2 border-t border-rule flex items-center justify-center gap-2">
                     <button
                         onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                         disabled={currentPage === 1}
-                        className="p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        aria-label="Previous page"
+                        className="p-2 border border-rule bg-paper text-ink hover:border-ink disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
-                        <ChevronLeft size={20} />
+                        <ChevronLeft size={20} strokeWidth={1.5} />
                     </button>
 
                     <div className="flex gap-1">
@@ -380,10 +495,8 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                                 <button
                                     key={pageNum}
                                     onClick={() => setCurrentPage(pageNum)}
-                                    className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${currentPage === pageNum
-                                        ? 'bg-blue-500 text-white'
-                                        : 'hover:bg-slate-200 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-300'
-                                        }`}
+                                    className={`px-3 py-1 text-sm transition-colors ${controlBtn(currentPage === pageNum)}`}
+                                    aria-current={currentPage === pageNum ? 'page' : undefined}
                                 >
                                     {pageNum}
                                 </button>
@@ -394,12 +507,13 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                     <button
                         onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                         disabled={currentPage === totalPages}
-                        className="p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        aria-label="Next page"
+                        className="p-2 border border-rule bg-paper text-ink hover:border-ink disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
-                        <ChevronRight size={20} />
+                        <ChevronRight size={20} strokeWidth={1.5} />
                     </button>
 
-                    <span className="ml-4 text-sm text-gray-500 dark:text-gray-400">
+                    <span className="ml-4 text-ink-pale" style={{ fontSize: '12px' }}>
                         Page {currentPage} of {totalPages}
                     </span>
                 </div>

@@ -1,0 +1,170 @@
+@import "tailwindcss";
+
+/* ─── Tokens (single source of truth) ─────────────────────────────── */
+:root {
+  color-scheme: light dark;
+
+  /* accent — 藍 ai-indigo. Swappable dye: keep these two lines the only place it's defined */
+  --acc-l: oklch(0.40 0.095 265);
+  --acc-d: oklch(0.72 0.085 260);
+
+  --paper:      light-dark(oklch(0.952 0.007 85), oklch(0.185 0.008 75));
+  --paper2:     light-dark(oklch(0.930 0.008 85), oklch(0.225 0.009 75));
+  --ink:        light-dark(oklch(0.235 0.014 65), oklch(0.905 0.012 85));
+  --ink-mid:    light-dark(oklch(0.44 0.012 65),  oklch(0.68 0.012 85));
+  --ink-pale:   light-dark(oklch(0.62 0.010 70),  oklch(0.50 0.010 80));
+  --ink-wash:   light-dark(oklch(0.78 0.009 75),  oklch(0.35 0.009 75));
+  --rule:       light-dark(oklch(0.855 0.008 80), oklch(0.30 0.010 75));
+  --accent:     light-dark(var(--acc-l), var(--acc-d));
+  --accent-ink: light-dark(oklch(0.965 0.006 85), oklch(0.185 0.008 75));
+  --crit:       light-dark(oklch(0.55 0.17 30),  oklch(0.66 0.17 30));
+  --amber:      light-dark(oklch(0.60 0.10 78),  oklch(0.72 0.10 78));
+  --green:      light-dark(oklch(0.50 0.08 150), oklch(0.68 0.09 150));
+
+  /* type families */
+  --serif:  "Shippori Mincho", "Yu Mincho", serif;
+  --gothic: "Zen Kaku Gothic New", "Yu Gothic UI", "Segoe UI", system-ui, sans-serif;
+  --mono:   "Cascadia Mono", Consolas, ui-monospace, monospace;
+
+  /* washi grain opacity — grain now renders ABOVE opaque panes, so it is
+     dialled well down from the mockup's under-content .35/.22 to stay a
+     barely-perceptible paper texture that never muddies text contrast */
+  --grain-op: .20;
+}
+:root[data-theme="light"] { color-scheme: light; --grain-op: .20 }
+:root[data-theme="dark"]  { color-scheme: dark;  --grain-op: .12 }
+@media (prefers-color-scheme: dark) { :root { --grain-op: .12 } }
+
+/* ─── Expose tokens to Tailwind v4 utilities ──────────────────────── */
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper2: var(--paper2);
+  --color-ink: var(--ink);
+  --color-ink-mid: var(--ink-mid);
+  --color-ink-pale: var(--ink-pale);
+  --color-ink-wash: var(--ink-wash);
+  --color-rule: var(--rule);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-crit: var(--crit);
+  --color-amber: var(--amber);
+  --color-green: var(--green);
+}
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ─── Base ─────────────────────────────────────────────────────────── */
+html, body { margin: 0 }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--gothic);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* washi grain — one fixed, pointer-transparent layer, no repaint cost.
+   Sits ABOVE app content (opaque canvas/panes) so the paper texture reads
+   over the whole app instead of being hidden under the panes. pointer-events
+   none keeps every click/pan/scroll passing straight through. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: var(--grain-op);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.45 0 0 0 0 0.42 0 0 0 0 0.38 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ─── Custom scrollbar (token-dyed) ───────────────────────────────── */
+::-webkit-scrollbar { width: 8px; height: 8px }
+::-webkit-scrollbar-track { background: transparent }
+::-webkit-scrollbar-thumb { background: var(--ink-pale); border-radius: 4px }
+::-webkit-scrollbar-thumb:hover { background: var(--ink-mid) }
+
+/* ─── Focus ───────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ─── React Flow controls (token-dyed, sumi paper/ink, sharp) ─────── */
+/* Tokens are light-dark() driven, so a single rule covers both themes. */
+.react-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--rule);
+  border-radius: 0;
+}
+.react-flow__controls-button {
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+  border-radius: 0;
+  width: 26px;
+  height: 26px;
+}
+.react-flow__controls-button:last-child { border-bottom: none; }
+.react-flow__controls-button:hover { background: var(--paper2); }
+.react-flow__controls-button svg { fill: var(--ink-mid); }
+.react-flow__controls-button:hover svg { fill: var(--ink); }
+
+/* Kill React Flow's default node/edge selection ring — the sumi nodes carry
+   their own accent border on select, we don't want the blue box-shadow too */
+.react-flow__node.selected,
+.react-flow__node:focus,
+.react-flow__node:focus-visible { outline: none; }
+
+/* ─── Loading sweep (canvas top bar) ──────────────────────────────── */
+@media (prefers-reduced-motion: no-preference) {
+  .loadsweep { animation: loadsweep 1.1s cubic-bezier(.4, 0, .2, 1) infinite; }
+  @keyframes loadsweep {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(400%); }
+  }
+}
+
+/* ─── Status ramp (design/STATUS_RAMP.md) ─────────────────────────── */
+/* Crit ink-bleed ring — a second crit outline just outside the node border.
+   Static for reduced-motion visitors; breathes (below) otherwise. */
+.node-crit::after {
+  content: "";
+  position: absolute;
+  inset: -6px;
+  border: 2px solid var(--crit);
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Edges brush-draw in on graph build. The dasharray only exists during
+     the animation (fill-mode none), so edges end up with their own style
+     — solid or dashed — once drawn. Ceased edges are excluded: animating
+     dashoffset would clobber their dash pattern, so they fade in instead. */
+  .react-flow__edge:not(.edge-ceased) .react-flow__edge-path {
+    animation: edgedraw .8s cubic-bezier(.4, 0, .2, 1);
+  }
+  @keyframes edgedraw {
+    from { stroke-dasharray: 1500; stroke-dashoffset: 1500; }
+    to   { stroke-dasharray: 1500; stroke-dashoffset: 0; }
+  }
+  .react-flow__edge.edge-ceased .react-flow__edge-path {
+    animation: edgefade .8s ease-out;
+  }
+  @keyframes edgefade {
+    from { opacity: 0; }
+  }
+
+  /* Crit nodes only: slow ink-bleed border pulse. Amber stays static —
+     red is the one color allowed to breathe on the canvas. */
+  .node-crit::after { animation: ink-bleed 3.1s ease-in-out infinite; }
+  @keyframes ink-bleed {
+    0%, 100% { opacity: 0.15; inset: -3px; }
+    50%      { opacity: 0.6;  inset: -8px; }
+  }
+
+  /* Status chips fade up on first render */
+  .status-chip { animation: chipup .45s ease-out .1s backwards; }
+  @keyframes chipup {
+    from { opacity: 0; transform: translateY(4px); }
+  }
+}

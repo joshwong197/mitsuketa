@@ -1,4 +1,5 @@
 import { CompaniesRoleSearchResult, PersonCompanyResult, LogEntry } from '../types.js';
+import { fetchNzbnEntityCached } from '../src/api/companyStatusApi.js';
 
 // Production URL (no longer used directly - routed through /api/proxy)
 const BASE_URL_PROD = 'https://api.business.govt.nz/gateway';
@@ -58,7 +59,7 @@ export async function searchByPersonName(
         console.log(`✅ Found ${data.roles?.length || 0} role(s) for "${personName}"`);
 
         // Process and deduplicate results (pass search name for client-side filtering)
-        return processPersonSearchResults(data, personName);
+        return await processPersonSearchResults(data, personName, baseUrl, onLog);
 
     } catch (error: any) {
         logEntry.message = `❌ Error: ${error.message}`;
@@ -72,8 +73,15 @@ export async function searchByPersonName(
  * Process raw API results into PersonCompanyResult format
  * Deduplicates companies where person has multiple roles
  * @param searchName Optional search name for client-side exact name filtering
+ * @param baseUrl Proxy base URL, used to enrich sole-held shareholdings with a real percentage
+ * @param onLog Optional logger for the enrichment lookups
  */
-function processPersonSearchResults(data: CompaniesRoleSearchResult, searchName?: string): PersonCompanyResult[] {
+async function processPersonSearchResults(
+    data: CompaniesRoleSearchResult,
+    searchName?: string,
+    baseUrl: string = '/api/proxy',
+    onLog?: (entry: LogEntry) => void
+): Promise<PersonCompanyResult[]> {
     if (!data.roles || data.roles.length === 0) {
         return [];
     }
@@ -119,6 +127,13 @@ function processPersonSearchResults(data: CompaniesRoleSearchResult, searchName?
     // Group by company NZBN
     const companyMap = new Map<string, PersonCompanyResult>();
 
+    // NZBN -> total shares this person holds where sharePercentage was NOT provided by the
+    // Companies Office API. Per the entity-roles/v3 schema, sharePercentage is "typically only
+    // present if the shareholding is jointly held" - for a sole holding (the common case) the API
+    // only gives numberOfShares, so the percentage must be derived from the company's total issued
+    // shares (fetched separately below) rather than defaulting to 0/"not a shareholder".
+    const pendingShareEnrichment = new Map<string, number>();
+
     console.log(`📋 Processing ${roles.length} role(s) from API`);
     roles.forEach((role, index) => {
         console.log(`  Role ${index + 1}: ${role.associatedCompanyName} (${role.associatedCompanyNzbn}) - ${role.roleType}`);
@@ -146,7 +161,16 @@ function processPersonSearchResults(data: CompaniesRoleSearchResult, searchName?
                 const isInactive = role.status === 'inactive';
                 const resignationDate = role.resignationDate;
 
-                const shareholdingPercentage = parseFloat(String(shareholding.sharePercentage || 0));
+                // sharePercentage is only populated by the API for jointly-held shareholdings.
+                // For a sole holding it's absent even though numberOfShares is present - track the
+                // share count so we can resolve the real percentage after the loop instead of
+                // silently treating this person as a 0% / non-shareholder.
+                const hasSharePercentage = shareholding.sharePercentage !== undefined && shareholding.sharePercentage !== null;
+                const shareholdingPercentage = hasSharePercentage ? parseFloat(String(shareholding.sharePercentage)) : 0;
+                const personShares = shareholding.numberOfShares || 0;
+                if (!hasSharePercentage && personShares > 0) {
+                    pendingShareEnrichment.set(nzbn, (pendingShareEnrichment.get(nzbn) || 0) + personShares);
+                }
 
                 // Parse status code
                 const statusCode = parseInt(shareholding.associatedCompanyStatusCode || '0');
@@ -315,6 +339,12 @@ function processPersonSearchResults(data: CompaniesRoleSearchResult, searchName?
         }
     });
 
+    // Resolve real percentages for sole-held shareholdings (sharePercentage absent, only
+    // numberOfShares known) by fetching each company's total issued shares and dividing.
+    if (pendingShareEnrichment.size > 0) {
+        await enrichShareholdingPercentages(companyMap, pendingShareEnrichment, baseUrl, onLog);
+    }
+
     // Convert to array and sort
     const results = Array.from(companyMap.values());
 
@@ -357,4 +387,82 @@ function processPersonSearchResults(data: CompaniesRoleSearchResult, searchName?
 
 
     return results;
+}
+
+/**
+ * For sole-held shareholdings, the Companies Office entity-roles/v3 search only returns
+ * numberOfShares (the person's own share count) - not a percentage. To show the same
+ * percentage the company-side ownership graph derives from the NZBN entity endpoint
+ * (company-details.shareholding.numberOfShares = total issued shares), fetch each pending
+ * company's total shares and compute personShares / totalShares * 100.
+ *
+ * Failures are non-fatal per company: if the lookup fails or the company has no share data,
+ * that company's shareholding simply stays at 0 (i.e. we never fabricate a number we can't
+ * support with data).
+ */
+async function enrichShareholdingPercentages(
+    companyMap: Map<string, PersonCompanyResult>,
+    pendingShareEnrichment: Map<string, number>,
+    baseUrl: string,
+    onLog?: (entry: LogEntry) => void
+): Promise<void> {
+    const lookups = Array.from(pendingShareEnrichment.entries());
+
+    await Promise.all(lookups.map(async ([nzbn, personShares]) => {
+        if (!personShares || personShares <= 0) return;
+
+        const startTime = Date.now();
+
+        const logEntry: LogEntry = {
+            timestamp: new Date().toISOString(),
+            method: 'GET',
+            url: `/nzbn/v5/entities/${nzbn}`,
+            headers: {
+                'x-api-type': 'nzbn',
+                'Accept': 'application/json'
+            }
+        };
+
+        try {
+            // Shared cached fetch — the status enrichment hits the same endpoint later
+            // and reuses this response instead of refetching.
+            const entityData = await fetchNzbnEntityCached(nzbn, '', baseUrl);
+
+            if (!entityData) {
+                logEntry.status = 0;
+                logEntry.message = `❌ Share enrichment failed for NZBN ${nzbn} - ${Date.now() - startTime}ms`;
+                onLog?.(logEntry);
+                return;
+            }
+
+            logEntry.status = 200;
+            const totalShares = entityData?.['company-details']?.shareholding?.numberOfShares;
+
+            if (!totalShares || totalShares <= 0) {
+                logEntry.message = `⚠️ No total share count for NZBN ${nzbn} - leaving shareholding at 0`;
+                onLog?.(logEntry);
+                return;
+            }
+
+            const percentage = parseFloat(((personShares / totalShares) * 100).toFixed(2));
+            logEntry.message = `✅ Resolved ${personShares}/${totalShares} shares = ${percentage}% for NZBN ${nzbn} - ${Date.now() - startTime}ms`;
+            onLog?.(logEntry);
+
+            const entry = companyMap.get(nzbn);
+            if (!entry) return;
+
+            entry.shareholding = Math.max(entry.shareholding, percentage);
+
+            // Refresh role label now that we know the person actually holds a real percentage
+            if (entry.isDirector && entry.shareholding > 0) {
+                entry.roleType = 'Director & Shareholder';
+            } else if (entry.shareholding > 0) {
+                entry.roleType = 'Shareholder';
+            }
+        } catch (error: any) {
+            logEntry.message = `❌ Share enrichment error for NZBN ${nzbn}: ${error.message}`;
+            logEntry.status = 0;
+            onLog?.(logEntry);
+        }
+    }));
 }

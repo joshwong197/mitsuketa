@@ -89,6 +89,41 @@ export async function fetchEntityStatusHistory(
     return Array.isArray(data) ? data : [];
 }
 
+// Session-lifetime cache of NZBN entity lookups so the shareholding-% enrichment and the
+// status enrichment (and repeat searches) share one fetch per company instead of two.
+// ponytail: unbounded-ish Map capped by wholesale clear; LRU if memory ever matters
+const entityCache = new Map<string, Promise<any | null>>();
+
+/**
+ * Fetch (with caching) the raw NZBN entity payload for a company.
+ * Resolves to null on any failure; failures are not cached so a retry can succeed.
+ */
+export function fetchNzbnEntityCached(
+    nzbn: string,
+    apiKey: string = '',
+    baseUrl: string = '/api/proxy'
+): Promise<any | null> {
+    const key = `${baseUrl}|${nzbn}`;
+    let pending = entityCache.get(key);
+    if (!pending) {
+        const proxyPath = `${API_PATHS.nzbn}/entities/${encodeURIComponent(nzbn)}`;
+        const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
+        pending = fetch(url, {
+            headers: {
+                'x-user-api-key': apiKey || '',
+                'x-api-type': 'nzbn',
+                'Accept': 'application/json'
+            }
+        })
+            .then(r => (r.ok ? r.json() : null))
+            .catch(() => null);
+        if (entityCache.size > 500) entityCache.clear();
+        entityCache.set(key, pending);
+        pending.then(v => { if (v === null) entityCache.delete(key); });
+    }
+    return pending;
+}
+
 /**
  * Fetch a single company's NZBN entity details to extract insolvency/admin status.
  */
@@ -114,13 +149,7 @@ export async function fetchCompanyStatus(
     }
 
     try {
-        const response = await fetch(url, {
-            headers: {
-                'x-user-api-key': config.nzbnKey || '',
-                'x-api-type': 'nzbn',
-                'Accept': 'application/json'
-            }
-        });
+        const data: NZBNEntityResponse | null = await fetchNzbnEntityCached(nzbn, config.nzbnKey, baseUrl);
 
         if (logger) {
             logger({
@@ -128,17 +157,15 @@ export async function fetchCompanyStatus(
                 method: 'GET',
                 url,
                 headers: {},
-                status: response.status,
-                message: response.statusText
+                status: data ? 200 : 0,
+                message: data ? 'OK (cached fetch)' : 'Failed'
             });
         }
 
-        if (!response.ok) {
-            console.warn(`⚠️ Failed to fetch status for ${nzbn}: ${response.status}`);
+        if (!data) {
+            console.warn(`⚠️ Failed to fetch status for ${nzbn}`);
             return null;
         }
-
-        const data: NZBNEntityResponse = await response.json();
 
         // The company details can be under "company" or "company-details" depending on the response
         const companyDetails = data.company || data['company-details'];

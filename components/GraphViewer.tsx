@@ -70,17 +70,25 @@ export function GraphViewer() {
             position: n.position || { x: 0, y: 0 },
             data: n.data as any,
         }));
-        const rfEdges: Edge[] = data.edges.map((e) => ({
-            id: e.id,
-            source: e.source,
-            target: e.target,
-            label: e.label,
-            type: 'smoothstep',
-            animated: false,
-            style: { stroke: '#3b82f6', strokeWidth: 1.5 },
-            markerEnd: { type: MarkerType.ArrowClosed, color: '#3b82f6' },
-            data: e.data as any,
-        }));
+        const rfEdges: Edge[] = data.edges.map((e) => {
+            // Status ramp: ceased roles render dashed/faded, current roles solid.
+            // (This standalone viewer doesn't load index.css, so no CSS tokens here.)
+            const isCeased = !!e.data?.isCeased;
+            return {
+                id: e.id,
+                source: e.source,
+                target: e.target,
+                label: e.label,
+                type: 'smoothstep',
+                animated: false,
+                className: isCeased ? 'edge-ceased' : undefined,
+                style: isCeased
+                    ? { stroke: '#94a3b8', strokeWidth: 1.3, strokeDasharray: '6 4' }
+                    : { stroke: '#3b82f6', strokeWidth: 1.5 },
+                markerEnd: { type: MarkerType.ArrowClosed, color: isCeased ? '#94a3b8' : '#3b82f6' },
+                data: e.data as any,
+            };
+        });
         return getLayoutedElements(rfNodes, rfEdges);
     }, [data]);
 

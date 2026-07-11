@@ -334,8 +334,10 @@ class OrgSpider {
         } else if (details.roles && details.roles.length > 0) {
             // Processing non-company roles (e.g. General Partners of a Limited Partnership)
             for (const role of details.roles) {
-                // Ignore resigned/inactive roles
-                if (role.roleStatus && role.roleStatus.toLowerCase() !== 'active') continue;
+                // Ceased (resigned/inactive) roles are skipped by default, but kept
+                // as dashed ink-wash edges when includeInactive is on.
+                const roleCeased = !!role.roleStatus && role.roleStatus.toLowerCase() !== 'active';
+                if (roleCeased && !this.config.includeInactive) continue;
 
                 let holderId = '';
                 let holderLabel = '';
@@ -399,7 +401,7 @@ class OrgSpider {
                     position: { x: 0, y: 0 }
                 });
 
-                this.addEdge(holderId, details.nzbn, `▼ ${role.roleType}`, 'parent');
+                this.addEdge(holderId, details.nzbn, `▼ ${role.roleType}`, 'parent', roleCeased);
 
                 if (!isPerson && parentNzbn && !this.visited.has(parentNzbn)) {
                     this.visited.add(parentNzbn);
@@ -678,17 +680,22 @@ class OrgSpider {
         }
     }
 
-    private addEdge(source: string, target: string, label: string, type: 'parent' | 'subsidiary' | 'sibling' | 'common') {
+    private addEdge(source: string, target: string, label: string, type: 'parent' | 'subsidiary' | 'sibling' | 'common', isCeased: boolean = false) {
         const id = `e-${source}-${target}`;
         if (this.edges.some(e => e.id === id)) return;
 
+        // Status ramp edge dye: current roles solid ink-mid, ceased roles
+        // dashed ink-wash (App.tsx restyles by depth, but exports/snapshots
+        // keep these token-dyed defaults).
         this.edges.push({
             id,
             source,
             target,
-            data: { percentage: 0, label, relationshipType: type },
+            data: { percentage: 0, label, relationshipType: type, isCeased },
             animated: type === 'subsidiary',
-            style: { stroke: type === 'sibling' ? '#94a3b8' : '#2563eb' },
+            style: isCeased
+                ? { stroke: 'var(--ink-wash)', strokeWidth: 1.4, strokeDasharray: '6 5', opacity: 0.75 }
+                : { stroke: type === 'sibling' ? 'var(--ink-wash)' : 'var(--ink-mid)' },
             markerEnd: 'arrowclosed' as any // Fix: Use string instead of object
         });
     }
@@ -972,8 +979,12 @@ async function fetchDirectorsByEntityName(name: string, config: ApiConfig, baseU
 }
 
 export const searchEntities = async (term: string, config: ApiConfig, logger?: LoggerCallback, page: number = 0, baseUrl: string = '/api/proxy'): Promise<EntitySearchResponse> => {
-    // Enclose in double quotes to force exact match
-    const encodedTerm = encodeURIComponent(`"${term}"`);
+    // Quote name searches for exact-phrase matching, but send NZBN/company
+    // numbers unquoted — the API matches identifiers on raw digits only.
+    const cleaned = term.trim();
+    const digits = cleaned.replace(/[\s-]/g, '');
+    const isNumericId = /^\d{6,13}$/.test(digits);
+    const encodedTerm = encodeURIComponent(isNumericId ? digits : `"${cleaned}"`);
     const proxyPath = `${API_PATHS.nzbn}/entities?search-term=${encodedTerm}&page-size=10&page=${page}`;
     const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
 

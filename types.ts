@@ -39,6 +39,7 @@ export interface NodeData {
   entityTypeDescription?: string; // e.g. "Limited Partnership"
   isTarget?: boolean; // To identify the center of the "butterfly"
   isHighlighted?: boolean;
+  depth?: number; // Hops from search target (undirected BFS); 0 = target
   // Visibility/collapse tracking
   isVisible?: boolean;          // Should this node be rendered?
   isDirectLineage?: boolean;    // Is this in direct path from search root?
@@ -55,12 +56,28 @@ export interface NodeData {
   removalCommenced?: boolean;
   hasHistoricInsolvency?: boolean;
   historicInsolvencyType?: string;
+  isDisqualified?: boolean; // Person node: on the disqualified directors register (crit)
+  // Compare mode (FindScreen A ↔ B connection search)
+  onComparePath?: boolean;      // Node lies on a shortest connection path (full ink)
+  isCompareEndpoint?: boolean;  // Node is endpoint A or B (also gets isTarget for the stamp)
+  // Case notes decoration — stamped by App's nodesWithAnnotations useMemo from
+  // caseNotes; rendered by CustomNodes (dog-ear, Stage B) and the export viewer.
+  hasNote?: boolean;
+  noteFlagged?: boolean;
+  // Save-point status diff (Stage C) — stamped session-only by App's
+  // handleCheckChanges on nodes whose status changed since the save point;
+  // never persisted. Rendered by CustomNodes as the 変 badge (bottom-left).
+  diff?: {
+    prevStatus: string;
+    prevBucket: import('./utils/statusRamp').StatusBucket;
+  };
 }
 
 export interface EdgeData {
   percentage: number;
   label: string;
   relationshipType?: 'parent' | 'subsidiary' | 'sibling' | 'common';
+  isCeased?: boolean; // Role has ended (resigned/inactive) — rendered dashed ink-wash
 }
 
 export interface GraphNode {
@@ -90,6 +107,45 @@ export interface GraphSnapshot {
   nodes: GraphNode[];
   edges: GraphEdge[];
   personResults?: PersonCompanyResult[]; // NEW: For person search snapshots
+  notes?: CaseNote[]; // Case notes copied in at save time (Stage B populates)
+}
+
+// --- Cases workspace (see design/CASES_PLAN.md) ---
+
+// A node annotation. `key` is the node's stable identity: nzbn when present,
+// otherwise personId(label) from services/compareService.
+export interface CaseNote {
+  id: string;
+  key: string; // nzbn ?? personId(label)
+  tabId: string;
+  nodeLabel: string;
+  text: string;
+  flag: boolean;
+  createdAt: number;
+}
+
+// Serialized CompanyTab for the session store. Only allNodesInMemory + edges
+// are persisted (visible nodes are rebuilt on load via assignDepths/layout);
+// transient node fields (isHighlighted, isExpanding, selected) are stripped.
+export interface PersistedCompanyTab {
+  id: string;
+  label: string;
+  nzbn: string;
+  searchQuery: string;
+  allNodesInMemory: GraphNode[];
+  edges: GraphEdge[];
+  compare?: CompanyTab['compare'];
+}
+
+// The one implicit case in v1 — localStorage mitsuketa_session_v1.
+// Individual (person) tabs are NEVER serialized here (compliance: same rule
+// as person snapshots; disqualified/insolvency matches live only on them).
+export interface CaseSession {
+  version: 1;
+  companyTabs: PersistedCompanyTab[];
+  activeCompanyTabId: string | null;
+  notes: CaseNote[];
+  updatedAt: number;
 }
 
 // Physical address from Companies Office Entity Roles API
@@ -133,6 +189,14 @@ export interface CompanyTab {
   edges: GraphEdge[];
   allNodesInMemory: GraphNode[];
   isLoading: boolean;
+  // Present when this tab holds a Compare (A ↔ B) result rather than an org chart
+  compare?: {
+    aLabel: string;
+    bLabel: string;
+    hops: number;
+    pathNodeIds: string[];
+    pathEdgeIds: string[];
+  };
 }
 
 export interface IndividualTab {

@@ -6,7 +6,6 @@ import {
     AlertTriangle,
     PenTool,
     Building2,
-    Calendar,
     Loader2,
     Eye,
     FileText,
@@ -15,13 +14,11 @@ import {
     ZoomOut,
     Maximize2,
     Focus,
-    Download,
     ChevronLeft,
-    Shield,
 } from 'lucide-react';
-import { PersonCompanyResult, PhysicalAddress } from '../types';
-import { useConsentForms, ConsentFormLink } from '../hooks/useConsentForms';
-import { useSignatureExtractor, SignatureExtractionResult } from '../hooks/useSignatureExtractor';
+import { PersonCompanyResult } from '../types';
+import { useConsentForms } from '../hooks/useConsentForms';
+import { useSignatureExtractor } from '../hooks/useSignatureExtractor';
 
 interface KydVerificationPanelProps {
     personName: string;
@@ -125,79 +122,82 @@ function PdfViewerModal({
 
     return (
         <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+            <div className="bg-paper border border-rule max-w-4xl w-full max-h-[90vh] flex flex-col">
                 {/* Header */}
-                <div className="flex items-center justify-between p-3 border-b border-slate-200 dark:border-slate-700">
+                <div className="flex items-center justify-between p-3 bg-paper2 border-b border-rule">
                     <div>
-                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                        <h3 className="text-sm font-bold text-ink" style={{ fontFamily: 'var(--serif)' }}>
                             Consent Form
                         </h3>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">{companyName}</p>
+                        <p className="text-xs text-ink-mid">{companyName}</p>
                     </div>
                     <div className="flex items-center gap-1">
                         <button
                             onClick={() => setScale((s) => Math.max(baseScaleRef.current * 0.5, s - baseScaleRef.current * 0.25))}
-                            className="h-7 w-7 p-0 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200"
+                            aria-label="Zoom out"
+                            className="h-7 w-7 p-0 flex items-center justify-center border border-rule bg-paper text-ink-mid hover:border-ink hover:text-ink transition-colors"
                         >
-                            <ZoomOut className="w-4 h-4" />
+                            <ZoomOut className="w-4 h-4" strokeWidth={1.5} />
                         </button>
-                        <span className="text-xs text-gray-500 dark:text-gray-300 w-12 text-center">
+                        <span className="text-xs text-ink-mid w-12 text-center font-mono" style={{ fontVariantNumeric: 'tabular-nums' }}>
                             {Math.round((scale / baseScaleRef.current) * 100)}%
                         </span>
                         <button
                             onClick={() => setScale((s) => Math.min(baseScaleRef.current * 3, s + baseScaleRef.current * 0.25))}
-                            className="h-7 w-7 p-0 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200"
+                            aria-label="Zoom in"
+                            className="h-7 w-7 p-0 flex items-center justify-center border border-rule bg-paper text-ink-mid hover:border-ink hover:text-ink transition-colors"
                         >
-                            <ZoomIn className="w-4 h-4" />
+                            <ZoomIn className="w-4 h-4" strokeWidth={1.5} />
                         </button>
                         <button
                             onClick={handleAutoZoom}
-                            className="h-7 px-2 flex items-center gap-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-xs text-gray-700 dark:text-gray-200"
+                            className="h-7 px-2 flex items-center gap-1 border border-rule bg-paper text-xs text-ink-mid hover:border-ink hover:text-ink transition-colors"
                             title={autoZoomed ? 'Show full page' : 'Auto-zoom to signature area'}
                         >
-                            {autoZoomed ? <Maximize2 className="w-4 h-4" /> : <Focus className="w-4 h-4" />}
+                            {autoZoomed ? <Maximize2 className="w-4 h-4" strokeWidth={1.5} /> : <Focus className="w-4 h-4" strokeWidth={1.5} />}
                             <span className="hidden sm:inline">{autoZoomed ? 'Full Page' : 'Signature'}</span>
                         </button>
                         <button
                             onClick={onClose}
-                            className="h-7 w-7 p-0 flex items-center justify-center rounded hover:bg-slate-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-200"
+                            aria-label="Close PDF viewer"
+                            className="h-7 w-7 p-0 flex items-center justify-center border border-rule bg-paper text-ink-mid hover:border-ink hover:text-ink transition-colors"
                         >
-                            <X className="w-4 h-4" />
+                            <X className="w-4 h-4" strokeWidth={1.5} />
                         </button>
                     </div>
                 </div>
 
                 {/* Content */}
-                <div ref={containerRef} className="flex-1 overflow-auto p-4 bg-gray-100 dark:bg-gray-950">
+                <div ref={containerRef} className="flex-1 overflow-auto p-4 bg-paper2">
                     {loading && (
                         <div className="flex items-center justify-center h-64">
-                            <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-                            <span className="ml-2 text-sm text-gray-500">Loading PDF...</span>
+                            <Loader2 className="w-6 h-6 animate-spin text-accent" strokeWidth={1.5} />
+                            <span className="ml-2 text-sm text-ink-mid">Loading PDF...</span>
                         </div>
                     )}
                     {error && (
-                        <div className="flex items-center justify-center h-64 text-red-500 text-sm">{error}</div>
+                        <div className="flex items-center justify-center h-64 text-crit text-sm">{error}</div>
                     )}
-                    <canvas ref={canvasRef} className={`mx-auto shadow-lg ${loading ? 'hidden' : ''}`} />
+                    <canvas ref={canvasRef} className={`mx-auto border border-rule ${loading ? 'hidden' : ''}`} />
                 </div>
 
                 {/* Footer */}
                 {pageCount > 1 && (
-                    <div className="flex items-center justify-center gap-2 p-2 border-t border-slate-200 dark:border-slate-700">
+                    <div className="flex items-center justify-center gap-2 p-2 bg-paper2 border-t border-rule">
                         <button
                             disabled={currentPage <= 1}
                             onClick={() => renderPage(currentPage - 1, scale)}
-                            className="h-7 px-3 text-xs rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
+                            className="h-7 px-3 text-xs border border-rule bg-paper text-ink-mid hover:border-ink hover:text-ink disabled:opacity-50 transition-colors"
                         >
                             Previous
                         </button>
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-ink-mid font-mono" style={{ fontVariantNumeric: 'tabular-nums' }}>
                             Page {currentPage} of {pageCount}
                         </span>
                         <button
                             disabled={currentPage >= pageCount}
                             onClick={() => renderPage(currentPage + 1, scale)}
-                            className="h-7 px-3 text-xs rounded hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-50"
+                            className="h-7 px-3 text-xs border border-rule bg-paper text-ink-mid hover:border-ink hover:text-ink disabled:opacity-50 transition-colors"
                         >
                             Next
                         </button>
@@ -241,20 +241,20 @@ function AddressComparison({ results }: { results: PersonCompanyResult[] }) {
     const allMatch = unique.length === 1;
 
     return (
-        <div className="p-3 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/30">
+        <div className="p-3 border border-rule bg-paper2">
             <div className="flex items-center gap-2 mb-2">
-                <MapPin className="w-3.5 h-3.5 text-gray-500" />
-                <span className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                <MapPin className="w-3.5 h-3.5 text-ink-pale" strokeWidth={1.5} />
+                <span className="text-xs font-bold uppercase tracking-wider text-ink-pale">
                     Address Comparison
                 </span>
                 {allMatch ? (
-                    <span className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-                        <Check className="w-3 h-3" />
+                    <span className="flex items-center gap-1 text-xs text-green">
+                        <Check className="w-3 h-3" strokeWidth={1.5} />
                         All match
                     </span>
                 ) : (
-                    <span className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-                        <AlertTriangle className="w-3 h-3" />
+                    <span className="flex items-center gap-1 text-xs text-amber">
+                        <AlertTriangle className="w-3 h-3" strokeWidth={1.5} />
                         {unique.length} different addresses
                     </span>
                 )}
@@ -264,12 +264,12 @@ function AddressComparison({ results }: { results: PersonCompanyResult[] }) {
                 {unique.map((entry, idx) => (
                     <div
                         key={`addr-${idx}`}
-                        className={`text-xs p-2 rounded ${!allMatch ? 'bg-amber-50/50 dark:bg-amber-900/10' : ''}`}
+                        className="text-xs p-2 border border-rule bg-paper"
                     >
-                        <div className="text-gray-700 dark:text-gray-300 font-medium">
+                        <div className="text-ink font-medium">
                             {entry.fullAddress}
                         </div>
-                        <div className="text-gray-400 dark:text-gray-500 mt-0.5">
+                        <div className="text-ink-pale mt-0.5">
                             Used by {entry.companies.length} compan{entry.companies.length === 1 ? 'y' : 'ies'}
                             {entry.companies.length <= 3 && (
                                 <span>: {entry.companies.join(', ')}</span>
@@ -350,49 +350,55 @@ export const KydVerificationPanel: React.FC<KydVerificationPanelProps> = ({
     );
     const loadingCount = Array.from(signatureResults.values()).filter((r) => r.loading).length;
 
+    const chipClass = 'flex items-center gap-1.5 px-3 py-1 border border-rule bg-paper text-ink-mid';
+
     return (
-        <div className="absolute inset-0 flex flex-col bg-white dark:bg-slate-900 overflow-hidden z-50">
+        <div className="absolute inset-0 flex flex-col bg-paper overflow-hidden z-50">
             {/* Header */}
-            <div className="p-6 bg-gradient-to-r from-blue-50 to-emerald-50 dark:from-blue-900/20 dark:to-emerald-900/20 border-b border-slate-200 dark:border-slate-700">
+            <div className="p-6 bg-paper2 border-b border-rule">
                 <button
                     onClick={onClose}
-                    className="mb-4 flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+                    className="mb-4 flex items-center gap-1.5 text-sm text-ink-mid hover:text-ink transition-colors"
                 >
-                    <ChevronLeft size={16} />
+                    <ChevronLeft size={16} strokeWidth={1.5} />
                     Back to results
                 </button>
 
                 <div className="flex items-center gap-3 mb-2">
-                    <div className="p-3 bg-blue-500 rounded-full">
-                        <Shield className="text-white" size={24} />
+                    <div
+                        aria-hidden="true"
+                        className="shrink-0 flex items-center justify-center rounded-full border border-accent text-accent"
+                        style={{ width: 30, height: 30, fontFamily: 'var(--serif)', fontSize: 15 }}
+                    >
+                        印
                     </div>
                     <div>
-                        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                        <h2 className="text-ink" style={{ fontFamily: 'var(--serif)', fontWeight: 600, fontSize: 24, lineHeight: 1.2 }}>
                             KYD Verification
                         </h2>
-                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                        <p className="text-ink-mid" style={{ fontSize: '12.5px' }}>
                             {personName} — {activeCompanies.length} active compan{activeCompanies.length === 1 ? 'y' : 'ies'}
                         </p>
                     </div>
                 </div>
 
-                {/* Status badges */}
-                <div className="flex gap-2 mt-3 flex-wrap">
+                {/* Status chips */}
+                <div className="flex gap-2 mt-3 flex-wrap" style={{ fontSize: '11px' }}>
                     {consentState.loading && (
-                        <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/30 text-xs font-medium text-blue-700 dark:text-blue-300">
-                            <Loader2 className="w-3 h-3 animate-spin" />
+                        <span className={chipClass}>
+                            <Loader2 className="w-3 h-3 animate-spin text-accent" strokeWidth={1.5} />
                             Fetching consent forms...
                         </span>
                     )}
                     {loadingCount > 0 && (
-                        <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-purple-100 dark:bg-purple-900/30 text-xs font-medium text-purple-700 dark:text-purple-300">
-                            <Loader2 className="w-3 h-3 animate-spin" />
+                        <span className={chipClass}>
+                            <Loader2 className="w-3 h-3 animate-spin text-accent" strokeWidth={1.5} />
                             Extracting {loadingCount} signature{loadingCount !== 1 ? 's' : ''}...
                         </span>
                     )}
                     {!consentState.loading && extractedSignatures.length > 0 && loadingCount === 0 && (
-                        <span className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/30 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                            <PenTool className="w-3 h-3" />
+                        <span className={chipClass}>
+                            <PenTool className="w-3 h-3 text-green" strokeWidth={1.5} />
                             {extractedSignatures.length} signature{extractedSignatures.length !== 1 ? 's' : ''} extracted
                         </span>
                     )}
@@ -406,13 +412,13 @@ export const KydVerificationPanel: React.FC<KydVerificationPanelProps> = ({
 
                 {/* Signature Comparison */}
                 {extractedSignatures.length > 0 && (
-                    <div className="p-4 rounded-md border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20">
+                    <div className="p-4 border border-rule bg-paper2">
                         <div className="flex items-center gap-2 mb-3">
-                            <PenTool className="w-3.5 h-3.5 text-blue-500" />
-                            <span className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                            <PenTool className="w-3.5 h-3.5 text-accent" strokeWidth={1.5} />
+                            <span className="text-xs font-bold uppercase tracking-wider text-ink-pale">
                                 Signature Comparison
                             </span>
-                            <span className="text-xs text-blue-500 dark:text-blue-400">
+                            <span className="text-xs text-ink-mid">
                                 {extractedSignatures.length} from active compan{extractedSignatures.length === 1 ? 'y' : 'ies'}
                             </span>
                         </div>
@@ -423,19 +429,20 @@ export const KydVerificationPanel: React.FC<KydVerificationPanelProps> = ({
                                     onClick={() =>
                                         sig.pdfUrl && handleViewPdf(sig.pdfUrl, sig.companyName)
                                     }
-                                    className="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden hover:border-blue-300 dark:hover:border-blue-600 transition-colors cursor-pointer text-left"
+                                    className="border border-rule bg-paper overflow-hidden hover:border-ink transition-colors cursor-pointer text-left"
                                 >
-                                    <div className="px-2 py-1 bg-slate-100 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700">
-                                        <span className="text-xs font-medium text-gray-700 dark:text-gray-300 truncate block">
-                                            {sig.companyName}
-                                        </span>
-                                    </div>
-                                    <div className="bg-white p-1 max-h-32 overflow-hidden">
+                                    {/* PNG crops from PDFs need a white surface — exempt from tokens */}
+                                    <div className="p-1 max-h-32 overflow-hidden" style={{ background: '#fff' }}>
                                         <img
                                             src={sig.imageDataUrl!}
                                             alt={`Signature from ${sig.companyName}`}
                                             className="w-full object-contain"
                                         />
+                                    </div>
+                                    <div className="px-2 py-1 bg-paper2 border-t border-rule">
+                                        <span className="font-medium text-ink-mid truncate block" style={{ fontSize: '10.5px' }}>
+                                            {sig.companyName}
+                                        </span>
                                     </div>
                                 </button>
                             ))}
@@ -445,7 +452,7 @@ export const KydVerificationPanel: React.FC<KydVerificationPanelProps> = ({
 
                 {/* Company Details with consent form status */}
                 <div>
-                    <p className="text-xs font-bold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3">
+                    <p className="text-xs font-bold uppercase tracking-wider text-ink-pale mb-3">
                         Companies ({activeCompanies.length} active)
                     </p>
                     <div className="space-y-3">
@@ -460,23 +467,23 @@ export const KydVerificationPanel: React.FC<KydVerificationPanelProps> = ({
                             return (
                                 <div
                                     key={company.nzbn}
-                                    className="p-3 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50"
+                                    className="p-3 border border-rule bg-paper"
                                 >
                                     <div className="flex items-start justify-between gap-2">
                                         <div className="min-w-0 flex-1">
                                             <div className="flex items-center gap-2">
-                                                <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
-                                                <span className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                                <Building2 className="w-4 h-4 text-ink-pale shrink-0" strokeWidth={1.5} />
+                                                <span className="font-bold text-ink truncate" style={{ fontSize: '12.5px' }}>
                                                     {company.companyName}
                                                 </span>
-                                                <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 font-medium shrink-0">
+                                                <span className="text-green uppercase shrink-0" style={{ fontSize: '10px', letterSpacing: '.04em' }}>
                                                     Active
                                                 </span>
                                             </div>
-                                            <div className="mt-1.5 space-y-1 text-xs text-gray-500 dark:text-gray-400">
+                                            <div className="mt-1.5 space-y-1 text-xs text-ink-mid">
                                                 {company.physicalAddress?.addressLines && (
                                                     <div className="flex items-start gap-1.5">
-                                                        <MapPin className="w-3 h-3 mt-0.5 shrink-0" />
+                                                        <MapPin className="w-3 h-3 mt-0.5 shrink-0" strokeWidth={1.5} />
                                                         <span>
                                                             {company.physicalAddress.addressLines.join(', ')}
                                                             {company.physicalAddress.postCode &&
@@ -484,7 +491,7 @@ export const KydVerificationPanel: React.FC<KydVerificationPanelProps> = ({
                                                         </span>
                                                     </div>
                                                 )}
-                                                <div className="text-xs text-gray-400 dark:text-gray-500">
+                                                <div className="font-mono text-ink-pale" style={{ fontSize: '10.5px', fontVariantNumeric: 'tabular-nums' }}>
                                                     Company #{company.companyNumber}
                                                 </div>
                                             </div>
@@ -492,16 +499,16 @@ export const KydVerificationPanel: React.FC<KydVerificationPanelProps> = ({
                                             {/* Consent form link */}
                                             {consentLink && (
                                                 <div className="mt-2 flex items-center gap-2">
-                                                    <FileText className="w-3 h-3 text-gray-400 shrink-0" />
+                                                    <FileText className="w-3 h-3 text-ink-pale shrink-0" strokeWidth={1.5} />
                                                     <button
                                                         onClick={() => handleViewPdf(consentLink.url, company.companyName)}
-                                                        className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center gap-1"
+                                                        className="text-xs text-accent hover:text-ink flex items-center gap-1 transition-colors"
                                                     >
-                                                        <Eye className="w-3 h-3" />
+                                                        <Eye className="w-3 h-3" strokeWidth={1.5} />
                                                         View Consent Form
                                                     </button>
-                                                    <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 flex items-center gap-0.5">
-                                                        <CheckCircle className="w-3 h-3" />
+                                                    <span className="text-green flex items-center gap-1 uppercase" style={{ fontSize: '10px', letterSpacing: '.04em' }}>
+                                                        <CheckCircle className="w-3 h-3" strokeWidth={1.5} />
                                                         Direct link
                                                     </span>
                                                 </div>
@@ -509,8 +516,8 @@ export const KydVerificationPanel: React.FC<KydVerificationPanelProps> = ({
 
                                             {/* Loading state for consent search */}
                                             {consentState.loading && !consentLink && (
-                                                <div className="mt-2 flex items-center gap-1.5 text-xs text-gray-400">
-                                                    <Loader2 className="w-3 h-3 animate-spin" />
+                                                <div className="mt-2 flex items-center gap-1.5 text-xs text-ink-pale">
+                                                    <Loader2 className="w-3 h-3 animate-spin text-accent" strokeWidth={1.5} />
                                                     Searching for consent form...
                                                 </div>
                                             )}
@@ -520,8 +527,8 @@ export const KydVerificationPanel: React.FC<KydVerificationPanelProps> = ({
                                         {sigResult && (
                                             <div className="shrink-0 w-36">
                                                 {sigResult.loading ? (
-                                                    <div className="flex items-center justify-center h-16 rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-                                                        <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                                                    <div className="flex items-center justify-center h-16 border border-rule bg-paper2">
+                                                        <Loader2 className="w-4 h-4 animate-spin text-accent" strokeWidth={1.5} />
                                                     </div>
                                                 ) : sigResult.imageDataUrl ? (
                                                     <button
@@ -529,21 +536,23 @@ export const KydVerificationPanel: React.FC<KydVerificationPanelProps> = ({
                                                             sigResult.pdfUrl &&
                                                             handleViewPdf(sigResult.pdfUrl, company.companyName)
                                                         }
-                                                        className="block w-full rounded border border-slate-200 dark:border-slate-700 overflow-hidden hover:border-blue-400 dark:hover:border-blue-500 transition-colors cursor-pointer"
+                                                        className="block w-full border border-rule overflow-hidden hover:border-ink transition-colors cursor-pointer"
                                                         title="Click to view full consent form"
                                                     >
+                                                        {/* White surface for PDF signature crop — exempt from tokens */}
                                                         <img
                                                             src={sigResult.imageDataUrl}
                                                             alt={`Signature for ${company.companyName}`}
-                                                            className="w-full h-16 object-contain bg-white"
+                                                            className="w-full h-16 object-contain"
+                                                            style={{ background: '#fff' }}
                                                         />
-                                                        <div className="flex items-center justify-center gap-1 py-0.5 bg-slate-100 dark:bg-slate-900/50 text-xs text-gray-500 dark:text-gray-400">
-                                                            <Eye className="w-3 h-3" />
+                                                        <div className="flex items-center justify-center gap-1 py-0.5 bg-paper2 border-t border-rule text-ink-mid" style={{ fontSize: '10.5px' }}>
+                                                            <Eye className="w-3 h-3" strokeWidth={1.5} />
                                                             View form
                                                         </div>
                                                     </button>
                                                 ) : sigResult.error ? (
-                                                    <div className="flex items-center justify-center h-16 rounded border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 text-xs text-red-500 px-1 text-center">
+                                                    <div className="flex items-center justify-center h-16 border border-crit bg-paper2 text-xs text-crit px-1 text-center">
                                                         No form found
                                                     </div>
                                                 ) : null}
@@ -559,8 +568,8 @@ export const KydVerificationPanel: React.FC<KydVerificationPanelProps> = ({
                 {/* No active companies message */}
                 {activeCompanies.length === 0 && (
                     <div className="text-center py-12">
-                        <Building2 className="mx-auto mb-4 text-gray-300 dark:text-gray-600" size={48} />
-                        <p className="text-gray-500 dark:text-gray-400">
+                        <Building2 className="mx-auto mb-4 text-ink-pale" size={48} strokeWidth={1.5} />
+                        <p className="text-ink-mid">
                             No active companies with company numbers found for KYD verification
                         </p>
                     </div>
@@ -571,9 +580,9 @@ export const KydVerificationPanel: React.FC<KydVerificationPanelProps> = ({
                     activeCompanies.length > 0 &&
                     Object.values(consentState.results).every((v) => v === null) &&
                     Object.keys(consentState.results).length > 0 && (
-                        <div className="p-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20">
-                            <div className="flex items-center gap-2 text-xs text-amber-600 dark:text-amber-400">
-                                <AlertTriangle className="w-3.5 h-3.5" />
+                        <div className="p-3 border border-rule bg-paper2">
+                            <div className="flex items-center gap-2 text-xs text-amber">
+                                <AlertTriangle className="w-3.5 h-3.5" strokeWidth={1.5} />
                                 <span>No consent forms found for this director across active companies</span>
                             </div>
                         </div>

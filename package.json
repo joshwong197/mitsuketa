@@ -4,14 +4,18 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "npm run build:export-viewer && vite",
+    "build": "npm run build:export-viewer && vite build",
     "preview": "vite preview",
-    "build:graph-bundle": "esbuild mcp/templates/graph-bundle.entry.ts --bundle --format=iife --minify --target=es2020 --outfile=mcp/templates/graph-bundle.js --log-level=info"
+    "build:graph-bundle": "esbuild mcp/templates/graph-bundle.entry.ts --bundle --format=iife --minify --target=es2020 --outfile=mcp/templates/graph-bundle.js --log-level=info",
+    "build:export-viewer": "esbuild export-viewer.entry.tsx --bundle --format=iife --minify --target=es2020 --outfile=public/export-viewer.js --log-level=info && tailwindcss -i export-viewer.css -o public/export-viewer.css --minify"
   },
   "dependencies": {
     "@dagrejs/dagre": "^1.1.8",
+    "@fontsource/shippori-mincho": "^5.2.8",
+    "@fontsource/zen-kaku-gothic-new": "^5.2.7",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@tailwindcss/vite": "^4.3.2",
     "@vercel/analytics": "^2.0.1",
     "cheerio": "^1.2.0",
     "html-to-image": "^1.11.13",
@@ -23,6 +27,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@tailwindcss/cli": "^4.3.2",
     "@types/node": "^22.14.0",
     "@vercel/node": "^5.6.10",
     "@vitejs/plugin-react": "^5.0.0",
@@ -30,6 +35,7 @@
     "cytoscape-dagre": "^3.0.0",
     "cytoscape-expand-collapse": "^4.1.1",
     "esbuild": "^0.28.0",
+    "tailwindcss": "^4.3.2",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

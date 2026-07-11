@@ -1,5 +1,5 @@
 import React from 'react';
-import { Building2, User, X } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 
 interface TabItem {
     id: string;
@@ -15,6 +15,9 @@ interface TabBarProps {
     activeSubTabId: string | null;
     onSubTabClick: (tabId: string) => void;
     onSubTabClose: (tabId: string) => void;
+    /** While true, a transient "New search" chip is the visually active tab. */
+    searchViewOpen: boolean;
+    onNewSearch: () => void;
 }
 
 export const TabBar: React.FC<TabBarProps> = ({
@@ -24,87 +27,87 @@ export const TabBar: React.FC<TabBarProps> = ({
     individualTabs,
     activeSubTabId,
     onSubTabClick,
-    onSubTabClose
+    onSubTabClose,
+    searchViewOpen,
+    onNewSearch
 }) => {
     const activeTabs = activeMainTab === 'company' ? companyTabs : individualTabs;
 
+    const modeBtn = (mode: 'company' | 'individual', kanji: string, label: string) => {
+        const current = activeMainTab === mode;
+        return (
+            <button
+                onClick={() => onMainTabChange(mode)}
+                className={`flex items-center gap-2 px-4 py-2.5 transition-colors ${current ? 'text-ink bg-paper2' : 'text-ink-pale hover:text-ink-mid'}`}
+                style={{ fontSize: 12.5, boxShadow: current ? 'inset 0 -2px 0 var(--accent)' : undefined }}
+            >
+                <span
+                    style={{ fontFamily: 'var(--serif)', fontSize: 11 }}
+                    className={current ? 'text-accent' : 'text-ink-pale'}
+                >
+                    {kanji}
+                </span>
+                {label}
+            </button>
+        );
+    };
+
     return (
-        <div className="flex-shrink-0 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex-shrink-0 bg-paper border-b border-rule">
             {/* Primary Category Tabs */}
-            <div className="flex items-center gap-1 px-3 pt-2">
-                <button
-                    onClick={() => onMainTabChange('company')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-t-lg text-sm font-semibold transition-all border border-b-0 ${activeMainTab === 'company'
-                            ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 border-slate-200 dark:border-slate-700 shadow-sm'
-                            : 'bg-slate-50 dark:bg-slate-900/50 text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-700 dark:hover:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                        }`}
-                >
-                    <Building2 size={16} />
-                    Company
-                    {companyTabs.length > 0 && (
-                        <span className={`text-xs px-1.5 py-0.5 rounded-full ${activeMainTab === 'company'
-                                ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400'
-                                : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
-                            }`}>
-                            {companyTabs.length}
-                        </span>
-                    )}
-                </button>
-                <button
-                    onClick={() => onMainTabChange('individual')}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-t-lg text-sm font-semibold transition-all border border-b-0 ${activeMainTab === 'individual'
-                            ? 'bg-white dark:bg-slate-800 text-purple-600 dark:text-purple-400 border-slate-200 dark:border-slate-700 shadow-sm'
-                            : 'bg-slate-50 dark:bg-slate-900/50 text-gray-500 dark:text-gray-400 border-transparent hover:text-gray-700 dark:hover:text-gray-300 hover:bg-slate-100 dark:hover:bg-slate-800'
-                        }`}
-                >
-                    <User size={16} />
-                    Individual
-                    {individualTabs.length > 0 && (
-                        <span className={`text-xs px-1.5 py-0.5 rounded-full ${activeMainTab === 'individual'
-                                ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400'
-                                : 'bg-slate-200 dark:bg-slate-700 text-slate-500 dark:text-slate-400'
-                            }`}>
-                            {individualTabs.length}
-                        </span>
-                    )}
-                </button>
+            <div className="flex items-center">
+                {modeBtn('company', '会社', 'Company')}
+                {modeBtn('individual', '個人', 'Individual')}
             </div>
 
             {/* Sub-tabs (scrollable row) */}
-            {activeTabs.length > 0 && (
-                <div className="flex items-center gap-0.5 px-3 py-1 overflow-x-auto scrollbar-thin touch-pan-x">
-                    {activeTabs.map(tab => (
-                        <div
-                            key={tab.id}
-                            className={`group flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium cursor-pointer transition-all whitespace-nowrap max-w-[200px] ${activeSubTabId === tab.id
-                                    ? activeMainTab === 'company'
-                                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 ring-1 ring-blue-300 dark:ring-blue-700'
-                                        : 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 ring-1 ring-purple-300 dark:ring-purple-700'
-                                    : 'bg-slate-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400 hover:bg-slate-200 dark:hover:bg-slate-700'
-                                }`}
-                            onClick={() => onSubTabClick(tab.id)}
-                        >
-                            {activeMainTab === 'company'
-                                ? <Building2 size={12} className="flex-shrink-0" />
-                                : <User size={12} className="flex-shrink-0" />
-                            }
-                            <span className="truncate">
-                                {tab.label}
-                            </span>
-                            {tab.isLoading && (
-                                <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse flex-shrink-0" />
-                            )}
-                            <button
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onSubTabClose(tab.id);
-                                }}
-                                className="ml-1 p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-gray-400 hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+            {(activeTabs.length > 0 || searchViewOpen) && (
+                <div className="flex items-stretch overflow-x-auto border-t border-rule touch-pan-x">
+                    {activeTabs.map(tab => {
+                        const active = !searchViewOpen && activeSubTabId === tab.id;
+                        return (
+                            <div
+                                key={tab.id}
+                                className={`group flex items-center gap-1.5 px-3 py-1.5 cursor-pointer transition-colors whitespace-nowrap max-w-[220px] border-r border-rule ${active ? 'text-ink bg-paper2' : 'text-ink-pale hover:text-ink-mid'}`}
+                                style={{ fontSize: 12 }}
+                                onClick={() => onSubTabClick(tab.id)}
                             >
-                                <X size={10} />
-                            </button>
+                                <span className="truncate">{tab.label}</span>
+                                {tab.isLoading && (
+                                    <span className="w-1.5 h-1.5 bg-accent animate-pulse flex-shrink-0" />
+                                )}
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onSubTabClose(tab.id);
+                                    }}
+                                    aria-label="Close tab"
+                                    className="ml-1 p-0.5 text-ink-pale hover:text-ink opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                                >
+                                    <X size={11} strokeWidth={1.5} />
+                                </button>
+                            </div>
+                        );
+                    })}
+                    {searchViewOpen ? (
+                        /* Transient chip — exists only while the search view is open */
+                        <div
+                            className="flex items-center gap-1.5 px-3 py-1.5 whitespace-nowrap border-r border-rule text-ink bg-paper2"
+                            style={{ fontSize: 12 }}
+                        >
+                            <span className="text-accent" style={{ fontFamily: 'var(--serif)', fontSize: 11 }}>新</span>
+                            New search
                         </div>
-                    ))}
+                    ) : (
+                        <button
+                            onClick={onNewSearch}
+                            aria-label="New search"
+                            title="New search"
+                            className="flex items-center px-3 py-1.5 border-r border-rule text-ink-pale hover:text-ink transition-colors flex-shrink-0"
+                        >
+                            <Plus size={13} strokeWidth={1.5} />
+                        </button>
+                    )}
                 </div>
             )}
         </div>

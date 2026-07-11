@@ -21,68 +21,69 @@ export const ConfirmOrgChartDialog: React.FC<ConfirmOrgChartDialogProps> = ({
             >
                 {/* Dialog */}
                 <div
-                    className="bg-white dark:bg-slate-900 rounded-lg shadow-2xl max-w-md w-full mx-4 border-2 border-orange-500 dark:border-orange-400"
+                    className="bg-paper max-w-md w-full mx-4 border border-rule"
                     onClick={(e) => e.stopPropagation()}
                 >
                     {/* Header */}
-                    <div className="p-6 border-b border-slate-200 dark:border-slate-800">
+                    <div className="p-6 border-b border-rule">
                         <div className="flex items-start justify-between">
                             <div className="flex items-center gap-3">
-                                <div className="p-2 bg-orange-100 dark:bg-orange-900/30 rounded-full">
-                                    <AlertTriangle className="text-orange-600 dark:text-orange-400" size={24} />
+                                <div className="p-2 bg-paper2">
+                                    <AlertTriangle className="text-amber" size={24} strokeWidth={1.5} />
                                 </div>
                                 <div>
-                                    <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                                    <h3 className="text-ink" style={{ fontFamily: 'var(--serif)', fontWeight: 600, fontSize: 17 }}>
                                         Load Org Chart?
                                     </h3>
-                                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+                                    <p className="text-sm text-ink-mid mt-0.5">
                                         This action will switch views
                                     </p>
                                 </div>
                             </div>
                             <button
                                 onClick={onCancel}
-                                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+                                className="text-ink-mid hover:text-ink transition-colors"
+                                aria-label="Close"
                             >
-                                <X size={20} />
+                                <X size={20} strokeWidth={1.5} />
                             </button>
                         </div>
                     </div>
 
                     {/* Body */}
                     <div className="p-6">
-                        <p className="text-gray-700 dark:text-gray-300 mb-4">
+                        <p className="text-ink-mid mb-4">
                             This will load the full organizational chart for:
                         </p>
 
-                        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800 flex items-center gap-3">
-                            <Building2 className="text-blue-600 dark:text-blue-400" size={20} />
-                            <p className="font-semibold text-gray-900 dark:text-gray-100">
+                        <div className="p-4 bg-paper2 border border-rule flex items-center gap-3">
+                            <Building2 className="text-accent" size={20} strokeWidth={1.5} />
+                            <p className="font-semibold text-ink">
                                 {companyName}
                             </p>
                         </div>
 
-                        <div className="mt-4 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
-                            <p className="text-sm text-gray-600 dark:text-gray-400">
-                                ℹ️ Your current person search will be saved as a snapshot for easy access later.
+                        <div className="mt-4 p-3 bg-paper2">
+                            <p className="text-sm text-ink-mid">
+                                Your current person search will be saved as a snapshot for easy access later.
                             </p>
                         </div>
                     </div>
 
                     {/* Footer */}
-                    <div className="p-6 border-t border-slate-200 dark:border-slate-800 flex gap-3 justify-end">
+                    <div className="p-6 border-t border-rule flex gap-3 justify-end">
                         <button
                             onClick={onCancel}
-                            className="px-4 py-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors font-medium"
+                            className="px-4 py-2 text-ink bg-paper border border-rule hover:border-ink-mid transition-colors font-medium"
                         >
                             Cancel
                         </button>
                         <button
                             onClick={onConfirm}
-                            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-md transition-colors font-medium flex items-center gap-2"
+                            className="px-4 py-2 bg-ink text-paper hover:bg-accent hover:text-accent-ink transition-colors font-medium flex items-center gap-2"
                         >
                             Load Chart
-                            <Building2 size={16} />
+                            <Building2 size={16} strokeWidth={1.5} />
                         </button>
                     </div>
                 </div>
