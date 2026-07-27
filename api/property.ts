@@ -93,13 +93,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const ip = (req.headers['x-forwarded-for'] as string) || undefined;
 
     // Fail closed: an unconfigured feature is an unreachable one.
-    if (!password) {
-        return res.status(503).json({
-            error: 'not_configured',
-            message: 'Property search is not enabled on this deployment.',
-        });
-    }
-    if (!process.env.LINZ_API_KEY) {
+    //
+    // Which variable is missing goes to the server log, never to the client —
+    // config state is not the public's business. Note that Vercel binds env
+    // vars at BUILD time, so a deployment built before a variable was added
+    // will land here until it is redeployed. Check `vercel logs <url>`.
+    const missing = [
+        !password && 'PROPERTY_PASS',
+        !process.env.LINZ_API_KEY && 'LINZ_API_KEY',
+    ].filter(Boolean);
+    if (missing.length > 0) {
+        console.error(`[property] disabled — not set on this deployment: ${missing.join(', ')}`
+            + ' (env vars bind at build time; redeploy after adding them)');
         return res.status(503).json({
             error: 'not_configured',
             message: 'Property search is not enabled on this deployment.',
