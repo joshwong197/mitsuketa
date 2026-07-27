@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Search } from 'lucide-react';
 import type { EntitySearchResultItem } from '../types';
 import type { CompareEndpoint, CompareProgress } from '../services/compareService';
+import { PropertyScreen } from './PropertyScreen';
 import {
   addRecentSearch,
   clearRecentSearches,
@@ -203,6 +204,13 @@ export const FindScreen: React.FC<FindScreenProps> = ({
   const [recent, setRecent] = useState<RecentSearch[]>(() => loadRecentSearches());
   // Compare mode — third face of the mode line. Slots + last-used hop budget.
   const [compareMode, setCompareMode] = useState(false);
+  // 家族 — fourth face: LINZ property titles, behind its own sign-in. The unlock
+  // itself lives in utils/propertySession.ts, so leaving this screen and coming
+  // back does not ask again; only a reload or a new tab does.
+  const [propertyMode, setPropertyMode] = useState(false);
+  // The mode line now has four faces. These keep the JSX guards legible.
+  const findFace = !compareMode && !propertyMode;
+  const compareFace = compareMode && !propertyMode;
   const [slotA, setSlotA] = useState<CompareSlotState>(EMPTY_SLOT);
   const [slotB, setSlotB] = useState<CompareSlotState>(EMPTY_SLOT);
   const [lastMaxHops, setLastMaxHops] = useState(4);
@@ -279,10 +287,17 @@ export const FindScreen: React.FC<FindScreenProps> = ({
 
   return (
     <div
-      className="relative overflow-hidden w-full h-full min-h-[620px] grid place-items-center"
+      className={`relative w-full h-full min-h-[620px] grid ${
+        // A title report is a long document, not a centred hero: it has to
+        // scroll and start at the top, or most of the memorials are unreachable.
+        propertyMode
+          ? 'overflow-y-auto items-start justify-items-center py-10'
+          : 'overflow-hidden place-items-center'
+      }`}
       style={{ position: 'relative' }}
     >
-      {/* Brushed enso ring */}
+      {/* Brushed enso ring — decoration for the hero, noise behind a report. */}
+      {!propertyMode && (
       <svg
         className="find-enso pointer-events-none absolute left-1/2 top-1/2"
         style={{
@@ -306,8 +321,14 @@ export const FindScreen: React.FC<FindScreenProps> = ({
           strokeDasharray="1560 200"
         />
       </svg>
+      )}
 
-      <div className="relative text-center" style={{ width: 'min(660px, 88%)' }}>
+      <div
+        className="relative text-center"
+        // Reports are dense lists of memorials; 660px is a hero width, not a
+        // reading width.
+        style={{ width: propertyMode ? 'min(900px, 92%)' : 'min(660px, 88%)' }}
+      >
         <h2
           style={{
             fontFamily: 'var(--serif)',
@@ -327,7 +348,7 @@ export const FindScreen: React.FC<FindScreenProps> = ({
         </p>
 
         {/* Big search */}
-        {!compareMode && (
+        {findFace && (
         <div
           className="find-bigsearch flex text-left relative overflow-hidden"
           style={{ border: '1px solid var(--ink-mid)', background: 'var(--paper)' }}
@@ -386,7 +407,7 @@ export const FindScreen: React.FC<FindScreenProps> = ({
         )}
 
         {/* Include inactive/removed entities — off by default (fewer API calls) */}
-        {!compareMode && (
+        {findFace && (
           <label className="flex items-center gap-2 mt-3 cursor-pointer select-none text-left">
             <input
               type="checkbox"
@@ -402,7 +423,7 @@ export const FindScreen: React.FC<FindScreenProps> = ({
         )}
 
         {/* Suggestions */}
-        {!compareMode && visibleResults.length > 0 && (
+        {findFace && visibleResults.length > 0 && (
           <div
             className="text-left"
             style={{ border: '1px solid var(--rule)', borderTop: 'none', background: 'var(--paper)' }}
@@ -446,7 +467,7 @@ export const FindScreen: React.FC<FindScreenProps> = ({
         )}
 
         {/* Compare (A ↔ B) */}
-        {compareMode && (
+        {compareFace && (
           <div className="text-left">
             <CompareSlot
               label="A"
@@ -557,16 +578,22 @@ export const FindScreen: React.FC<FindScreenProps> = ({
           </div>
         )}
 
+        {propertyMode && (
+          <div style={{ marginTop: 4 }}>
+            <PropertyScreen />
+          </div>
+        )}
+
         {/* Mode line */}
         <div className="text-ink-mid" style={{ marginTop: 26, fontSize: 12.5 }}>
           <button
             type="button"
-            onClick={() => { setCompareMode(false); onSearchModeChange('company'); }}
+            onClick={() => { setCompareMode(false); setPropertyMode(false); onSearchModeChange('company'); }}
             style={{
-              borderBottom: `1px solid ${!compareMode && searchMode === 'company' ? 'var(--accent)' : 'var(--rule)'}`,
+              borderBottom: `1px solid ${findFace && searchMode === 'company' ? 'var(--accent)' : 'var(--rule)'}`,
               padding: '2px 1px',
               margin: '0 8px',
-              color: !compareMode && searchMode === 'company' ? 'var(--ink)' : 'var(--ink-mid)',
+              color: findFace && searchMode === 'company' ? 'var(--ink)' : 'var(--ink-mid)',
             }}
           >
             Companies
@@ -574,12 +601,12 @@ export const FindScreen: React.FC<FindScreenProps> = ({
           ·
           <button
             type="button"
-            onClick={() => { setCompareMode(false); onSearchModeChange('person'); }}
+            onClick={() => { setCompareMode(false); setPropertyMode(false); onSearchModeChange('person'); }}
             style={{
-              borderBottom: `1px solid ${!compareMode && searchMode === 'person' ? 'var(--accent)' : 'var(--rule)'}`,
+              borderBottom: `1px solid ${findFace && searchMode === 'person' ? 'var(--accent)' : 'var(--rule)'}`,
               padding: '2px 1px',
               margin: '0 8px',
-              color: !compareMode && searchMode === 'person' ? 'var(--ink)' : 'var(--ink-mid)',
+              color: findFace && searchMode === 'person' ? 'var(--ink)' : 'var(--ink-mid)',
             }}
           >
             People
@@ -587,16 +614,32 @@ export const FindScreen: React.FC<FindScreenProps> = ({
           ·
           <button
             type="button"
-            onClick={() => { setCompareMode(true); onCompareReset(); }}
+            onClick={() => { setCompareMode(true); setPropertyMode(false); onCompareReset(); }}
             style={{
-              borderBottom: `1px solid ${compareMode ? 'var(--accent)' : 'var(--rule)'}`,
+              borderBottom: `1px solid ${compareFace ? 'var(--accent)' : 'var(--rule)'}`,
               padding: '2px 1px',
               margin: '0 8px',
-              color: compareMode ? 'var(--ink)' : 'var(--ink-mid)',
+              color: compareFace ? 'var(--ink)' : 'var(--ink-mid)',
             }}
           >
             <span style={{ fontFamily: 'var(--serif)', marginRight: 5 }}>比</span>
             Compare
+          </button>
+          ·
+          {/* 家族 — kanji only, no English. Property titles, behind its own sign-in. */}
+          <button
+            type="button"
+            onClick={() => { setCompareMode(false); setPropertyMode(true); }}
+            aria-label="Property titles"
+            title="Property titles"
+            style={{
+              borderBottom: `1px solid ${propertyMode ? 'var(--accent)' : 'var(--rule)'}`,
+              padding: '2px 1px',
+              margin: '0 8px',
+              color: propertyMode ? 'var(--ink)' : 'var(--ink-mid)',
+            }}
+          >
+            <span style={{ fontFamily: 'var(--serif)', letterSpacing: '.08em' }}>家族</span>
           </button>
           <span style={{ marginLeft: 18 }}>
             <kbd
@@ -618,7 +661,7 @@ export const FindScreen: React.FC<FindScreenProps> = ({
 
         {/* Recent searches — quiet list, hidden while live suggestions show.
             Compare mode has its own slots and is not recorded in recents. */}
-        {!compareMode && recent.length > 0 && visibleResults.length === 0 && (
+        {findFace && recent.length > 0 && visibleResults.length === 0 && (
           <div className="text-left" style={{ marginTop: 34 }}>
             <div
               className="flex items-baseline justify-between"

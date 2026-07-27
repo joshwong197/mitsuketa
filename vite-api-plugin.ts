@@ -8,21 +8,38 @@ import type { Plugin, ViteDevServer } from 'vite';
 import { loadEnv } from 'vite';
 import type { IncomingMessage, ServerResponse } from 'http';
 
-// The four org API keys read by mcp/lib/keys.ts. Loaded from .env (or the
-// process environment) and copied onto process.env so the handlers -- which
-// read process.env directly -- see them exactly as they would on Vercel.
-const ORG_ENV_KEYS = [
+// Server-side env vars the handlers read: the four org API keys used by
+// mcp/lib/keys.ts, plus the LINZ key and shared password used by api/property.ts.
+// Loaded from .env (or the process environment) and copied onto process.env so
+// the handlers -- which read process.env directly -- see them exactly as they
+// would on Vercel. Without PROPERTY_PASS, /api/property fails closed in dev too.
+const SERVER_ENV_KEYS = [
     'ORG_NZBN_KEY',
     'ORG_COMPANIES_KEY',
     'ORG_DISQUALIFIED_KEY',
     'ORG_INSOLVENCY_KEY',
+    'LINZ_API_KEY',
+    'PROPERTY_PASS',
 ] as const;
 
 const API_ROUTES: Record<string, string> = {
     '/api/proxy': '/api/proxy.ts',
     '/api/consent-forms': '/api/consent-forms.ts',
     '/api/documents': '/api/documents.ts',
+    '/api/property': '/api/property.ts',
 };
+
+// Vercel parses cookies onto req.cookies; Node's http server does not.
+function parseCookies(header: string | undefined): Record<string, string> {
+    const out: Record<string, string> = {};
+    for (const pair of (header || '').split(';')) {
+        const eq = pair.indexOf('=');
+        if (eq < 1) continue;
+        const name = pair.slice(0, eq).trim();
+        if (name) out[name] = decodeURIComponent(pair.slice(eq + 1).trim());
+    }
+    return out;
+}
 
 // Minimal VercelResponse-compatible shim over Node's ServerResponse. Only
 // implements what api/proxy.ts, api/consent-forms.ts and api/documents.ts
@@ -76,7 +93,7 @@ export default function apiPlugin(): Plugin {
         apply: 'serve',
         config(_config, { mode }) {
             const env = loadEnv(mode, '.', '');
-            for (const key of ORG_ENV_KEYS) {
+            for (const key of SERVER_ENV_KEYS) {
                 if (env[key] && !process.env[key]) {
                     process.env[key] = env[key];
                 }
@@ -107,6 +124,7 @@ export default function apiPlugin(): Plugin {
                         query[key] = all.length > 1 ? all : all[0];
                     }
                     (req as any).query = query;
+                    (req as any).cookies = parseCookies(req.headers.cookie);
 
                     if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
                         (req as any).body = await readJsonBody(req);
