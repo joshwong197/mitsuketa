@@ -44,6 +44,24 @@ export const TitleMap: React.FC<TitleMapProps> = ({
     if (!model) return null;
     const { grid, paths, bar } = model;
 
+    // Every tile failing means imagery is unavailable — almost always a key
+    // problem. A blank frame with an outline floating on it looks like a bug,
+    // so say what happened and where to look instead.
+    if (failed.size >= grid.tiles.length) {
+        return (
+            <p
+                className="text-ink-mid"
+                style={{ border: '1px solid var(--rule)', padding: '11px 14px', fontSize: 12.5, margin: 0 }}
+            >
+                Aerial imagery unavailable — the parcel outline could not be drawn.
+                <span className="text-ink-pale">
+                    {' '}The LINZ Basemaps key may be missing or not valid for Basemaps; the server
+                    log records the exact status.
+                </span>
+            </p>
+        );
+    }
+
     return (
         <figure style={{ margin: 0 }}>
             <div

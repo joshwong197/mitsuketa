@@ -32,6 +32,7 @@ import {
 // is the fallback, so a deployment with one key still renders a map.
 const BASEMAPS = 'https://basemaps.linz.govt.nz/v1/tiles/aerial';
 const TILE_MAX_ZOOM = 22;
+const TILE_TIMEOUT_MS = 8_000;
 
 const COOKIE = 'mitsuketa_property';
 const SESSION_HOURS = 12;
@@ -174,11 +175,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!sane) return res.status(400).json({ error: 'bad_tile' });
 
         const key = process.env.LINZ_BASEMAPS_KEY || process.env.LINZ_API_KEY || '';
-        const upstream = await fetch(
-            `${BASEMAPS}/3857/${z}/${x}/${y}.webp?api=${encodeURIComponent(key)}`);
+        let upstream: Response;
+        try {
+            upstream = await fetch(
+                `${BASEMAPS}/3857/${z}/${x}/${y}.webp?api=${encodeURIComponent(key)}`,
+                // The handler runs on a 30s budget and one report asks for a
+                // dozen tiles; a hung upstream must not consume the whole thing.
+                { signal: AbortSignal.timeout(TILE_TIMEOUT_MS) });
+        } catch {
+            console.error('[property] tile fetch failed or timed out');
+            return res.status(504).json({ error: 'tile_unavailable' });
+        }
         if (!upstream.ok) {
-            // A missing tile is normal at the edge of coverage; say so
-            // quietly rather than failing the whole report.
+            // A missing tile is normal at the edge of coverage and stays quiet.
+            // Anything else means the KEY is wrong — Basemaps issues its own
+            // keys and an LDS key may not be accepted — so log the status,
+            // because from the browser this only ever looks like a blank map.
+            if (upstream.status !== 404) {
+                console.error(`[property] basemaps returned HTTP ${upstream.status}`
+                    + ` — check LINZ_BASEMAPS_KEY (an LDS key may not be valid for Basemaps)`);
+            }
             return res.status(upstream.status === 404 ? 404 : 502)
                 .json({ error: 'tile_unavailable' });
         }
