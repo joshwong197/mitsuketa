@@ -10,8 +10,14 @@
 // call — see api/property.ts mode=tile.
 
 export const TILE_SIZE = 256;
-/** LINZ Basemaps tops out here; beyond it the service 404s rather than upscales. */
-export const MAX_ZOOM = 22;
+/**
+ * LINZ Basemaps does not hold imagery at every zoom everywhere — urban areas go
+ * deeper than rural ones, and above the available level the service 404s rather
+ * than upscaling. Starting at 20 keeps a suburban parcel sharp (~0.3 m/px) while
+ * landing inside coverage far more often; TitleMap steps further out when a
+ * whole grid comes back empty, which is what rural titles need.
+ */
+export const MAX_ZOOM = 20;
 const MIN_ZOOM = 1;
 
 export interface TileRef { z: number; x: number; y: number }
@@ -50,11 +56,12 @@ export function zoomForBbox(
     width: number,
     height: number,
     margin = 0.12,
+    maxZoom = MAX_ZOOM,
 ): number {
     const [minx, miny, maxx, maxy] = bbox;
     const usableW = width * (1 - margin * 2);
     const usableH = height * (1 - margin * 2);
-    for (let z = MAX_ZOOM; z > MIN_ZOOM; z--) {
+    for (let z = Math.min(maxZoom, MAX_ZOOM); z > MIN_ZOOM; z--) {
         const [x1, y1] = lonLatToPixel(minx, maxy, z);
         const [x2, y2] = lonLatToPixel(maxx, miny, z);
         if (Math.abs(x2 - x1) <= usableW && Math.abs(y2 - y1) <= usableH) return z;
@@ -75,8 +82,10 @@ export function tileGrid(
     width: number,
     height: number,
     maxTiles = 20,
+    /** Levels to step back from the natural fit, for retrying past a coverage gap. */
+    zoomOut = 0,
 ): TileGrid {
-    let z = zoomForBbox(bbox, width, height);
+    let z = Math.max(MIN_ZOOM, zoomForBbox(bbox, width, height) - Math.max(0, zoomOut));
 
     for (;;) {
         const [minx, miny, maxx, maxy] = bbox;

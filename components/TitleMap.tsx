@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { tileUrl } from '../services/propertyService.js';
 import { ringsToPaths, scaleBar, tileGrid } from '../utils/tiles.js';
 
@@ -22,41 +22,74 @@ export interface TitleMapProps {
     height?: number;
 }
 
+/** How many levels to step back looking for imagery before giving up. */
+const MAX_ZOOM_RETRIES = 4;
+
+const keyOf = (t: { z: number; x: number; y: number }) => `${t.z}/${t.x}/${t.y}`;
+
 export const TitleMap: React.FC<TitleMapProps> = ({
     geometry, bbox, width = 640, height = 300,
 }) => {
     // A tile that fails is left blank rather than showing a broken image: the
     // outline and the rest of the mosaic still read.
     const [failed, setFailed] = useState<Set<string>>(new Set());
+    // Whether ANY tile has painted. LINZ holds imagery to a different depth in
+    // different places, so a grid can come back wholly empty at one zoom and be
+    // fine one level out — but a map that has already drawn must never be
+    // replaced by an error, which is what made this look like it worked and
+    // then broke.
+    const [anyLoaded, setAnyLoaded] = useState(false);
+    const [zoomOut, setZoomOut] = useState(0);
 
     const model = useMemo(() => {
         if (!bbox || !geometry) return null;
-        const grid = tileGrid(bbox, width, height);
+        const grid = tileGrid(bbox, width, height, 20, zoomOut);
         return {
             grid,
             paths: ringsToPaths(geometry, grid),
             bar: scaleBar((bbox[1] + bbox[3]) / 2, grid.z),
         };
-    }, [geometry, bbox, width, height]);
+    }, [geometry, bbox, width, height, zoomOut]);
+
+    // Only failures belonging to the CURRENT grid count. Stepping the zoom
+    // changes every tile key, and stale keys from the previous attempt would
+    // otherwise instantly condemn the new grid.
+    const missing = model
+        ? model.grid.tiles.filter(t => failed.has(keyOf(t))).length
+        : 0;
+    const allMissing = !!model && model.grid.tiles.length > 0 && missing >= model.grid.tiles.length;
+
+    useEffect(() => {
+        if (allMissing && !anyLoaded && zoomOut < MAX_ZOOM_RETRIES) {
+            setZoomOut(z => z + 1);
+            setFailed(new Set());
+        }
+    }, [allMissing, anyLoaded, zoomOut]);
+
+    // A different title resets the search entirely.
+    useEffect(() => {
+        setFailed(new Set());
+        setAnyLoaded(false);
+        setZoomOut(0);
+    }, [geometry, bbox]);
 
     // Unit titles and some cross-leases carry no outline. Say nothing rather
     // than render an empty frame.
     if (!model) return null;
     const { grid, paths, bar } = model;
 
-    // Every tile failing means imagery is unavailable — almost always a key
-    // problem. A blank frame with an outline floating on it looks like a bug,
-    // so say what happened and where to look instead.
-    if (failed.size >= grid.tiles.length) {
+    // Only after every retry has come back empty, and nothing ever painted, is
+    // the imagery genuinely unavailable.
+    if (allMissing && !anyLoaded && zoomOut >= MAX_ZOOM_RETRIES) {
         return (
             <p
                 className="text-ink-mid"
                 style={{ border: '1px solid var(--rule)', padding: '11px 14px', fontSize: 12.5, margin: 0 }}
             >
-                Aerial imagery unavailable — the parcel outline could not be drawn.
+                No aerial imagery covers this parcel at any available zoom.
                 <span className="text-ink-pale">
-                    {' '}The LINZ Basemaps key may be missing or not valid for Basemaps; the server
-                    log records the exact status.
+                    {' '}If this is unexpected, check LINZ_BASEMAPS_KEY — the server log records the
+                    exact status returned by LINZ Basemaps.
                 </span>
             </p>
         );
@@ -85,7 +118,11 @@ export const TitleMap: React.FC<TitleMapProps> = ({
                                 alt=""
                                 aria-hidden="true"
                                 draggable={false}
-                                onError={() => setFailed(prev => new Set(prev).add(key))}
+                                onLoad={() => setAnyLoaded(true)}
+                                onError={() => setFailed(prev => {
+                                    if (prev.has(key)) return prev;
+                                    return new Set(prev).add(key);
+                                })}
                                 style={{
                                     // Percentages, not pixels: the mosaic then
                                     // scales with the container in step with the

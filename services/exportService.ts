@@ -375,28 +375,39 @@ async function buildMapSvg(report: TitleReportData & {
 
     const width = 640;
     const height = 300;
-    const grid = tileGrid(bbox, width, height);
+
+    const fetchTiles = async (grid: ReturnType<typeof tileGrid>) =>
+        Promise.all(grid.tiles.map(async t => {
+            try {
+                const resp = await fetch(tileUrl(t.z, t.x, t.y), { credentials: 'same-origin' });
+                if (!resp.ok) return '';
+                const blob = await resp.blob();
+                const data = await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(String(reader.result));
+                    reader.onerror = () => reject(reader.error);
+                    reader.readAsDataURL(blob);
+                });
+                return `<image x="${t.left}" y="${t.top}" width="256" height="256" href="${esc(data)}"/>`;
+            } catch {
+                return '';
+            }
+        }));
+
+    // Same zoom-out search as TitleMap: LINZ holds imagery to different depths
+    // in different places, so a grid can come back wholly empty at the natural
+    // fit and be fine a level out. Without this the export would silently drop
+    // the map the screen is showing.
+    let grid = tileGrid(bbox, width, height);
+    let images = await fetchTiles(grid);
+    for (let step = 1; step <= 4 && images.every(i => !i); step++) {
+        grid = tileGrid(bbox, width, height, 20, step);
+        images = await fetchTiles(grid);
+    }
+    if (images.every(i => !i)) return '';
+
     const paths = ringsToPaths(geometry, grid);
     const bar = scaleBar((bbox[1] + bbox[3]) / 2, grid.z);
-
-    const images = await Promise.all(grid.tiles.map(async t => {
-        try {
-            const resp = await fetch(tileUrl(t.z, t.x, t.y), { credentials: 'same-origin' });
-            if (!resp.ok) return '';
-            const blob = await resp.blob();
-            const data = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(String(reader.result));
-                reader.onerror = () => reject(reader.error);
-                reader.readAsDataURL(blob);
-            });
-            return `<image x="${t.left}" y="${t.top}" width="256" height="256" href="${esc(data)}"/>`;
-        } catch {
-            return '';
-        }
-    }));
-
-    if (images.every(i => !i)) return '';
 
     return `<figure class="map">
   <svg viewBox="0 0 ${width} ${height}" width="100%" preserveAspectRatio="none" role="img"
