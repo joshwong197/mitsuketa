@@ -209,6 +209,22 @@ export interface IndividualTab {
   isEnriching: boolean; // True while fetching NZBN enrichment data
 }
 
+/**
+ * One open 地 title report.
+ *
+ * Deliberately NOT part of the persisted case session (utils/caseStore.ts):
+ * a report holds restricted personal data — registered owners, mortgagees and
+ * caveators — under the LINZ Licence for Personal Data, and the property
+ * sign-in itself is memory-only by design (utils/propertySession.ts). Writing
+ * reports to localStorage would quietly undo that. Memory only, every time.
+ */
+export interface PropertyTab {
+  id: string;
+  label: string;      // the title number
+  titleNo: string;
+  report: unknown;    // TitleReport — typed at the use site to keep types.ts free of service imports
+}
+
 // --- API Response Types (Aligned with JSON Schemas) ---
 
 // From /entities search response

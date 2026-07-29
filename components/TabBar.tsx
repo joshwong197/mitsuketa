@@ -7,11 +7,14 @@ interface TabItem {
     isLoading?: boolean;
 }
 
+export type MainTab = 'company' | 'individual' | 'property';
+
 interface TabBarProps {
-    activeMainTab: 'company' | 'individual';
-    onMainTabChange: (tab: 'company' | 'individual') => void;
+    activeMainTab: MainTab;
+    onMainTabChange: (tab: MainTab) => void;
     companyTabs: TabItem[];
     individualTabs: TabItem[];
+    propertyTabs: TabItem[];
     activeSubTabId: string | null;
     onSubTabClick: (tabId: string) => void;
     onSubTabClose: (tabId: string) => void;
@@ -25,15 +28,18 @@ export const TabBar: React.FC<TabBarProps> = ({
     onMainTabChange,
     companyTabs,
     individualTabs,
+    propertyTabs,
     activeSubTabId,
     onSubTabClick,
     onSubTabClose,
     searchViewOpen,
     onNewSearch
 }) => {
-    const activeTabs = activeMainTab === 'company' ? companyTabs : individualTabs;
+    const activeTabs = activeMainTab === 'company' ? companyTabs
+        : activeMainTab === 'individual' ? individualTabs
+        : propertyTabs;
 
-    const modeBtn = (mode: 'company' | 'individual', kanji: string, label: string) => {
+    const modeBtn = (mode: MainTab, kanji: string, label: string) => {
         const current = activeMainTab === mode;
         return (
             <button
@@ -60,6 +66,7 @@ export const TabBar: React.FC<TabBarProps> = ({
                     (社 · 人 · 比 · 地) so the app has one convention. */}
                 {modeBtn('company', '社', 'Company')}
                 {modeBtn('individual', '人', 'Individual')}
+                {modeBtn('property', '地', 'Property')}
             </div>
 
             {/* Sub-tabs (scrollable row) */}

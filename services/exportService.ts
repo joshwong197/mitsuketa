@@ -4,6 +4,11 @@
 import { GraphNode, GraphEdge, PersonCompanyResult, CaseNote } from '../types';
 import { DisqualifiedDirector } from '../src/api/disqualifiedDirectorsApi';
 import { InsolvencyRecord } from '../src/api/insolvencyApi';
+import { heldFor, type MemorialEvent } from '../utils/memorials';
+import {
+    buildTitleView, closedVerb, formatDate, markFor, yearOf,
+    type TitleReportData, type TitleView,
+} from '../utils/titleReport';
 
 const esc = (s: unknown): string =>
     String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -342,4 +347,189 @@ export function buildPersonReportHtml(opts: {
 </div>
 </body>
 </html>`;
+}
+
+// ---------------------------------------------------------------------------
+// 地 Title report export — static, self-contained HTML
+// ---------------------------------------------------------------------------
+//
+// Built from the SAME view model the on-screen report uses
+// (utils/titleReport.ts), so the file cannot drift from the app. The export is
+// deliberately unfiltered: whatever the screen is showing, the document carries
+// the full memorial set, because a filtered report is a misleading record.
+
+export async function downloadTitleReportHtml(report: TitleReportData): Promise<void> {
+    const now = new Date();
+    const view = buildTitleView(report);
+    const html = buildTitleReportHtml(view, now);
+    downloadHtml(html, `mitsuketa-title-${safeName(view.titleNo)}-${now.toISOString().split('T')[0]}.html`);
+}
+
+const TONE_HEX: Record<string, string> = {
+    accent: '#2f3f6b', green: '#3f6b4f', amber: '#8a6a2a', ink: '#2e2b26', wash: '#b6b1a8',
+};
+const TONE_FG_HEX: Record<string, string> = {
+    accent: '#f4f2ee', green: '#f4f2ee', amber: '#f4f2ee', ink: '#f4f2ee', wash: '#2e2b26',
+};
+
+const mark = (e: MemorialEvent): string => {
+    const { glyph, tone } = markFor(e);
+    return `<span class="sq" style="background:${TONE_HEX[tone]};color:${TONE_FG_HEX[tone]}">${esc(glyph)}</span>`;
+};
+
+// Pure — also used to preview the report outside the app
+export function buildTitleReportHtml(view: TitleView, now: Date): string {
+    const eventRow = (e: MemorialEvent) => `
+    <article class="ev">
+      <div class="ev-when">${esc(formatDate(e.date, e.undated))}</div>
+      <div class="ev-body">
+        <h4>${mark(e)} ${esc(e.headline)}
+          ${e.current ? '<span class="badge live">Live</span>' : ''}
+          ${e.closed_by ? `<span class="badge">${esc(closedVerb(e))} · ${esc(heldFor(e))}</span>` : ''}
+          ${e.batch_size && e.batch_size > 1 ? `<span class="badge">Batch of ${e.batch_size}</span>` : ''}
+        </h4>
+        <p class="commentary">${esc(e.commentary)}</p>
+        <pre class="memo">${esc(e.text || '(no memorial text)')}</pre>
+        ${(e.notations ?? []).map(n => `<pre class="memo note">${esc(n)}</pre>`).join('')}
+      </div>
+    </article>`;
+
+    let lastYear: string | null = null;
+    const chronology = view.chronology.map(e => {
+        const y = yearOf(e);
+        const heading = y === lastYear ? '' : `<div class="year">${esc(y)}</div>`;
+        lastYear = y;
+        return heading + eventRow(e);
+    }).join('');
+
+    return `<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${esc(view.titleNo)} — LINZ title report — Mitsuketa</title>
+<style>
+:root{--paper:#f3f1ed;--paper2:#e9e6e0;--ink:#2e2b26;--ink-mid:#5f5a52;--ink-pale:#8c8579;
+--rule:#d6d2ca;--accent:#2f3f6b}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font-size:14px;line-height:1.6;
+ font-family:"Zen Kaku Gothic New","Yu Gothic UI","Segoe UI",system-ui,sans-serif}
+.mono,.memo,.ev-when,.eyebrow,.badge,.sq{font-variant-numeric:tabular-nums}
+.mono,.memo,.ev-when,.eyebrow,.badge{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace}
+.page{max-width:900px;margin:0 auto;padding:32px 22px 70px}
+.mast{display:flex;gap:14px;align-items:flex-start;border-bottom:1px solid var(--rule);
+ padding-bottom:16px;margin-bottom:18px}
+.hanko{width:34px;height:34px;flex:none;background:var(--accent);color:#f4f2ee;display:grid;
+ place-items:center;font-family:"Shippori Mincho","Yu Mincho",serif;font-size:19px;margin-top:5px}
+h1{font-family:"Shippori Mincho","Yu Mincho",serif;font-size:34px;font-weight:600;margin:0;
+ line-height:1.1;letter-spacing:.01em}
+.meta{color:var(--ink-mid);font-size:12.5px;margin:5px 0 0}
+.addr{font-size:13px;margin:6px 0 0}
+.eyebrow{font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink-pale);
+ margin:24px 0 8px}
+.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--rule)}
+.fact{padding:9px 13px;border-left:1px solid var(--rule);border-top:1px solid var(--rule)}
+.fact:nth-child(3n+1){border-left:none}
+.fact:nth-child(-n+3){border-top:none}
+.fact .k{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-size:9px;
+ text-transform:uppercase;letter-spacing:.09em;color:var(--ink-pale)}
+.fact .v{font-size:12.5px;margin-top:3px}
+.block{border:1px solid var(--rule)}
+.row{display:flex;align-items:center;gap:14px;padding:11px 14px;border-top:1px solid var(--rule)}
+.row:first-child{border-top:none}
+.row .grow{flex:1;min-width:0}
+.row .nm{font-size:13px;font-weight:600}
+.row .sub{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-size:10.5px;
+ color:var(--ink-pale);margin-top:2px}
+.avatar{width:34px;height:34px;flex:none;border:1px solid var(--accent);color:var(--accent);
+ display:grid;place-items:center;font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-size:12px}
+.sq{display:inline-grid;place-items:center;width:17px;height:17px;flex:none;
+ font-family:"Shippori Mincho","Yu Mincho",serif;font-size:11px;vertical-align:middle}
+.badge{font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;padding:1px 6px;
+ border:1px solid var(--rule);color:var(--ink-pale);white-space:nowrap;margin-left:7px}
+.badge.live{border-color:var(--accent);color:var(--accent)}
+.year{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-size:11px;
+ letter-spacing:.08em;color:var(--ink-pale);margin:20px 0 2px}
+.ev{display:flex;gap:16px;border-top:1px solid var(--rule);padding:13px 0}
+.year + .ev{border-top:none}
+.ev-when{width:96px;flex:none;font-size:11px;color:var(--ink-pale)}
+.ev-body{flex:1;min-width:0}
+.ev h4{margin:0;font-size:13.5px;font-weight:600}
+.commentary{font-size:12px;color:var(--ink-mid);margin:5px 0 0}
+.memo{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-size:11px;
+ white-space:pre-wrap;color:var(--ink-mid);background:var(--paper2);border:1px solid var(--rule);
+ padding:8px 10px;margin:7px 0 0;overflow-x:auto}
+.memo.note{color:var(--ink-pale);font-size:10.5px}
+.foot{border-top:1px solid var(--rule);margin-top:26px;padding-top:14px;font-size:11px;
+ color:var(--ink-pale);line-height:1.6}
+@media (max-width:720px){.facts{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .fact:nth-child(3n+1){border-left:1px solid var(--rule)}
+ .fact:nth-child(-n+3){border-top:1px solid var(--rule)}
+ .fact:nth-child(2n+1){border-left:none}
+ .fact:nth-child(-n+2){border-top:none}
+ .ev{flex-direction:column;gap:3px}.ev-when{width:auto}}
+@media print{body{background:#fff}.memo{background:#fff}}
+</style></head>
+<body><div class="page">
+
+<div class="mast">
+  <div class="hanko">地</div>
+  <div>
+    <h1>${esc(view.titleNo)}</h1>
+    <p class="meta">${esc(view.meta)}</p>
+    ${view.address ? `<p class="addr">${esc(view.address)}</p>` : ''}
+  </div>
+</div>
+
+<div class="eyebrow" style="margin-top:0">Register detail</div>
+<div class="facts">
+  ${view.facts.map(f => `<div class="fact"><div class="k">${esc(f.label)}</div>
+    <div class="v${f.mono ? ' mono' : ''}">${esc(f.value)}</div></div>`).join('')}
+</div>
+
+${view.owners.length === 0 ? '' : `
+<div class="eyebrow">Registered owner${view.owners.length === 1 ? '' : 's'}</div>
+<div class="block">
+  ${view.owners.map(o => `<div class="row">
+    <div class="avatar">${esc(o.initials)}</div>
+    <div class="grow"><div class="nm">${esc(o.name)}</div>
+      <div class="sub">${esc([o.shares.length ? `Share ${o.shares.join(', ')}` : null, ...o.estateLines].filter(Boolean).join(' · ') || '—')}</div></div>
+    <span class="badge">${o.corporate ? 'Corporation' : 'Individual'}</span>
+  </div>`).join('')}
+</div>`}
+
+<div class="eyebrow">Currently registered — ${view.live.length}</div>
+${view.live.length === 0
+    ? '<div class="block"><div class="row">Nothing is currently registered against this title.</div></div>'
+    : `<div class="block">${view.live.map(e => `<div class="row">
+        ${mark(e)}
+        <div class="grow"><div class="nm">${esc(e.headline)}</div>
+          <div class="sub">${esc([e.instrument, formatDate(e.date, e.undated)].filter(Boolean).join(' · '))}</div></div>
+      </div>`).join('')}</div>`}
+
+<div class="eyebrow">Chronology — ${view.chronology.length} dealing${view.chronology.length === 1 ? '' : 's'}</div>
+${chronology || '<p class="commentary">No dated dealings on this title.</p>'}
+
+${view.burdens.length === 0 ? '' : `
+<div class="eyebrow">Standing burdens — ${view.burdens.length}</div>
+<div class="block">
+  ${view.burdens.map(e => `<div class="row">
+    ${mark(e)}
+    <div class="grow"><div class="nm">${esc(e.headline)}</div>
+      <div class="sub">${esc(e.instrument ?? '')}</div></div>
+    ${e.current ? '<span class="badge live">Live</span>' : ''}
+    <span class="sub">${e.date ? e.date.getUTCFullYear() : '—'}</span>
+  </div>`).join('')}
+</div>`}
+
+<div class="foot">
+  <p>Generated ${esc(nzTimestamp(now))} · LINZ Title Register via the LINZ Data Service.</p>
+  <p>Reference copy of the LINZ Title Register, not a title search. It may lag the register and is
+  not legal advice. Every line above is taken from the register's own fields — no interpretation
+  has been added. Obtain a formal search from LINZ before relying on this document.</p>
+  <p>This document contains personal information supplied under the LINZ Licence for Personal Data.
+  Handle it in line with the Privacy Act 2020 and do not pass it to anyone who has not accepted
+  equivalent terms.</p>
+</div>
+
+</div></body></html>`;
 }

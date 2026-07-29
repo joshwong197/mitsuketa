@@ -572,55 +572,6 @@ export async function titleReport(client: LDSClient, titleNo: string): Promise<T
     };
 }
 
-export function ownerName(owner: Record<string, any>): string {
-    if (owner.corporate_name) return owner.corporate_name;
-    const parts = [owner.prime_other_names, owner.prime_surname].filter(Boolean);
-    return parts.join(' ') || 'Unnamed owner';
-}
-
-/**
- * Collapse LDS's one-row-per-estate owners into one entry per person.
- *
- * A couple owning two estates comes back as four rows; rendering that as four
- * cards is the single worst piece of clutter on a subdivision title.
- */
-export function groupOwners(owners: Record<string, any>[],
-                            estates: Record<string, any>[] = []): Record<string, any>[] {
-    const estateById = new Map(estates.filter(e => e.id).map(e => [e.id, e]));
-    const grouped = new Map<string, Record<string, any>>();
-    for (const owner of owners) {
-        const name = ownerName(owner);
-        const key = `${name.toLowerCase()} ${owner.owner_type ?? ''}`;
-        let entry = grouped.get(key);
-        if (!entry) {
-            entry = {
-                name,
-                owner_type: owner.owner_type ?? null,
-                corporate: !!owner.corporate_name,
-                status: owner.status ?? null,
-                shares: [] as string[],
-                estates: [] as Record<string, any>[],
-            };
-            grouped.set(key, entry);
-        }
-        const share = owner.estate_share;
-        if (share && !entry.shares.includes(share)) entry.shares.push(share);
-        const est = estateById.get(owner.tte_id);
-        if (est && !entry.estates.includes(est)) entry.estates.push(est);
-    }
-    return [...grouped.values()];
-}
-
-/** 'Fee Simple, 1/1, Lot 33 DP 532614, 190 m²' — the register's own shape. */
-export function estateLine(estate: Record<string, any>): string {
-    const legal = String(estate.legal_description ?? '').replace(/Deposited Plan/g, 'DP');
-    const area = estate.area;
-    const bits = [estate.type, estate.share, legal || null];
-    if (area) {
-        const n = Number(area);
-        bits.push(Number.isInteger(n)
-            ? `${n.toLocaleString('en-NZ')} m²`
-            : `${n.toLocaleString('en-NZ')} m²`);
-    }
-    return bits.filter(Boolean).join(', ');
-}
+// Owner/estate display helpers live in utils/titleReport.ts so the browser can
+// use them too — this module is server-only and must never reach the bundle.
+export { ownerName, groupOwners, estateLine } from './titleReport.js';

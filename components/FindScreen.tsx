@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Search } from 'lucide-react';
 import type { EntitySearchResultItem } from '../types';
 import type { CompareEndpoint, CompareProgress } from '../services/compareService';
+import type { TitleReport } from '../services/propertyService';
 import { PropertyScreen } from './PropertyScreen';
 import {
   addRecentSearch,
@@ -28,6 +29,12 @@ export interface FindScreenProps {
   fetchCompanySuggestions: (q: string) => Promise<EntitySearchResultItem[]>;
   includeInactive: boolean;
   onIncludeInactiveToggle: (checked: boolean) => void;
+  /** Open straight on the 地 face — used when returning from a property tab. */
+  startOnProperty?: boolean;
+  /** Keeps the app's main tab in step with the 地 face of the mode line. */
+  onPropertyFaceChange?: (on: boolean) => void;
+  /** A fetched title report, handed up so the app can open it as a tab. */
+  onOpenPropertyReport: (report: TitleReport, titleNo: string) => void;
 }
 
 const MAX_SUGGESTIONS = 6;
@@ -198,6 +205,9 @@ export const FindScreen: React.FC<FindScreenProps> = ({
   fetchCompanySuggestions,
   includeInactive,
   onIncludeInactiveToggle,
+  startOnProperty = false,
+  onPropertyFaceChange,
+  onOpenPropertyReport,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -207,9 +217,14 @@ export const FindScreen: React.FC<FindScreenProps> = ({
   // 家族 — fourth face: LINZ property titles, behind its own sign-in. The unlock
   // itself lives in utils/propertySession.ts, so leaving this screen and coming
   // back does not ask again; only a reload or a new tab does.
-  const [propertyMode, setPropertyMode] = useState(false);
+  const [propertyMode, setPropertyMode] = useState(startOnProperty);
   // The mode line now has four faces. These keep the JSX guards legible.
   const findFace = !compareMode && !propertyMode;
+  // One place to flip the 地 face, so the app's main tab never drifts from it.
+  const setProperty = (on: boolean) => {
+    setPropertyMode(on);
+    onPropertyFaceChange?.(on);
+  };
   const compareFace = compareMode && !propertyMode;
   const [slotA, setSlotA] = useState<CompareSlotState>(EMPTY_SLOT);
   const [slotB, setSlotB] = useState<CompareSlotState>(EMPTY_SLOT);
@@ -580,7 +595,7 @@ export const FindScreen: React.FC<FindScreenProps> = ({
 
         {propertyMode && (
           <div style={{ marginTop: 4 }}>
-            <PropertyScreen />
+            <PropertyScreen onOpenReport={onOpenPropertyReport} />
           </div>
         )}
 
@@ -593,19 +608,19 @@ export const FindScreen: React.FC<FindScreenProps> = ({
               kanji: '社',
               label: 'Companies',
               active: findFace && searchMode === 'company',
-              onClick: () => { setCompareMode(false); setPropertyMode(false); onSearchModeChange('company'); },
+              onClick: () => { setCompareMode(false); setProperty(false); onSearchModeChange('company'); },
             },
             {
               kanji: '人',
               label: 'People',
               active: findFace && searchMode === 'person',
-              onClick: () => { setCompareMode(false); setPropertyMode(false); onSearchModeChange('person'); },
+              onClick: () => { setCompareMode(false); setProperty(false); onSearchModeChange('person'); },
             },
             {
               kanji: '比',
               label: 'Compare',
               active: compareFace,
-              onClick: () => { setCompareMode(true); setPropertyMode(false); onCompareReset(); },
+              onClick: () => { setCompareMode(true); setProperty(false); onCompareReset(); },
             },
             {
               // 地 — land. The LINZ Title Register covers every title type, not
@@ -613,7 +628,7 @@ export const FindScreen: React.FC<FindScreenProps> = ({
               kanji: '地',
               label: 'Property',
               active: propertyMode,
-              onClick: () => { setCompareMode(false); setPropertyMode(true); },
+              onClick: () => { setCompareMode(false); setProperty(true); },
             },
           ] as const).map((face, i) => (
             <React.Fragment key={face.label}>

@@ -12,6 +12,9 @@ import { Search, FolderOpen, AlertTriangle, X, Sparkles, Undo, ChevronRight, Che
 import { ConfigBar } from './components/ConfigBar';
 import { CommandPalette, PaletteCommand } from './components/CommandPalette';
 import { FindScreen } from './components/FindScreen';
+import { PropertyReport } from './components/PropertyReport';
+import type { MainTab } from './components/TabBar';
+import type { TitleReport as PropertyTitleReport } from './services/propertyService';
 import { IntroAnimation, INTRO_SEEN_KEY } from './components/IntroAnimation';
 import { assignDepths } from './utils/graphDepth';
 import { CompanyNode, PersonNode, SummaryNode } from './components/CustomNodes';
@@ -28,9 +31,9 @@ import { markDirectLineage, calculateHiddenDescendants, expandNodeSubtree, colla
 import { getLayoutedElements } from './services/layoutService';
 import { tidyUpLayout } from './services/layoutOptimizer';
 import { generateOrgChart, searchEntities, expandNodeDownstream } from './services/apiService';
-import { downloadInteractiveGraphHtml, downloadPersonReportHtml } from './services/exportService';
+import { downloadInteractiveGraphHtml, downloadPersonReportHtml, downloadTitleReportHtml } from './services/exportService';
 import { extractDirectorsFromEntity } from './services/directorService';
-import { ApiConfig, EntitySearchResultItem, EntitySearchResponse, GraphSnapshot, GraphNode, GraphEdge, LogEntry, NodeData, NodeType, NZBNFullEntity, PersonCompanyResult, CompanyTab, IndividualTab, CaseNote, PersistedCompanyTab } from './types';
+import { ApiConfig, EntitySearchResultItem, EntitySearchResponse, GraphSnapshot, GraphNode, GraphEdge, LogEntry, NodeData, NodeType, NZBNFullEntity, PersonCompanyResult, CompanyTab, IndividualTab, PropertyTab, CaseNote, PersistedCompanyTab } from './types';
 import { loadSession, saveSession, loadSavePoints, saveSavePoints } from './utils/caseStore';
 import { diffStatuses, NodeDiff } from './utils/statusDiff';
 import { searchByPersonName } from './services/directorSearchService';
@@ -281,7 +284,7 @@ function App() {
 
   // Tab System State
   const MAX_TABS = 10;
-  const [activeMainTab, setActiveMainTab] = useState<'company' | 'individual'>('company');
+  const [activeMainTab, setActiveMainTab] = useState<MainTab>('company');
   const [graphTabs, setGraphTabs] = useState<CompanyTab[]>(() =>
     bootSession ? bootSession.companyTabs.map(rehydrateTab) : []
   );
@@ -295,6 +298,12 @@ function App() {
       : ids[ids.length - 1];
   });
   const [activeIndividualTabId, setActiveIndividualTabId] = useState<string | null>(null);
+
+  // 地 property tabs — memory only, never persisted. See types.ts PropertyTab
+  // for why: the reports carry restricted personal data and the property
+  // sign-in is deliberately memory-only, so caseStore must not see these.
+  const [propertyTabs, setPropertyTabs] = useState<PropertyTab[]>([]);
+  const [activePropertyTabId, setActivePropertyTabId] = useState<string | null>(null);
   // Mirror of activeCompanyTabId for async graph loads: when a fetch resolves
   // after the user has switched tabs, results must go to the tab that started
   // the load — not clobber the live state of whichever tab is now active.
@@ -325,17 +334,22 @@ function App() {
   // content (the search view may have flipped searchMode/activeMainTab, so we
   // can't just hide it and trust whatever live state is underneath).
   const closeSearchView = useCallback(() => {
-    const mode: 'company' | 'individual' | null =
+    const mode: MainTab | null =
       activeMainTab === 'individual' && individualTabs.length > 0 ? 'individual'
       : activeMainTab === 'company' && graphTabs.length > 0 ? 'company'
+      : activeMainTab === 'property' && propertyTabs.length > 0 ? 'property'
       : individualTabs.length > 0 ? 'individual'
       : graphTabs.length > 0 ? 'company'
+      : propertyTabs.length > 0 ? 'property'
       : null;
     if (!mode) return; // nothing to return to — stay on the search home
 
     setSearchViewOpen(false);
     setActiveMainTab(mode);
-    if (mode === 'company') {
+    if (mode === 'property') {
+      const tab = propertyTabs.find(t => t.id === activePropertyTabId) || propertyTabs[propertyTabs.length - 1];
+      setActivePropertyTabId(tab.id);
+    } else if (mode === 'company') {
       setSearchMode('company');
       const tab = graphTabs.find(t => t.id === activeCompanyTabId) || graphTabs[graphTabs.length - 1];
       setActiveCompanyTabId(tab.id);
@@ -352,7 +366,8 @@ function App() {
       setDisqualifiedMatches(tab.disqualifiedMatches);
       setInsolvencyMatches(tab.insolvencyMatches);
     }
-  }, [activeMainTab, graphTabs, individualTabs, activeCompanyTabId, activeIndividualTabId, setNodes, setEdges]);
+  }, [activeMainTab, graphTabs, individualTabs, propertyTabs, activeCompanyTabId,
+      activeIndividualTabId, activePropertyTabId, setNodes, setEdges]);
 
   // Command palette (Ctrl/Cmd+K)
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -796,17 +811,25 @@ function App() {
     }
   }, [config, handleLog]);
 
-  const handleMainTabChange = (tab: 'company' | 'individual') => {
+  const handleMainTabChange = (tab: MainTab) => {
     setActiveMainTab(tab);
 
     // BUG 1 — while the search view is open, the main-tab buttons are just the
-    // other face of FindScreen's Companies/People toggle. Don't switch tab
-    // content; only flip the search mode so both controls stay one fact.
-    // (FindScreen's own toggle mirrors this by setting activeMainTab.)
+    // other face of FindScreen's Companies/People/Property mode line. Don't
+    // switch tab content; only flip the search mode so both controls stay one
+    // fact. (FindScreen's own mode line mirrors this by setting activeMainTab.)
     if (searchViewOpen) {
-      setSearchMode(tab === 'individual' ? 'person' : 'company');
-      setSearchResults([]);
-      setError(null);
+      if (tab !== 'property') {
+        setSearchMode(tab === 'individual' ? 'person' : 'company');
+        setSearchResults([]);
+        setError(null);
+      }
+      return;
+    }
+
+    if (tab === 'property') {
+      // No open report to return to — land on the property face of the search.
+      if (propertyTabs.length === 0) openSearchView();
       return;
     }
 
@@ -842,8 +865,32 @@ function App() {
     }
   };
 
+  /**
+   * A title report opens as its own tab, exactly like a chart or a person
+   * result: it gets a chip, it survives switching to Company or Individual, and
+   * it can be exported. Re-opening a title already open just focuses that tab
+   * rather than stacking duplicates.
+   */
+  const handleOpenPropertyReport = (report: PropertyTitleReport, titleNo: string) => {
+    const existing = propertyTabs.find(t => t.titleNo === titleNo);
+    if (existing) {
+      setPropertyTabs(prev => prev.map(t => (t.id === existing.id ? { ...t, report } : t)));
+      setActivePropertyTabId(existing.id);
+    } else {
+      const id = `property-${titleNo}-${Date.now()}`;
+      setPropertyTabs(prev => [...prev, { id, label: titleNo, titleNo, report }].slice(-MAX_TABS));
+      setActivePropertyTabId(id);
+    }
+    setActiveMainTab('property');
+    setSearchViewOpen(false);
+  };
+
   const handleSubTabClick = (tabId: string) => {
     setSearchViewOpen(false); // clicking a real tab closes the search view
+    if (activeMainTab === 'property') {
+      setActivePropertyTabId(tabId);
+      return;
+    }
     if (activeMainTab === 'company') {
       setSearchMode('company'); // keep search mode in step with the tab we land on
       setActiveCompanyTabId(tabId);
@@ -884,9 +931,13 @@ function App() {
 
   // Command palette: jump to any tab regardless of the current main tab
   // (handleSubTabClick only reaches tabs in the active mode).
-  const jumpToTab = (kind: 'company' | 'individual', tabId: string) => {
+  const jumpToTab = (kind: MainTab, tabId: string) => {
     setSearchViewOpen(false);
     setActiveMainTab(kind);
+    if (kind === 'property') {
+      setActivePropertyTabId(tabId);
+      return;
+    }
     if (kind === 'company') {
       setSearchMode('company');
       setActiveCompanyTabId(tabId);
@@ -959,6 +1010,20 @@ function App() {
   ];
 
   const handleSubTabClose = (tabId: string) => {
+    if (activeMainTab === 'property') {
+      setPropertyTabs(prev => {
+        const updated = prev.filter(t => t.id !== tabId);
+        if (activePropertyTabId === tabId) {
+          const newActive = updated.length > 0 ? updated[updated.length - 1].id : null;
+          setActivePropertyTabId(newActive);
+          // No report left to show — back to the search home, which reopens on
+          // the property face because the session is still unlocked.
+          if (!newActive) openSearchView();
+        }
+        return updated;
+      });
+      return;
+    }
     if (activeMainTab === 'company') {
       setGraphTabs(prev => {
         const updated = prev.filter(t => t.id !== tabId);
@@ -1180,6 +1245,21 @@ function App() {
   };
 
   const [isExportingHtml, setIsExportingHtml] = useState(false);
+
+  const activePropertyTab = propertyTabs.find(t => t.id === activePropertyTabId) ?? null;
+
+  /** The report downloads unfiltered — a filtered record is a misleading one. */
+  const exportPropertyReport = async (tab: PropertyTab) => {
+    setIsExportingHtml(true);
+    try {
+      await downloadTitleReportHtml(tab.report as PropertyTitleReport);
+    } catch (err) {
+      console.error('Failed to export title report:', err);
+      setError('Failed to export the title report');
+    } finally {
+      setIsExportingHtml(false);
+    }
+  };
 
   const exportAsHtml = async () => {
     setIsExportingHtml(true);
@@ -2067,7 +2147,12 @@ function App() {
             onMainTabChange={handleMainTabChange}
             companyTabs={graphTabs.map(t => ({ id: t.id, label: t.label, isLoading: t.isLoading }))}
             individualTabs={individualTabs.map(t => ({ id: t.id, label: t.label, isLoading: t.isEnriching }))}
-            activeSubTabId={activeMainTab === 'company' ? activeCompanyTabId : activeIndividualTabId}
+            propertyTabs={propertyTabs.map(t => ({ id: t.id, label: t.label }))}
+            activeSubTabId={
+              activeMainTab === 'company' ? activeCompanyTabId
+              : activeMainTab === 'individual' ? activeIndividualTabId
+              : activePropertyTabId
+            }
             onSubTabClick={handleSubTabClick}
             onSubTabClose={handleSubTabClose}
             searchViewOpen={searchViewOpen}
@@ -2075,8 +2160,19 @@ function App() {
           />
 
           <div className="flex-1 relative">
-            {/* Search view covers the canvas while open; otherwise person results / graph */}
-            {searchViewOpen || (nodes.length === 0 && !isGraphLoading && !(activeMainTab === 'individual' && (personSearchResults.length > 0 || disqualifiedMatches.length > 0 || insolvencyMatches.length > 0))) ? (
+            {/* A property report owns the canvas whenever its tab is active — it
+                is a document, not a graph, so it scrolls in place. */}
+            {!searchViewOpen && activeMainTab === 'property' && activePropertyTab ? (
+              <div className="absolute inset-0 overflow-y-auto bg-paper">
+                <PropertyReport
+                  key={activePropertyTab.id}
+                  report={activePropertyTab.report as PropertyTitleReport}
+                  onBack={openSearchView}
+                  onExport={() => exportPropertyReport(activePropertyTab)}
+                  isExporting={isExportingHtml}
+                />
+              </div>
+            ) : searchViewOpen || (nodes.length === 0 && !isGraphLoading && !(activeMainTab === 'individual' && (personSearchResults.length > 0 || disqualifiedMatches.length > 0 || insolvencyMatches.length > 0))) ? (
               <div className="absolute inset-0">
                 <FindScreen
                   key={searchViewNonce}
@@ -2103,6 +2199,15 @@ function App() {
                   onIncludeInactiveToggle={(checked) => {
                     if (checked) { setShowInactiveWarning(true); } else { setIncludeInactive(false); }
                   }}
+                  startOnProperty={activeMainTab === 'property'}
+                  onPropertyFaceChange={(on) => {
+                    // Keep the tab bar in step with the mode line: entering 地
+                    // makes Property the active mode, leaving it hands back to
+                    // whichever of Companies/People the search is on.
+                    if (on) setActiveMainTab('property');
+                    else setActiveMainTab(searchMode === 'person' ? 'individual' : 'company');
+                  }}
+                  onOpenPropertyReport={handleOpenPropertyReport}
                 />
               </div>
             ) : activeMainTab === 'individual' && (personSearchResults.length > 0 || disqualifiedMatches.length > 0 || insolvencyMatches.length > 0) ? (

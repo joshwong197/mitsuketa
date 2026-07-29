@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { ArrowLeft, ArrowRight, Loader2, Lock, Search as SearchIcon } from 'lucide-react';
+import { ArrowRight, Loader2, Lock, Search as SearchIcon } from 'lucide-react';
+import { PropertyStyles } from './PropertyStyles';
 import {
     fetchTitleReport, login, logout, searchAddress, searchOwner,
     PropertyError,
@@ -8,7 +9,6 @@ import {
 import {
     acknowledge, getSession, setReference, signIn, subscribe,
 } from '../utils/propertySession.js';
-import { analyse, heldFor, visible, type MemorialEvent } from '../utils/memorials.js';
 
 /**
  * 地 — the LINZ Title Register feature. Four faces, in order:
@@ -115,73 +115,6 @@ const LandMark: React.FC<{ size: number }> = ({ size }) => (
     </span>
 );
 
-/**
- * Hover, focus and layout rules that inline styles cannot express. Mounted once
- * by the shell, so every face below can use these class names.
- */
-const PropertyStyles: React.FC = () => (
-    <style>{`
-.property-btn:hover:not(:disabled) { background: var(--accent); color: var(--accent-ink); }
-.property-row:hover, .property-row:focus-visible {
-  background: oklch(from var(--accent) l c h / .10);
-}
-.property-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.property-quiet:hover, .property-quiet:focus-visible { color: var(--ink); }
-.property-bigsearch:focus-within { border-color: var(--accent); }
-.property-ref:focus { outline: none; border-bottom-color: var(--accent); }
-
-
-/* Chronology: dates sit in a mono gutter against a vertical rule,
-   with the category mark straddling it. */
-.property-timeline { position: relative; padding-left: 112px; }
-.property-timeline::before {
-    content: "";
-    position: absolute;
-    left: 96px; top: 6px; bottom: 10px;
-    width: 1px; background: var(--rule);
-}
-.property-event { position: relative; }
-.property-event:first-child { border-top: none !important; }
-.property-event-when {
-    position: absolute;
-    left: -112px; top: 15px;
-    width: 74px; text-align: right;
-}
-.property-event-pip { position: absolute; left: -25px; top: 14px; }
-
-@media (prefers-reduced-motion: no-preference) {
-    .property-loadbar {
-        animation: property-loadbar-sweep 1.1s cubic-bezier(.4,0,.2,1) infinite;
-    }
-    @keyframes property-loadbar-sweep {
-        0%   { transform: translateX(-100%); }
-        100% { transform: translateX(350%); }
-    }
-}
-@media (prefers-reduced-motion: reduce) {
-    .property-loadbar { transform: none; }
-}
-
-/* Narrow: the gutter collapses and the date leads the row. */
-@media (max-width: 640px) {
-    .property-timeline { padding-left: 0; }
-    .property-timeline::before { display: none; }
-    .property-event-when {
-        position: static;
-        display: block;
-        width: auto;
-        text-align: left;
-        margin-bottom: 3px;
-    }
-    .property-event-pip {
-        position: static;
-        display: inline-block;
-        vertical-align: middle;
-        margin-right: 7px;
-    }
-}
-            `}</style>
-);
 
 // ── 1. Sign in ───────────────────────────────────────────────────────────────
 
@@ -329,379 +262,6 @@ const Notice: React.FC<{ searcher: string }> = ({ searcher }) => {
     );
 };
 
-// ── 4. Report ────────────────────────────────────────────────────────────────
-
-/**
- * The category mark for one memorial: a serif kanji square, the same device the
- * graph nodes use for status. Colour encodes *what kind of interest* and
- * whether it is still live — never severity, so --crit is not in this table.
- */
-const markFor = (e: MemorialEvent): { glyph: string; bg: string } => {
-    if (e.burden) {
-        if (e.kind.includes('Easement') || e.kind.includes('Right of Way')) {
-            return { glyph: '役', bg: 'var(--ink-wash)' };   // 地役権 — easement
-        }
-        if (e.kind.includes('Covenant') || e.kind.includes('Consent Notice')) {
-            return { glyph: '約', bg: 'var(--ink-wash)' };   // 約款 — covenant
-        }
-        return { glyph: '他', bg: 'var(--ink-wash)' };       // 他 — other
-    }
-    switch (e.category) {
-        case 'mortgage':
-            return { glyph: '抵', bg: e.current ? 'var(--accent)' : 'var(--ink-wash)' };
-        case 'discharge':
-            return { glyph: '済', bg: 'var(--green)' };      // 済 — settled, done
-        case 'transfer':
-            return { glyph: '譲', bg: 'var(--ink)' };        // 譲渡 — conveyance
-        case 'caveat':
-            return { glyph: '警', bg: e.current ? 'var(--amber)' : 'var(--ink-wash)' };
-        case 'lease':
-            return { glyph: '借', bg: e.current ? 'var(--accent)' : 'var(--ink-wash)' };
-        default:
-            return { glyph: '他', bg: 'var(--ink-wash)' };
-    }
-};
-
-/** How the closing instrument finished this interest, in past tense. */
-const closedVerb = (e: MemorialEvent): string => {
-    const label = e.closed_by?.label ?? '';
-    if (label.includes('Withdrawal')) return 'Withdrawn';
-    if (label.includes('Surrender')) return 'Surrendered';
-    return 'Discharged';
-};
-
-/**
- * Glyph colour has to flip with the theme on the ink grounds: --ink and
- * --ink-wash are dark in light mode and light in dark mode, so a fixed
- * --accent-ink glyph goes dark-on-dark the moment the theme flips. The status
- * grounds (accent/green/amber) hold their polarity in both themes.
- */
-const glyphOn = (bg: string): string => {
-    if (bg === 'var(--ink)') return 'var(--paper)';
-    if (bg === 'var(--ink-wash)') return 'var(--ink)';
-    return 'var(--accent-ink)';
-};
-
-const KanjiSquare: React.FC<{ event: MemorialEvent; size: number }> = ({ event, size }) => {
-    const { glyph, bg } = markFor(event);
-    return (
-        <span
-            aria-hidden="true"
-            className="inline-grid place-items-center flex-shrink-0"
-            style={{
-                width: size, height: size, background: bg,
-                color: glyphOn(bg),
-                fontFamily: 'var(--serif)', fontSize: Math.round(size * 0.62), lineHeight: 1,
-            }}
-        >
-            {glyph}
-        </span>
-    );
-};
-
-const Badge: React.FC<{ children: React.ReactNode; accent?: boolean }> = ({ children, accent }) => (
-    <span
-        style={{
-            fontFamily: 'var(--mono)', fontSize: 9.5, textTransform: 'uppercase',
-            letterSpacing: '.07em', padding: '1px 6px',
-            border: `1px solid ${accent ? 'var(--accent)' : 'var(--rule)'}`,
-            color: accent ? 'var(--accent)' : 'var(--ink-pale)',
-            whiteSpace: 'nowrap',
-        }}
-    >
-        {children}
-    </span>
-);
-
-const Stat: React.FC<{ value: React.ReactNode; label: string; accent?: boolean }> = ({ value, label, accent }) => (
-    <div style={{ padding: '10px 13px', borderLeft: '1px solid var(--rule)' }}>
-        <b
-            className="block"
-            style={{
-                fontFamily: 'var(--serif)', fontSize: 21, fontWeight: 600, lineHeight: 1.2,
-                color: accent ? 'var(--accent)' : 'var(--ink)',
-            }}
-        >
-            {value}
-        </b>
-        <Eyebrow>{label}</Eyebrow>
-    </div>
-);
-
-/**
- * One event in the chronology. Live interests carry full ink and an accent
- * badge; closed ones drop to ink-mid with the duration they ran for, so the
- * eye lands on what is still on the title.
- */
-const EventRow: React.FC<{ event: MemorialEvent }> = ({ event }) => {
-    const [open, setOpen] = useState(false);
-    const when = event.date
-        ? (event.undated
-            ? `${event.date.getUTCFullYear()}?`
-            : event.date.toISOString().slice(0, 10))
-        : '—';
-    const closed = !!event.closed_by;
-
-    return (
-        <article className="property-event" style={{ borderTop: '1px solid var(--rule)', padding: '13px 0' }}>
-            <span
-                className="property-event-when text-ink-pale"
-                style={{ fontFamily: 'var(--mono)', fontSize: 11, fontVariantNumeric: 'tabular-nums' }}
-            >
-                {when}
-            </span>
-            <span className="property-event-pip">
-                <KanjiSquare event={event} size={17} />
-            </span>
-
-            <h5
-                className="flex items-baseline gap-2.5 flex-wrap"
-                style={{
-                    margin: 0, fontSize: 13.5,
-                    fontWeight: closed ? 500 : 600,
-                    color: closed ? 'var(--ink-mid)' : 'var(--ink)',
-                }}
-            >
-                {event.headline}
-                {event.current && <Badge accent>Live</Badge>}
-                {closed && <Badge>{`${closedVerb(event)} · ${heldFor(event)}`}</Badge>}
-                {event.batch_size && event.batch_size > 1 && (
-                    <Badge>{`Batch of ${event.batch_size}`}</Badge>
-                )}
-            </h5>
-
-            <p className="text-ink-mid" style={{ fontSize: 12, margin: '4px 0 0', maxWidth: '66ch' }}>
-                {event.commentary}
-            </p>
-
-            <button
-                onClick={() => setOpen(!open)}
-                aria-expanded={open}
-                className="property-quiet text-ink-pale transition-colors duration-150"
-                style={{
-                    marginTop: 6, fontFamily: 'var(--mono)', fontSize: 10,
-                    textTransform: 'uppercase', letterSpacing: '.07em',
-                }}
-            >
-                {open ? '− Register text' : '+ Register text'}
-            </button>
-            {open && (
-                <>
-                    <p
-                        className="text-ink-mid"
-                        style={{ fontFamily: 'var(--mono)', fontSize: 11, lineHeight: 1.6, marginTop: 7, whiteSpace: 'pre-wrap' }}
-                    >
-                        {event.text || '(no memorial text)'}
-                    </p>
-                    {event.notations?.map((n, i) => (
-                        <p
-                            key={i}
-                            className="text-ink-pale"
-                            style={{ fontFamily: 'var(--mono)', fontSize: 10.5, lineHeight: 1.6, marginTop: 6 }}
-                        >
-                            {n}
-                        </p>
-                    ))}
-                </>
-            )}
-        </article>
-    );
-};
-
-/** A standing burden — sits on the land rather than happening at a moment. */
-const BurdenRow: React.FC<{ event: MemorialEvent }> = ({ event }) => (
-    <div
-        className="flex items-center gap-3.5 text-left"
-        style={{ borderTop: '1px solid var(--rule)', padding: '10px 13px' }}
-    >
-        <KanjiSquare event={event} size={19} />
-        <span style={{ flex: 1, minWidth: 0 }}>
-            <span className="block" style={{ fontSize: 12.5 }}>{event.headline}</span>
-            {event.instrument && (
-                <span
-                    className="block text-ink-pale"
-                    style={{ fontFamily: 'var(--mono)', fontSize: 11, marginTop: 1 }}
-                >
-                    {event.instrument}
-                </span>
-            )}
-        </span>
-        <span
-            className="text-ink-pale flex-shrink-0"
-            style={{ fontFamily: 'var(--mono)', fontSize: 10.5, fontVariantNumeric: 'tabular-nums' }}
-        >
-            {event.date ? event.date.getUTCFullYear() : '—'}
-        </span>
-    </div>
-);
-
-const Report: React.FC<{ report: TitleReport; onBack: () => void }> = ({ report, onBack }) => {
-    // Oldest first, the way a title is read. The toggle flips it for anyone
-    // who wants the most recent dealings at the top.
-    const [newestFirst, setNewestFirst] = useState(false);
-    const events = React.useMemo(() => visible(analyse(report.memorials)), [report]);
-    // Standing burdens leave the chronology: they'd otherwise pad a timeline
-    // they don't belong on. memorials.ts already flags them.
-    const burdens = events.filter(e => e.burden);
-    // analyse() returns oldest first; reverse only when asked.
-    const chronology = React.useMemo(() => {
-        const rows = events.filter(e => !e.burden);
-        return newestFirst ? rows.slice().reverse() : rows;
-    }, [events, newestFirst]);
-    const liveCount = events.filter(e => e.current && !e.burden).length;
-    const title = report.title ?? {};
-
-    return (
-        <div className="text-left">
-            <button
-                onClick={onBack}
-                className="property-quiet text-ink-pale inline-flex items-center gap-1.5 transition-colors duration-150"
-                style={{ fontSize: 12, marginBottom: 16 }}
-            >
-                <ArrowLeft size={12} strokeWidth={1.75} /> Back to results
-            </button>
-
-            {/* Masthead — a title number is this screen's proper noun. */}
-            <div style={{ borderBottom: '1px solid var(--rule)', paddingBottom: 15, marginBottom: 16 }}>
-                <div className="flex items-start gap-3.5 flex-wrap">
-                    <span style={{ marginTop: 5 }}><LandMark size={34} /></span>
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                        <h3
-                            style={{
-                                fontFamily: 'var(--serif)', fontSize: 34, fontWeight: 600,
-                                margin: 0, lineHeight: 1.1, letterSpacing: '.01em',
-                                fontVariantNumeric: 'tabular-nums',
-                            }}
-                        >
-                            {title.title_no ?? '—'}
-                        </h3>
-                        <p className="text-ink-mid" style={{ fontSize: 12.5, margin: '5px 0 0' }}>
-                            {[title.type, title.status, title.land_district].filter(Boolean).join(' · ')}
-                        </p>
-                        {report.address && (
-                            <p className="text-ink" style={{ fontSize: 13, margin: '6px 0 0' }}>
-                                {report.address}
-                            </p>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            {/* Stats strip — the answer to "what am I looking at" before scrolling. */}
-            <div
-                className="grid"
-                style={{ ...ruleStyle, gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 20 }}
-            >
-                <div style={{ padding: '10px 13px' }}>
-                    <b className="block" style={{ fontFamily: 'var(--serif)', fontSize: 21, fontWeight: 600, lineHeight: 1.2 }}>
-                        {events.length}
-                    </b>
-                    <Eyebrow>Memorials</Eyebrow>
-                </div>
-                <Stat value={liveCount} label="Live interests" accent={liveCount > 0} />
-                <Stat value={report.owners.length} label="Registered owners" />
-            </div>
-
-            {/* Owners as inkan pills — the same object the graph draws for a person. */}
-            {report.owners.length > 0 && (
-                <div style={{ marginBottom: 24 }}>
-                    <Eyebrow className="mb-2">Registered owners</Eyebrow>
-                    <div className="flex flex-wrap" style={{ gap: 7 }}>
-                        {report.owners.map((o, i) => (
-                            <span
-                                key={i}
-                                className="inline-flex items-center"
-                                style={{
-                                    gap: 9, border: '1px solid var(--ink-mid)', borderRadius: 999,
-                                    padding: '3px 14px 3px 3px', fontSize: 12.5,
-                                }}
-                            >
-                                <span
-                                    aria-hidden="true"
-                                    className="inline-grid place-items-center flex-shrink-0"
-                                    style={{
-                                        width: 26, height: 26, borderRadius: 999,
-                                        border: '1px solid var(--accent)',
-                                        fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--accent)',
-                                    }}
-                                >
-                                    印
-                                </span>
-                                {o.corporate_name
-                                    || [o.prime_other_names, o.prime_surname].filter(Boolean).join(' ')
-                                    || 'Unnamed owner'}
-                                {o.estate_share && (
-                                    <span
-                                        className="text-ink-pale"
-                                        style={{ fontFamily: 'var(--mono)', fontSize: 10.5 }}
-                                    >
-                                        {o.estate_share}
-                                    </span>
-                                )}
-                            </span>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {/* Chronology — dates in a mono gutter against a vertical rule. */}
-            <div
-                className="flex items-baseline justify-between flex-wrap"
-                style={{ gap: 12, marginBottom: 8 }}
-            >
-                <Eyebrow>
-                    Chronology — {chronology.length} memorial{chronology.length === 1 ? '' : 's'}, {liveCount} live
-                </Eyebrow>
-                <div className="flex items-center text-ink-mid" style={{ gap: 2, fontSize: 11.5 }}>
-                    {([
-                        { newest: false, label: 'Oldest first' },
-                        { newest: true, label: 'Newest first' },
-                    ] as const).map((opt, i) => (
-                        <React.Fragment key={opt.label}>
-                            {i > 0 && <span className="text-ink-wash">·</span>}
-                            <button
-                                type="button"
-                                onClick={() => setNewestFirst(opt.newest)}
-                                aria-pressed={newestFirst === opt.newest}
-                                className="transition-colors duration-150"
-                                style={{
-                                    borderBottom: `1px solid ${newestFirst === opt.newest ? 'var(--accent)' : 'var(--rule)'}`,
-                                    padding: '2px 1px',
-                                    margin: '0 7px',
-                                    color: newestFirst === opt.newest ? 'var(--ink)' : 'var(--ink-mid)',
-                                }}
-                            >
-                                {opt.label}
-                            </button>
-                        </React.Fragment>
-                    ))}
-                </div>
-            </div>
-            <div className="property-timeline">
-                {chronology.map(e => <EventRow key={e.id} event={e} />)}
-            </div>
-
-            {burdens.length > 0 && (
-                <div style={{ marginTop: 26, borderTop: '1px solid var(--rule)', paddingTop: 18 }}>
-                    <Eyebrow className="mb-2.5">Standing burdens — {burdens.length}</Eyebrow>
-                    <div style={ruleStyle}>
-                        {burdens.map(e => <BurdenRow key={e.id} event={e} />)}
-                    </div>
-                </div>
-            )}
-
-            <p
-                className="text-ink-pale"
-                style={{ fontSize: 11, lineHeight: 1.6, marginTop: 22, borderTop: '1px solid var(--rule)', paddingTop: 13 }}
-            >
-                Reference copy of the LINZ Title Register, not a title search. It may lag the
-                register and is not legal advice. Commentary is generated from the register's own
-                fields — no interpretation has been added.
-            </p>
-        </div>
-    );
-};
-
 // ── 3. Search ────────────────────────────────────────────────────────────────
 
 type Mode = 'address' | 'owner';
@@ -740,16 +300,21 @@ const ResultList: React.FC<{ children: React.ReactNode }> = ({ children }) => (
     <div style={ruleStyle}>{children}</div>
 );
 
-const Search: React.FC<{ searcher: string; reference: string }> = ({ searcher, reference }) => {
+const Search: React.FC<{
+    searcher: string;
+    reference: string;
+    onOpenReport: (report: TitleReport, titleNo: string) => void;
+}> = ({ searcher, reference, onOpenReport }) => {
     const [mode, setMode] = useState<Mode>('address');
     const [query, setQuery] = useState('');
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [address, setAddress] = useState<AddressResult | null>(null);
     const [owner, setOwner] = useState<OwnerResult | null>(null);
-    const [report, setReport] = useState<TitleReport | null>(null);
 
-    const clear = () => { setAddress(null); setOwner(null); setReport(null); setError(null); };
+    // A report is no longer a face of this screen — it opens as its own tab, so
+    // it survives switching to a company or an individual and gets its own chip.
+    const clear = () => { setAddress(null); setOwner(null); setError(null); };
 
     const run = async (fn: () => Promise<void>) => {
         setBusy(true);
@@ -779,10 +344,8 @@ const Search: React.FC<{ searcher: string; reference: string }> = ({ searcher, r
     });
 
     const openTitle = (titleNo: string) => run(async () => {
-        setReport(await fetchTitleReport(titleNo, reference.trim()));
+        onOpenReport(await fetchTitleReport(titleNo, reference.trim()), titleNo);
     });
-
-    if (report) return <Report report={report} onBack={() => setReport(null)} />;
 
     const titleRow = (t: TitleSummary) => (
         <ResultRow
@@ -1016,14 +579,23 @@ const Search: React.FC<{ searcher: string; reference: string }> = ({ searcher, r
 
 // ── Shell ────────────────────────────────────────────────────────────────────
 
-export const PropertyScreen: React.FC = () => {
+export interface PropertyScreenProps {
+    /** Hands a fetched title report up to the app, which opens it as a tab. */
+    onOpenReport: (report: TitleReport, titleNo: string) => void;
+}
+
+export const PropertyScreen: React.FC<PropertyScreenProps> = ({ onOpenReport }) => {
     const session = useSyncExternalStore(subscribe, getSession, () => null);
 
     const face = !session
         ? <SignIn />
         : !session.acknowledged
             ? <Notice searcher={session.searcher} />
-            : <Search searcher={session.searcher} reference={session.reference} />;
+            : <Search
+                searcher={session.searcher}
+                reference={session.reference}
+                onOpenReport={onOpenReport}
+              />;
 
     return (
         <>
