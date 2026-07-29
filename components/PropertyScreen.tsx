@@ -536,13 +536,18 @@ const BurdenRow: React.FC<{ event: MemorialEvent }> = ({ event }) => (
 );
 
 const Report: React.FC<{ report: TitleReport; onBack: () => void }> = ({ report, onBack }) => {
+    // Oldest first, the way a title is read. The toggle flips it for anyone
+    // who wants the most recent dealings at the top.
+    const [newestFirst, setNewestFirst] = useState(false);
     const events = React.useMemo(() => visible(analyse(report.memorials)), [report]);
     // Standing burdens leave the chronology: they'd otherwise pad a timeline
     // they don't belong on. memorials.ts already flags them.
     const burdens = events.filter(e => e.burden);
-    // Newest first — the masthead and stats answer "what is this title now",
-    // and the chronology descends from there into history.
-    const chronology = events.filter(e => !e.burden).slice().reverse();
+    // analyse() returns oldest first; reverse only when asked.
+    const chronology = React.useMemo(() => {
+        const rows = events.filter(e => !e.burden);
+        return newestFirst ? rows.slice().reverse() : rows;
+    }, [events, newestFirst]);
     const liveCount = events.filter(e => e.current && !e.burden).length;
     const title = report.title ?? {};
 
@@ -640,9 +645,38 @@ const Report: React.FC<{ report: TitleReport; onBack: () => void }> = ({ report,
             )}
 
             {/* Chronology — dates in a mono gutter against a vertical rule. */}
-            <Eyebrow className="mb-2">
-                Chronology — {chronology.length} memorial{chronology.length === 1 ? '' : 's'}, {liveCount} live
-            </Eyebrow>
+            <div
+                className="flex items-baseline justify-between flex-wrap"
+                style={{ gap: 12, marginBottom: 8 }}
+            >
+                <Eyebrow>
+                    Chronology — {chronology.length} memorial{chronology.length === 1 ? '' : 's'}, {liveCount} live
+                </Eyebrow>
+                <div className="flex items-center text-ink-mid" style={{ gap: 2, fontSize: 11.5 }}>
+                    {([
+                        { newest: false, label: 'Oldest first' },
+                        { newest: true, label: 'Newest first' },
+                    ] as const).map((opt, i) => (
+                        <React.Fragment key={opt.label}>
+                            {i > 0 && <span className="text-ink-wash">·</span>}
+                            <button
+                                type="button"
+                                onClick={() => setNewestFirst(opt.newest)}
+                                aria-pressed={newestFirst === opt.newest}
+                                className="transition-colors duration-150"
+                                style={{
+                                    borderBottom: `1px solid ${newestFirst === opt.newest ? 'var(--accent)' : 'var(--rule)'}`,
+                                    padding: '2px 1px',
+                                    margin: '0 7px',
+                                    color: newestFirst === opt.newest ? 'var(--ink)' : 'var(--ink-mid)',
+                                }}
+                            >
+                                {opt.label}
+                            </button>
+                        </React.Fragment>
+                    ))}
+                </div>
+            </div>
             <div className="property-timeline">
                 {chronology.map(e => <EventRow key={e.id} event={e} />)}
             </div>
