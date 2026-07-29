@@ -164,7 +164,6 @@ const SignIn: React.FC = () => {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     autoComplete="off"
-                    placeholder="Josh Wong"
                 />
             </Field>
             <Field label="Password">
@@ -402,9 +401,7 @@ const Search: React.FC<{
                         }}
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
-                        placeholder={mode === 'address'
-                            ? '810 Great South Road, Penrose, Auckland'
-                            : 'Norak Properties Limited'}
+                        placeholder={mode === 'address' ? 'Property address' : 'Registered owner'}
                         aria-label={mode === 'address' ? 'Property address' : 'Registered owner'}
                     />
                     <button

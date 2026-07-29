@@ -371,164 +371,210 @@ const TONE_HEX: Record<string, string> = {
 const TONE_FG_HEX: Record<string, string> = {
     accent: '#f4f2ee', green: '#f4f2ee', amber: '#f4f2ee', ink: '#f4f2ee', wash: '#2e2b26',
 };
+// The export is a fixed light document, so unlike the app the glyph colours do
+// not need to flip with a theme — but the ink-wash ground still needs dark ink.
 
 const mark = (e: MemorialEvent): string => {
     const { glyph, tone } = markFor(e);
     return `<span class="sq" style="background:${TONE_HEX[tone]};color:${TONE_FG_HEX[tone]}">${esc(glyph)}</span>`;
 };
 
+
 // Pure — also used to preview the report outside the app
 export function buildTitleReportHtml(view: TitleView, now: Date): string {
+    const isLive = (view.status ?? '').toLowerCase().startsWith('live');
+
     const eventRow = (e: MemorialEvent) => `
     <article class="ev">
       <div class="ev-when">${esc(formatDate(e.date, e.undated))}</div>
       <div class="ev-body">
-        <h4>${mark(e)} ${esc(e.headline)}
-          ${e.current ? '<span class="badge live">Live</span>' : ''}
-          ${e.closed_by ? `<span class="badge">${esc(closedVerb(e))} · ${esc(heldFor(e))}</span>` : ''}
-          ${e.batch_size && e.batch_size > 1 ? `<span class="badge">Batch of ${e.batch_size}</span>` : ''}
+        <h4>${mark(e)}<span>${esc(e.headline)}</span>
+          ${e.current ? '<em class="live">Live</em>' : ''}
+          ${e.closed_by ? `<em>${esc(closedVerb(e))} · ${esc(heldFor(e))}</em>` : ''}
+          ${e.instrument ? `<em class="instr">${esc(e.instrument)}</em>` : ''}
         </h4>
-        <p class="commentary">${esc(e.commentary)}</p>
-        <pre class="memo">${esc(e.text || '(no memorial text)')}</pre>
-        ${(e.notations ?? []).map(n => `<pre class="memo note">${esc(n)}</pre>`).join('')}
+        <p class="note">${esc(e.commentary)}</p>
+        <p class="memo">${esc(e.text || '(no memorial text)')}</p>
+        ${(e.notations ?? []).map(n => `<p class="memo faint">${esc(n)}</p>`).join('')}
       </div>
     </article>`;
 
     let lastYear: string | null = null;
     const chronology = view.chronology.map(e => {
         const y = yearOf(e);
-        const heading = y === lastYear ? '' : `<div class="year">${esc(y)}</div>`;
+        const heading = y === lastYear ? '' : `<div class="ev-year"><span>${esc(y)}</span></div>`;
         lastYear = y;
         return heading + eventRow(e);
     }).join('');
 
+    const entry = (e: MemorialEvent, extra = '') => `
+      <div class="entry">${mark(e)}
+        <div class="entry-main"><div class="entry-name">${esc(e.headline)}</div>
+          <div class="entry-sub">${esc([e.instrument, formatDate(e.date, e.undated)].filter(Boolean).join(' · '))}</div>
+        </div>${extra}
+      </div>`;
+
+    const section = (m: string, title: string, count: string, body: string) => `
+    <section class="sec">
+      <span class="sec-mark">${m}</span>
+      <h3 class="sec-head"><span>${esc(title)}</span>${count ? `<b>${count}</b>` : ''}</h3>
+      ${body}
+    </section>`;
+
     return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${esc(view.titleNo)} — LINZ title report — Mitsuketa</title>
+<title>${esc(view.titleNo)} — Record of title — Mitsuketa</title>
 <style>
-:root{--paper:#f3f1ed;--paper2:#e9e6e0;--ink:#2e2b26;--ink-mid:#5f5a52;--ink-pale:#8c8579;
---rule:#d6d2ca;--accent:#2f3f6b}
+:root{--paper:#f3f1ed;--ink:#2e2b26;--ink-mid:#5f5a52;--ink-pale:#8c8579;--ink-wash:#c3bdb2;
+--rule:#dcd8d0;--accent:#2f3f6b;--accent-ink:#f4f2ee;--margin:84px;--gap:22px}
 *{box-sizing:border-box}
 html,body{margin:0}
 body{background:var(--paper);color:var(--ink);font-size:14px;line-height:1.6;
  font-family:"Zen Kaku Gothic New","Yu Gothic UI","Segoe UI",system-ui,sans-serif}
-.mono,.memo,.ev-when,.eyebrow,.badge,.sq{font-variant-numeric:tabular-nums}
-.mono,.memo,.ev-when,.eyebrow,.badge{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace}
-.page{max-width:900px;margin:0 auto;padding:32px 22px 70px}
-.mast{display:flex;gap:14px;align-items:flex-start;border-bottom:1px solid var(--rule);
- padding-bottom:16px;margin-bottom:18px}
-.hanko{width:34px;height:34px;flex:none;background:var(--accent);color:#f4f2ee;display:grid;
- place-items:center;font-family:"Shippori Mincho","Yu Mincho",serif;font-size:19px;margin-top:5px}
-h1{font-family:"Shippori Mincho","Yu Mincho",serif;font-size:34px;font-weight:600;margin:0;
- line-height:1.1;letter-spacing:.01em}
-.meta{color:var(--ink-mid);font-size:12.5px;margin:5px 0 0}
-.addr{font-size:13px;margin:6px 0 0}
-.eyebrow{font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:var(--ink-pale);
- margin:24px 0 8px}
-.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--rule)}
-.fact{padding:9px 13px;border-left:1px solid var(--rule);border-top:1px solid var(--rule)}
-.fact:nth-child(3n+1){border-left:none}
-.fact:nth-child(-n+3){border-top:none}
-.fact .k{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-size:9px;
- text-transform:uppercase;letter-spacing:.09em;color:var(--ink-pale)}
-.fact .v{font-size:12.5px;margin-top:3px}
-.block{border:1px solid var(--rule)}
-.row{display:flex;align-items:center;gap:14px;padding:11px 14px;border-top:1px solid var(--rule)}
-.row:first-child{border-top:none}
-.row .grow{flex:1;min-width:0}
-.row .nm{font-size:13px;font-weight:600}
-.row .sub{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-size:10.5px;
- color:var(--ink-pale);margin-top:2px}
-.avatar{width:34px;height:34px;flex:none;border:1px solid var(--accent);color:var(--accent);
- display:grid;place-items:center;font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-size:12px}
-.sq{display:inline-grid;place-items:center;width:17px;height:17px;flex:none;
- font-family:"Shippori Mincho","Yu Mincho",serif;font-size:11px;vertical-align:middle}
-.badge{font-size:9.5px;text-transform:uppercase;letter-spacing:.07em;padding:1px 6px;
- border:1px solid var(--rule);color:var(--ink-pale);white-space:nowrap;margin-left:7px}
-.badge.live{border-color:var(--accent);color:var(--accent)}
-.year{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-size:11px;
- letter-spacing:.08em;color:var(--ink-pale);margin:20px 0 2px}
-.ev{display:flex;gap:16px;border-top:1px solid var(--rule);padding:13px 0}
-.year + .ev{border-top:none}
-.ev-when{width:96px;flex:none;font-size:11px;color:var(--ink-pale)}
-.ev-body{flex:1;min-width:0}
-.ev h4{margin:0;font-size:13.5px;font-weight:600}
-.commentary{font-size:12px;color:var(--ink-mid);margin:5px 0 0}
-.memo{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-size:11px;
- white-space:pre-wrap;color:var(--ink-mid);background:var(--paper2);border:1px solid var(--rule);
- padding:8px 10px;margin:7px 0 0;overflow-x:auto}
-.memo.note{color:var(--ink-pale);font-size:10.5px}
-.foot{border-top:1px solid var(--rule);margin-top:26px;padding-top:14px;font-size:11px;
- color:var(--ink-pale);line-height:1.6}
-@media (max-width:720px){.facts{grid-template-columns:repeat(2,minmax(0,1fr))}
- .fact:nth-child(3n+1){border-left:1px solid var(--rule)}
- .fact:nth-child(-n+3){border-top:1px solid var(--rule)}
- .fact:nth-child(2n+1){border-left:none}
- .fact:nth-child(-n+2){border-top:none}
- .ev{flex-direction:column;gap:3px}.ev-when{width:auto}}
-@media print{body{background:#fff}.memo{background:#fff}}
+.serif{font-family:"Shippori Mincho","Yu Mincho","Hiragino Mincho ProN",serif}
+.mono,.ev-when,.entry-sub,.memo,.instr,b,.sec-head b{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;
+ font-variant-numeric:tabular-nums}
+.doc{max-width:880px;margin:0 auto;padding:34px 26px 72px}
+/* Masthead */
+.mast{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;flex-wrap:wrap;
+ border-bottom:2px solid var(--ink);padding-bottom:14px}
+.rule2{border-top:1px solid var(--ink);margin-bottom:30px}
+.sup{font-size:11.5px;color:var(--ink-pale);margin:0 0 4px}
+.sup em{font-family:"Shippori Mincho","Yu Mincho",serif;font-style:normal;letter-spacing:.2em;
+ margin-right:8px;color:var(--ink-mid)}
+h1{font-family:"Shippori Mincho","Yu Mincho",serif;font-size:42px;font-weight:600;margin:0;
+ line-height:1.05;letter-spacing:.01em;font-variant-numeric:tabular-nums}
+.addr{font-size:14px;margin:8px 0 0}
+.meta{font-size:12.5px;color:var(--ink-mid);margin:3px 0 0}
+.stampwrap{display:flex;flex-direction:column;align-items:center;gap:7px;padding-top:4px}
+.hanko{display:grid;place-items:center;width:46px;height:46px;background:var(--accent);
+ color:var(--accent-ink);font-family:"Shippori Mincho","Yu Mincho",serif;font-size:25px;line-height:1;
+ box-shadow:inset 0 0 14px rgba(0,0,0,.22)}
+.hanko.stamp{transform:rotate(-7deg);width:42px;height:42px;font-size:21px}
+.status{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-size:9.5px;
+ letter-spacing:.1em;text-transform:uppercase;color:var(--ink-pale)}
+.status.on{color:var(--accent)}
+/* Spine */
+.body{position:relative;padding-left:calc(var(--margin) + var(--gap))}
+.body::before{content:"";position:absolute;left:var(--margin);top:4px;bottom:0;width:1px;background:var(--rule)}
+.sec{position:relative;margin-top:34px}
+.sec:first-child{margin-top:0}
+.sec-mark{position:absolute;left:calc((var(--margin) + var(--gap)) * -1);top:0;width:var(--margin);
+ text-align:right;font-family:"Shippori Mincho","Yu Mincho",serif;font-size:15px;line-height:1.45;
+ letter-spacing:.12em;color:var(--accent)}
+.sec-head{font-family:"Shippori Mincho","Yu Mincho",serif;font-size:16.5px;font-weight:600;
+ margin:0 0 12px;padding-bottom:6px;border-bottom:1px solid var(--ink-wash);
+ display:flex;justify-content:space-between;align-items:baseline;gap:14px}
+.sec-head b{font-size:11px;font-weight:400;color:var(--ink-pale)}
+/* Ledger */
+dl{display:grid;grid-template-columns:152px minmax(0,1fr);margin:0}
+dt,dd{margin:0;padding:7px 0;border-top:1px solid var(--rule);font-size:13px}
+dt{color:var(--ink-pale);padding-right:18px;text-align:right;font-size:12px}
+dt:first-of-type,dt:first-of-type + dd{border-top:none}
+/* Entries */
+.entry{display:flex;align-items:baseline;gap:13px;padding:10px 0;border-top:1px solid var(--rule)}
+.entry:first-of-type{border-top:none}
+.entry-main{flex:1;min-width:0}
+.entry-name{display:block;font-size:13.5px;font-weight:600}
+.entry-sub{display:block;font-size:10.5px;color:var(--ink-pale);margin-top:2px}
+.avatar{display:grid;place-items:center;width:30px;height:30px;flex:none;border:1px solid var(--accent);
+ color:var(--accent);font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-size:11px;
+ align-self:flex-start}
+.tag{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-size:10px;letter-spacing:.06em;
+ text-transform:uppercase;color:var(--ink-pale);white-space:nowrap}
+.tag.on{color:var(--accent)}
+.sq{display:inline-grid;place-items:center;width:19px;height:19px;flex:none;align-self:flex-start;
+ font-family:"Shippori Mincho","Yu Mincho",serif;font-size:12px;line-height:1}
+/* Chronology */
+.ev{position:relative;border-top:1px solid var(--rule);padding:12px 0}
+.ev-when{position:absolute;left:calc((var(--margin) + var(--gap)) * -1);top:13px;width:var(--margin);
+ padding-right:18px;text-align:right;font-size:10.5px;color:var(--ink-pale)}
+.ev h4{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin:0;font-size:13.5px;font-weight:600}
+.ev h4 .sq{width:16px;height:16px;font-size:10px;align-self:center}
+.ev em{font-style:normal;font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-size:10px;
+ letter-spacing:.06em;text-transform:uppercase;color:var(--ink-pale)}
+.ev em.live{color:var(--accent)}
+.ev em.instr{text-transform:none;letter-spacing:0;font-size:10.5px}
+.note{font-size:12px;color:var(--ink-mid);margin:4px 0 0;max-width:64ch}
+.memo{font-family:"Cascadia Mono",Consolas,ui-monospace,monospace;font-size:11px;line-height:1.6;
+ white-space:pre-wrap;color:var(--ink-mid);border-left:2px solid var(--rule);padding-left:12px;margin:8px 0 0}
+.memo.faint{color:var(--ink-pale);font-size:10.5px}
+.ev-year{position:relative;margin:26px 0 0;font-family:"Shippori Mincho","Yu Mincho",serif;
+ font-size:13px;letter-spacing:.1em;color:var(--ink-mid)}
+.ev-year::before{content:"";position:absolute;left:calc((var(--margin) + var(--gap)) * -1);right:0;
+ top:50%;height:1px;background:var(--ink-wash)}
+.ev-year span{position:relative;background:var(--paper);padding-right:12px}
+.ev-year + .ev{border-top:none}
+.hint{font-size:11.5px;color:var(--ink-pale);margin:-4px 0 8px;max-width:64ch}
+.colophon{font-size:11px;line-height:1.65;color:var(--ink-pale);margin-top:40px;
+ border-top:1px solid var(--ink-wash);padding-top:14px;max-width:78ch}
+.colophon em{font-family:"Shippori Mincho","Yu Mincho",serif;font-style:normal;letter-spacing:.18em;
+ margin-right:8px;color:var(--ink-mid)}
+.colophon p{margin:0 0 7px}
+@media (max-width:700px){
+ .doc{padding:24px 18px 60px}
+ .body{padding-left:0}.body::before{display:none}
+ .sec-mark{position:static;width:auto;text-align:left;display:block;margin-bottom:2px}
+ dl{grid-template-columns:minmax(0,1fr)}
+ dt{text-align:left;padding:8px 0 0}dd{padding:1px 0 8px;border-top:none}
+ dt:first-of-type + dd{border-top:none}
+ .ev-when{position:static;display:block;width:auto;padding-right:0;text-align:left;margin-bottom:3px}
+ .ev-year::before{left:0}
+ h1{font-size:32px}}
+@media print{body{background:#fff}.memo{border-left-color:#999}}
 </style></head>
-<body><div class="page">
+<body><div class="doc">
 
-<div class="mast">
-  <div class="hanko">地</div>
-  <div>
+<header class="mast">
+  <div style="min-width:0;flex:1">
+    <p class="sup"><em>登記簿</em>Record of title · LINZ Title Register</p>
     <h1>${esc(view.titleNo)}</h1>
-    <p class="meta">${esc(view.meta)}</p>
     ${view.address ? `<p class="addr">${esc(view.address)}</p>` : ''}
+    <p class="meta">${esc(view.meta)}</p>
   </div>
+  <div class="stampwrap">
+    <div class="hanko${isLive ? ' stamp' : ''}">${isLive ? '現' : '地'}</div>
+    <div class="status${isLive ? ' on' : ''}">${esc(view.status ?? 'Status unknown')}</div>
+  </div>
+</header>
+<div class="rule2"></div>
+
+<div class="body">
+${section('登記', 'Register detail', '', `<dl>${view.facts.map(f =>
+    `<dt>${esc(f.label)}</dt><dd${f.mono ? ' class="mono"' : ''}>${esc(f.value)}</dd>`).join('')}</dl>`)}
+
+${view.owners.length === 0 ? '' : section('所有',
+    `Registered owner${view.owners.length === 1 ? '' : 's'}`, String(view.owners.length),
+    view.owners.map(o => `<div class="entry">
+      <div class="avatar">${esc(o.initials)}</div>
+      <div class="entry-main"><div class="entry-name">${esc(o.name)}</div>
+        <div class="entry-sub">${esc([o.shares.length ? `Share ${o.shares.join(', ')}` : null, ...o.estateLines].filter(Boolean).join(' · ') || '—')}</div>
+      </div>
+      <span class="tag">${o.corporate ? 'Corporation' : 'Individual'}</span>
+    </div>`).join(''))}
+
+${section('現況', 'Currently registered', String(view.live.length),
+    view.live.length === 0
+        ? '<p class="note">No live mortgages, caveats or leases on this title.</p>'
+        : view.live.map(e => entry(e)).join(''))}
+
+${section('履歴', 'History', `${view.chronology.length} dealing${view.chronology.length === 1 ? '' : 's'}`,
+    chronology || '<p class="note">No dated dealings on this title.</p>')}
+
+${view.burdens.length === 0 ? '' : section('負担', 'Standing burdens', String(view.burdens.length),
+    '<p class="hint">Easements, covenants and statutory conditions. These sit on the land indefinitely rather than happening at a moment.</p>'
+    + view.burdens.map(e => entry(e, e.current ? '<span class="tag on">Live</span>' : '')).join(''))}
 </div>
 
-<div class="eyebrow" style="margin-top:0">Register detail</div>
-<div class="facts">
-  ${view.facts.map(f => `<div class="fact"><div class="k">${esc(f.label)}</div>
-    <div class="v${f.mono ? ' mono' : ''}">${esc(f.value)}</div></div>`).join('')}
-</div>
-
-${view.owners.length === 0 ? '' : `
-<div class="eyebrow">Registered owner${view.owners.length === 1 ? '' : 's'}</div>
-<div class="block">
-  ${view.owners.map(o => `<div class="row">
-    <div class="avatar">${esc(o.initials)}</div>
-    <div class="grow"><div class="nm">${esc(o.name)}</div>
-      <div class="sub">${esc([o.shares.length ? `Share ${o.shares.join(', ')}` : null, ...o.estateLines].filter(Boolean).join(' · ') || '—')}</div></div>
-    <span class="badge">${o.corporate ? 'Corporation' : 'Individual'}</span>
-  </div>`).join('')}
-</div>`}
-
-<div class="eyebrow">Currently registered — ${view.live.length}</div>
-${view.live.length === 0
-    ? '<div class="block"><div class="row">Nothing is currently registered against this title.</div></div>'
-    : `<div class="block">${view.live.map(e => `<div class="row">
-        ${mark(e)}
-        <div class="grow"><div class="nm">${esc(e.headline)}</div>
-          <div class="sub">${esc([e.instrument, formatDate(e.date, e.undated)].filter(Boolean).join(' · '))}</div></div>
-      </div>`).join('')}</div>`}
-
-<div class="eyebrow">Chronology — ${view.chronology.length} dealing${view.chronology.length === 1 ? '' : 's'}</div>
-${chronology || '<p class="commentary">No dated dealings on this title.</p>'}
-
-${view.burdens.length === 0 ? '' : `
-<div class="eyebrow">Standing burdens — ${view.burdens.length}</div>
-<div class="block">
-  ${view.burdens.map(e => `<div class="row">
-    ${mark(e)}
-    <div class="grow"><div class="nm">${esc(e.headline)}</div>
-      <div class="sub">${esc(e.instrument ?? '')}</div></div>
-    ${e.current ? '<span class="badge live">Live</span>' : ''}
-    <span class="sub">${e.date ? e.date.getUTCFullYear() : '—'}</span>
-  </div>`).join('')}
-</div>`}
-
-<div class="foot">
-  <p>Generated ${esc(nzTimestamp(now))} · LINZ Title Register via the LINZ Data Service.</p>
-  <p>Reference copy of the LINZ Title Register, not a title search. It may lag the register and is
-  not legal advice. Every line above is taken from the register's own fields — no interpretation
-  has been added. Obtain a formal search from LINZ before relying on this document.</p>
+<div class="colophon">
+  <p><em>注記</em>Reference copy of the LINZ Title Register, not a title search. It may lag the
+  register and is not legal advice. Every line above is taken from the register\'s own fields — no
+  interpretation has been added. Obtain a formal search from LINZ before relying on it.</p>
   <p>This document contains personal information supplied under the LINZ Licence for Personal Data.
   Handle it in line with the Privacy Act 2020 and do not pass it to anyone who has not accepted
   equivalent terms.</p>
+  <p>Generated ${esc(nzTimestamp(now))} · Mitsuketa 見つけた</p>
 </div>
 
 </div></body></html>`;

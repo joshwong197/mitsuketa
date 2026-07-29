@@ -235,9 +235,12 @@ export function buildTitleView(report: TitleReportData): TitleView {
 
     const burdens = events.filter(e => e.burden);
     const chronology = events.filter(e => !e.burden);
-    // Live means still registered, burden or not — a right of way that binds the
-    // land matters to a buyer exactly as much as an undischarged mortgage.
-    const live = events.filter(e => e.current);
+    // 現況 answers "what dealings are live on this title" — mortgages, caveats,
+    // leases, encumbrances. Standing burdens are excluded: an easement or a
+    // covenant is a permanent characteristic of the land rather than something
+    // anyone is about to discharge, and listing them here buries the two things
+    // a reader is actually looking for. They get their own 負担 section in full.
+    const live = events.filter(e => e.current && !e.burden);
 
     const counts = {} as Record<FilterKey, number>;
     for (const { key } of FILTER_LABELS) {
