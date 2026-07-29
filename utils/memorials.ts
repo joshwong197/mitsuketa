@@ -375,12 +375,24 @@ function linkBatches(events: MemorialEvent[]): void {
     }
 }
 
-/** '9 days' reads honestly where '~0 months' does not. */
+/**
+ * How long an interest ran, in the largest honest unit.
+ *
+ * '9 days' reads honestly where '~0 months' does not, and '~15 yr 3 mo' reads
+ * where '~183 months' does not — a mortgage's natural span is years. One
+ * formatter, because the duration appears both in the commentary and on the
+ * chronology badge beside it, and two renderings of one number look like two
+ * different numbers.
+ */
 export function heldFor(e: MemorialEvent): string {
     const days = e.duration_days;
     if (days === undefined) return '';
     if (days < 31) return `${days} day${days === 1 ? '' : 's'}`;
-    return `~${e.duration_months} months`;
+    const months = e.duration_months ?? 0;
+    if (months < 12) return `~${months} months`;
+    const years = Math.floor(months / 12);
+    const rest = months % 12;
+    return rest ? `~${years} yr ${rest} mo` : `~${years} yr`;
 }
 
 /**

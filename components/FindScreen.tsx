@@ -584,63 +584,62 @@ export const FindScreen: React.FC<FindScreenProps> = ({
           </div>
         )}
 
-        {/* Mode line */}
+        {/* Mode line — one kanji per face, English label always present. The
+            glyph is the constant across the set; it sits ink-pale and goes
+            accent on the active face. */}
         <div className="text-ink-mid" style={{ marginTop: 26, fontSize: 12.5 }}>
-          <button
-            type="button"
-            onClick={() => { setCompareMode(false); setPropertyMode(false); onSearchModeChange('company'); }}
-            style={{
-              borderBottom: `1px solid ${findFace && searchMode === 'company' ? 'var(--accent)' : 'var(--rule)'}`,
-              padding: '2px 1px',
-              margin: '0 8px',
-              color: findFace && searchMode === 'company' ? 'var(--ink)' : 'var(--ink-mid)',
-            }}
-          >
-            Companies
-          </button>
-          ·
-          <button
-            type="button"
-            onClick={() => { setCompareMode(false); setPropertyMode(false); onSearchModeChange('person'); }}
-            style={{
-              borderBottom: `1px solid ${findFace && searchMode === 'person' ? 'var(--accent)' : 'var(--rule)'}`,
-              padding: '2px 1px',
-              margin: '0 8px',
-              color: findFace && searchMode === 'person' ? 'var(--ink)' : 'var(--ink-mid)',
-            }}
-          >
-            People
-          </button>
-          ·
-          <button
-            type="button"
-            onClick={() => { setCompareMode(true); setPropertyMode(false); onCompareReset(); }}
-            style={{
-              borderBottom: `1px solid ${compareFace ? 'var(--accent)' : 'var(--rule)'}`,
-              padding: '2px 1px',
-              margin: '0 8px',
-              color: compareFace ? 'var(--ink)' : 'var(--ink-mid)',
-            }}
-          >
-            <span style={{ fontFamily: 'var(--serif)', marginRight: 5 }}>比</span>
-            Compare
-          </button>
-          ·
-          {/* 家族 — kanji only, no English. Property titles, behind its own sign-in. */}
-          <button
-            type="button"
-            onClick={() => { setCompareMode(false); setPropertyMode(true); }}
-            aria-label="Property titles"
-            title="Property titles"
-            style={{
-              borderBottom: `1px solid ${propertyMode ? 'var(--accent)' : 'var(--rule)'}`,
-              padding: '2px 1px',
-              margin: '0 8px',
-              color: propertyMode ? 'var(--ink)' : 'var(--ink-mid)',
-            }}
-          >
-            <span style={{ fontFamily: 'var(--serif)', letterSpacing: '.08em' }}>家族</span>
-          </button>
+          {([
+            {
+              kanji: '社',
+              label: 'Companies',
+              active: findFace && searchMode === 'company',
+              onClick: () => { setCompareMode(false); setPropertyMode(false); onSearchModeChange('company'); },
+            },
+            {
+              kanji: '人',
+              label: 'People',
+              active: findFace && searchMode === 'person',
+              onClick: () => { setCompareMode(false); setPropertyMode(false); onSearchModeChange('person'); },
+            },
+            {
+              kanji: '比',
+              label: 'Compare',
+              active: compareFace,
+              onClick: () => { setCompareMode(true); setPropertyMode(false); onCompareReset(); },
+            },
+            {
+              // 地 — land. The LINZ Title Register covers every title type, not
+              // just houses, so this is the land character rather than 家.
+              kanji: '地',
+              label: 'Property',
+              active: propertyMode,
+              onClick: () => { setCompareMode(false); setPropertyMode(true); },
+            },
+          ] as const).map((face, i) => (
+            <React.Fragment key={face.label}>
+              {i > 0 && <span className="text-ink-wash">·</span>}
+              <button
+                type="button"
+                onClick={face.onClick}
+                aria-current={face.active}
+                className="inline-flex items-baseline gap-1.5 transition-colors duration-150"
+                style={{
+                  borderBottom: `1px solid ${face.active ? 'var(--accent)' : 'var(--rule)'}`,
+                  padding: '2px 1px',
+                  margin: '0 8px',
+                  color: face.active ? 'var(--ink)' : 'var(--ink-mid)',
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  style={{ fontFamily: 'var(--serif)', color: face.active ? 'var(--accent)' : 'var(--ink-pale)' }}
+                >
+                  {face.kanji}
+                </span>
+                {face.label}
+              </button>
+            </React.Fragment>
+          ))}
           <span style={{ marginLeft: 18 }}>
             <kbd
               className="border-rule bg-paper2"

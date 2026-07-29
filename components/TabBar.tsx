@@ -56,8 +56,10 @@ export const TabBar: React.FC<TabBarProps> = ({
         <div className="flex-shrink-0 bg-paper border-b border-rule">
             {/* Primary Category Tabs */}
             <div className="flex items-center">
-                {modeBtn('company', '会社', 'Company')}
-                {modeBtn('individual', '個人', 'Individual')}
+                {/* Single-character kanji, matching the find screen's mode line
+                    (社 · 人 · 比 · 地) so the app has one convention. */}
+                {modeBtn('company', '社', 'Company')}
+                {modeBtn('individual', '人', 'Individual')}
             </div>
 
             {/* Sub-tabs (scrollable row) */}

@@ -62,6 +62,22 @@ body {
   line-height: 1.6;
 }
 
+/* Form controls do NOT inherit font-family or color — browsers hand them their
+   own UA defaults (Arial-ish, `buttontext`), which is why any screen that didn't
+   patch it per-element rendered in a foreign face next to the rest of the app.
+   Reset once, here.
+
+   This MUST stay inside `@layer base`: Tailwind v4 emits utilities into the
+   `utilities` layer, and unlayered rules beat every layered rule regardless of
+   specificity — so an unlayered `color: inherit` here would silently override
+   `text-paper` on every button in the app. */
+@layer base {
+  input, button, select, textarea {
+    font: inherit;
+    color: inherit;
+  }
+}
+
 /* washi grain — one fixed, pointer-transparent layer, no repaint cost.
    Sits ABOVE app content (opaque canvas/panes) so the paper texture reads
    over the whole app instead of being hidden under the panes. pointer-events

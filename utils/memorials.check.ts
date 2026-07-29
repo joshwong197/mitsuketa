@@ -122,10 +122,11 @@ assert.equal(at(25883459).closed_by, undefined, 'partial discharge must not clos
 assert.equal(at(63751559).refers_to, '77413');
 assert.equal(at(22778619).refers_to, 'D651878.3');
 
-// Lease -> surrender closes it; ~154 months.
+// Lease -> surrender closes it; 154 months, rendered in years and months.
 const lease = at(11951585);
 assert.equal(lease.closed_by?.row_id, 31200305, 'lease -> surrender not paired');
-assert.ok(lease.commentary.includes('Surrendered after ~154 months'), lease.commentary);
+assert.equal(lease.duration_months, 154);
+assert.ok(lease.commentary.includes('Surrendered after ~12 yr 10 mo'), lease.commentary);
 assert.ok(at(31200305).commentary
     .includes('Surrenders the lease C626345.4 to Fletcher Building Limited'));
 

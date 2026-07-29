@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { ArrowLeft, ArrowRight, Loader2, Lock } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Loader2, Lock, Search as SearchIcon } from 'lucide-react';
 import {
     fetchTitleReport, login, logout, searchAddress, searchOwner,
     PropertyError,
@@ -11,7 +11,7 @@ import {
 import { analyse, heldFor, visible, type MemorialEvent } from '../utils/memorials.js';
 
 /**
- * 家族 — the LINZ Title Register feature. Four faces, in order:
+ * 地 — the LINZ Title Register feature. Four faces, in order:
  *
  *   1. locked        sign in with your name + the shared password
  *   2. notice        the privacy/acceptable-use check, every session
@@ -21,6 +21,12 @@ import { analyse, heldFor, visible, type MemorialEvent } from '../utils/memorial
  * The unlock lives in utils/propertySession.ts, in memory only. Leaving this
  * screen for a company or an individual and coming back keeps you signed in;
  * a reload or a new tab does not. See that file for why.
+ *
+ * Visual vocabulary is the app's, not this screen's own: the fused search bar
+ * and shared-hairline result rows come from FindScreen, the serif masthead from
+ * PersonSearchResults, the stats strip from CasePanel, and the kanji square
+ * from CustomNodes — reused here as a *category* mark, never a severity one.
+ * Red (--crit) stays reserved for danger and appears nowhere on this screen.
  */
 
 const ruleStyle = { border: '1px solid var(--rule)' };
@@ -51,6 +57,16 @@ const inputStyle: React.CSSProperties = {
     ...ruleStyle, padding: '9px 11px', fontSize: 13, outline: 'none',
 };
 
+/** Uppercase mono eyebrow — the app's section label. */
+const Eyebrow: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className }) => (
+    <div
+        className={`text-ink-pale ${className ?? ''}`}
+        style={{ fontFamily: 'var(--mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.09em' }}
+    >
+        {children}
+    </div>
+);
+
 const Button: React.FC<{
     children: React.ReactNode;
     disabled?: boolean;
@@ -62,7 +78,7 @@ const Button: React.FC<{
         type={type}
         disabled={disabled || busy}
         onClick={onClick}
-        className="bg-ink text-paper inline-flex items-center gap-2"
+        className="bg-ink text-paper inline-flex items-center gap-2 transition-colors duration-150 property-btn"
         style={{
             padding: '9px 20px', fontSize: 12.5,
             opacity: disabled || busy ? 0.45 : 1,
@@ -81,6 +97,90 @@ const ErrorNote: React.FC<{ children: React.ReactNode }> = ({ children }) => (
     >
         {children}
     </p>
+);
+
+/** The 地 mark, at whatever size the face needs. */
+const LandMark: React.FC<{ size: number }> = ({ size }) => (
+    <span
+        aria-hidden="true"
+        className="inline-grid place-items-center flex-shrink-0"
+        style={{
+            width: size, height: size,
+            background: 'var(--accent)', color: 'var(--accent-ink)',
+            fontFamily: 'var(--serif)', fontSize: Math.round(size * 0.56), lineHeight: 1,
+            boxShadow: 'inset 0 0 14px oklch(0 0 0/.22)',
+        }}
+    >
+        地
+    </span>
+);
+
+/**
+ * Hover, focus and layout rules that inline styles cannot express. Mounted once
+ * by the shell, so every face below can use these class names.
+ */
+const PropertyStyles: React.FC = () => (
+    <style>{`
+.property-btn:hover:not(:disabled) { background: var(--accent); color: var(--accent-ink); }
+.property-row:hover, .property-row:focus-visible {
+  background: oklch(from var(--accent) l c h / .10);
+}
+.property-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.property-quiet:hover, .property-quiet:focus-visible { color: var(--ink); }
+.property-bigsearch:focus-within { border-color: var(--accent); }
+.property-ref:focus { outline: none; border-bottom-color: var(--accent); }
+
+
+/* Chronology: dates sit in a mono gutter against a vertical rule,
+   with the category mark straddling it. */
+.property-timeline { position: relative; padding-left: 112px; }
+.property-timeline::before {
+    content: "";
+    position: absolute;
+    left: 96px; top: 6px; bottom: 10px;
+    width: 1px; background: var(--rule);
+}
+.property-event { position: relative; }
+.property-event:first-child { border-top: none !important; }
+.property-event-when {
+    position: absolute;
+    left: -112px; top: 15px;
+    width: 74px; text-align: right;
+}
+.property-event-pip { position: absolute; left: -25px; top: 14px; }
+
+@media (prefers-reduced-motion: no-preference) {
+    .property-loadbar {
+        animation: property-loadbar-sweep 1.1s cubic-bezier(.4,0,.2,1) infinite;
+    }
+    @keyframes property-loadbar-sweep {
+        0%   { transform: translateX(-100%); }
+        100% { transform: translateX(350%); }
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .property-loadbar { transform: none; }
+}
+
+/* Narrow: the gutter collapses and the date leads the row. */
+@media (max-width: 640px) {
+    .property-timeline { padding-left: 0; }
+    .property-timeline::before { display: none; }
+    .property-event-when {
+        position: static;
+        display: block;
+        width: auto;
+        text-align: left;
+        margin-bottom: 3px;
+    }
+    .property-event-pip {
+        position: static;
+        display: inline-block;
+        vertical-align: middle;
+        margin-right: 7px;
+    }
+}
+            `}</style>
 );
 
 // ── 1. Sign in ───────────────────────────────────────────────────────────────
@@ -111,15 +211,15 @@ const SignIn: React.FC = () => {
 
     return (
         <form onSubmit={submit} style={{ maxWidth: 380, margin: '0 auto' }}>
-            <div className="text-center" style={{ marginBottom: 26 }}>
-                <span
-                    className="text-accent"
-                    style={{ fontFamily: 'var(--serif)', fontSize: 30, letterSpacing: '.12em' }}
+            <div className="flex flex-col items-center" style={{ marginBottom: 26 }}>
+                <LandMark size={44} />
+                <h3
+                    style={{ fontFamily: 'var(--serif)', fontSize: 21, fontWeight: 600, margin: '14px 0 0' }}
                 >
-                    家族
-                </span>
-                <p className="text-ink-mid" style={{ fontSize: 12.5, marginTop: 10 }}>
-                    Property titles. Restricted to named team members.
+                    Property titles
+                </h3>
+                <p className="text-ink-mid text-center" style={{ fontSize: 12.5, marginTop: 5 }}>
+                    LINZ Title Register. Restricted to named team members.
                 </p>
             </div>
 
@@ -162,15 +262,17 @@ const Notice: React.FC<{ searcher: string }> = ({ searcher }) => {
 
     return (
         <div style={{ maxWidth: 560, margin: '0 auto' }} className="text-left">
-            <h3
-                className="text-center"
-                style={{ fontFamily: 'var(--serif)', fontSize: 20, fontWeight: 600, marginBottom: 6 }}
-            >
-                Before you search
-            </h3>
-            <p className="text-ink-mid text-center" style={{ fontSize: 12, marginBottom: 22 }}>
-                Signed in as {searcher}
-            </p>
+            <div className="flex flex-col items-center" style={{ marginBottom: 22 }}>
+                <LandMark size={30} />
+                <h3
+                    style={{ fontFamily: 'var(--serif)', fontSize: 20, fontWeight: 600, margin: '12px 0 0' }}
+                >
+                    Before you search
+                </h3>
+                <p className="text-ink-mid" style={{ fontSize: 12, marginTop: 4 }}>
+                    Signed in as {searcher}
+                </p>
+            </div>
 
             <ul
                 className="text-ink-mid"
@@ -229,11 +331,79 @@ const Notice: React.FC<{ searcher: string }> = ({ searcher }) => {
 
 // ── 4. Report ────────────────────────────────────────────────────────────────
 
+/**
+ * The category mark for one memorial: a serif kanji square, the same device the
+ * graph nodes use for status. Colour encodes *what kind of interest* and
+ * whether it is still live — never severity, so --crit is not in this table.
+ */
+const markFor = (e: MemorialEvent): { glyph: string; bg: string } => {
+    if (e.burden) {
+        if (e.kind.includes('Easement') || e.kind.includes('Right of Way')) {
+            return { glyph: '役', bg: 'var(--ink-wash)' };   // 地役権 — easement
+        }
+        if (e.kind.includes('Covenant') || e.kind.includes('Consent Notice')) {
+            return { glyph: '約', bg: 'var(--ink-wash)' };   // 約款 — covenant
+        }
+        return { glyph: '他', bg: 'var(--ink-wash)' };       // 他 — other
+    }
+    switch (e.category) {
+        case 'mortgage':
+            return { glyph: '抵', bg: e.current ? 'var(--accent)' : 'var(--ink-wash)' };
+        case 'discharge':
+            return { glyph: '済', bg: 'var(--green)' };      // 済 — settled, done
+        case 'transfer':
+            return { glyph: '譲', bg: 'var(--ink)' };        // 譲渡 — conveyance
+        case 'caveat':
+            return { glyph: '警', bg: e.current ? 'var(--amber)' : 'var(--ink-wash)' };
+        case 'lease':
+            return { glyph: '借', bg: e.current ? 'var(--accent)' : 'var(--ink-wash)' };
+        default:
+            return { glyph: '他', bg: 'var(--ink-wash)' };
+    }
+};
+
+/** How the closing instrument finished this interest, in past tense. */
+const closedVerb = (e: MemorialEvent): string => {
+    const label = e.closed_by?.label ?? '';
+    if (label.includes('Withdrawal')) return 'Withdrawn';
+    if (label.includes('Surrender')) return 'Surrendered';
+    return 'Discharged';
+};
+
+/**
+ * Glyph colour has to flip with the theme on the ink grounds: --ink and
+ * --ink-wash are dark in light mode and light in dark mode, so a fixed
+ * --accent-ink glyph goes dark-on-dark the moment the theme flips. The status
+ * grounds (accent/green/amber) hold their polarity in both themes.
+ */
+const glyphOn = (bg: string): string => {
+    if (bg === 'var(--ink)') return 'var(--paper)';
+    if (bg === 'var(--ink-wash)') return 'var(--ink)';
+    return 'var(--accent-ink)';
+};
+
+const KanjiSquare: React.FC<{ event: MemorialEvent; size: number }> = ({ event, size }) => {
+    const { glyph, bg } = markFor(event);
+    return (
+        <span
+            aria-hidden="true"
+            className="inline-grid place-items-center flex-shrink-0"
+            style={{
+                width: size, height: size, background: bg,
+                color: glyphOn(bg),
+                fontFamily: 'var(--serif)', fontSize: Math.round(size * 0.62), lineHeight: 1,
+            }}
+        >
+            {glyph}
+        </span>
+    );
+};
+
 const Badge: React.FC<{ children: React.ReactNode; accent?: boolean }> = ({ children, accent }) => (
     <span
         style={{
             fontFamily: 'var(--mono)', fontSize: 9.5, textTransform: 'uppercase',
-            letterSpacing: '.07em', padding: '2px 6px',
+            letterSpacing: '.07em', padding: '1px 6px',
             border: `1px solid ${accent ? 'var(--accent)' : 'var(--rule)'}`,
             color: accent ? 'var(--accent)' : 'var(--ink-pale)',
             whiteSpace: 'nowrap',
@@ -243,6 +413,26 @@ const Badge: React.FC<{ children: React.ReactNode; accent?: boolean }> = ({ chil
     </span>
 );
 
+const Stat: React.FC<{ value: React.ReactNode; label: string; accent?: boolean }> = ({ value, label, accent }) => (
+    <div style={{ padding: '10px 13px', borderLeft: '1px solid var(--rule)' }}>
+        <b
+            className="block"
+            style={{
+                fontFamily: 'var(--serif)', fontSize: 21, fontWeight: 600, lineHeight: 1.2,
+                color: accent ? 'var(--accent)' : 'var(--ink)',
+            }}
+        >
+            {value}
+        </b>
+        <Eyebrow>{label}</Eyebrow>
+    </div>
+);
+
+/**
+ * One event in the chronology. Live interests carry full ink and an accent
+ * badge; closed ones drop to ink-mid with the duration they ran for, so the
+ * eye lands on what is still on the title.
+ */
 const EventRow: React.FC<{ event: MemorialEvent }> = ({ event }) => {
     const [open, setOpen] = useState(false);
     const when = event.date
@@ -250,120 +440,225 @@ const EventRow: React.FC<{ event: MemorialEvent }> = ({ event }) => {
             ? `${event.date.getUTCFullYear()}?`
             : event.date.toISOString().slice(0, 10))
         : '—';
+    const closed = !!event.closed_by;
 
     return (
-        <div style={{ borderTop: '1px solid var(--rule)', padding: '11px 0' }}>
-            <div className="flex items-baseline gap-3" style={{ flexWrap: 'wrap' }}>
-                <span
-                    className="text-ink-pale"
-                    style={{ fontFamily: 'var(--mono)', fontSize: 11, minWidth: 82 }}
-                >
-                    {when}
-                </span>
-                <span style={{ fontSize: 13, fontWeight: 500, flex: 1, minWidth: 180 }}>
-                    {event.headline}
-                </span>
-                {event.current && <Badge accent>Current</Badge>}
-                {event.closed_by && <Badge>{`Closed · ${heldFor(event)}`}</Badge>}
-            </div>
-            <p className="text-ink-mid" style={{ fontSize: 12, margin: '5px 0 0', paddingLeft: 94 }}>
+        <article className="property-event" style={{ borderTop: '1px solid var(--rule)', padding: '13px 0' }}>
+            <span
+                className="property-event-when text-ink-pale"
+                style={{ fontFamily: 'var(--mono)', fontSize: 11, fontVariantNumeric: 'tabular-nums' }}
+            >
+                {when}
+            </span>
+            <span className="property-event-pip">
+                <KanjiSquare event={event} size={17} />
+            </span>
+
+            <h5
+                className="flex items-baseline gap-2.5 flex-wrap"
+                style={{
+                    margin: 0, fontSize: 13.5,
+                    fontWeight: closed ? 500 : 600,
+                    color: closed ? 'var(--ink-mid)' : 'var(--ink)',
+                }}
+            >
+                {event.headline}
+                {event.current && <Badge accent>Live</Badge>}
+                {closed && <Badge>{`${closedVerb(event)} · ${heldFor(event)}`}</Badge>}
+                {event.batch_size && event.batch_size > 1 && (
+                    <Badge>{`Batch of ${event.batch_size}`}</Badge>
+                )}
+            </h5>
+
+            <p className="text-ink-mid" style={{ fontSize: 12, margin: '4px 0 0', maxWidth: '66ch' }}>
                 {event.commentary}
             </p>
-            <div style={{ paddingLeft: 94, marginTop: 5 }}>
-                <button
-                    onClick={() => setOpen(!open)}
-                    className="text-ink-pale hover:text-ink"
-                    style={{ fontFamily: 'var(--mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.07em' }}
-                >
-                    {open ? '− Register text' : '+ Register text'}
-                </button>
-                {open && (
-                    <>
+
+            <button
+                onClick={() => setOpen(!open)}
+                aria-expanded={open}
+                className="property-quiet text-ink-pale transition-colors duration-150"
+                style={{
+                    marginTop: 6, fontFamily: 'var(--mono)', fontSize: 10,
+                    textTransform: 'uppercase', letterSpacing: '.07em',
+                }}
+            >
+                {open ? '− Register text' : '+ Register text'}
+            </button>
+            {open && (
+                <>
+                    <p
+                        className="text-ink-mid"
+                        style={{ fontFamily: 'var(--mono)', fontSize: 11, lineHeight: 1.6, marginTop: 7, whiteSpace: 'pre-wrap' }}
+                    >
+                        {event.text || '(no memorial text)'}
+                    </p>
+                    {event.notations?.map((n, i) => (
                         <p
-                            className="text-ink-mid"
-                            style={{ fontFamily: 'var(--mono)', fontSize: 11, lineHeight: 1.6, marginTop: 7, whiteSpace: 'pre-wrap' }}
+                            key={i}
+                            className="text-ink-pale"
+                            style={{ fontFamily: 'var(--mono)', fontSize: 10.5, lineHeight: 1.6, marginTop: 6 }}
                         >
-                            {event.text || '(no memorial text)'}
+                            {n}
                         </p>
-                        {event.notations?.map((n, i) => (
-                            <p
-                                key={i}
-                                className="text-ink-pale"
-                                style={{ fontFamily: 'var(--mono)', fontSize: 10.5, lineHeight: 1.6, marginTop: 6 }}
-                            >
-                                {n}
-                            </p>
-                        ))}
-                    </>
-                )}
-            </div>
-        </div>
+                    ))}
+                </>
+            )}
+        </article>
     );
 };
 
+/** A standing burden — sits on the land rather than happening at a moment. */
+const BurdenRow: React.FC<{ event: MemorialEvent }> = ({ event }) => (
+    <div
+        className="flex items-center gap-3.5 text-left"
+        style={{ borderTop: '1px solid var(--rule)', padding: '10px 13px' }}
+    >
+        <KanjiSquare event={event} size={19} />
+        <span style={{ flex: 1, minWidth: 0 }}>
+            <span className="block" style={{ fontSize: 12.5 }}>{event.headline}</span>
+            {event.instrument && (
+                <span
+                    className="block text-ink-pale"
+                    style={{ fontFamily: 'var(--mono)', fontSize: 11, marginTop: 1 }}
+                >
+                    {event.instrument}
+                </span>
+            )}
+        </span>
+        <span
+            className="text-ink-pale flex-shrink-0"
+            style={{ fontFamily: 'var(--mono)', fontSize: 10.5, fontVariantNumeric: 'tabular-nums' }}
+        >
+            {event.date ? event.date.getUTCFullYear() : '—'}
+        </span>
+    </div>
+);
+
 const Report: React.FC<{ report: TitleReport; onBack: () => void }> = ({ report, onBack }) => {
     const events = React.useMemo(() => visible(analyse(report.memorials)), [report]);
-    const currentCount = events.filter(e => e.current).length;
+    // Standing burdens leave the chronology: they'd otherwise pad a timeline
+    // they don't belong on. memorials.ts already flags them.
+    const burdens = events.filter(e => e.burden);
+    // Newest first — the masthead and stats answer "what is this title now",
+    // and the chronology descends from there into history.
+    const chronology = events.filter(e => !e.burden).slice().reverse();
+    const liveCount = events.filter(e => e.current && !e.burden).length;
     const title = report.title ?? {};
 
     return (
         <div className="text-left">
             <button
                 onClick={onBack}
-                className="text-ink-pale hover:text-ink inline-flex items-center gap-1.5"
+                className="property-quiet text-ink-pale inline-flex items-center gap-1.5 transition-colors duration-150"
                 style={{ fontSize: 12, marginBottom: 16 }}
             >
                 <ArrowLeft size={12} strokeWidth={1.75} /> Back to results
             </button>
 
-            <div style={{ borderBottom: '1px solid var(--rule)', paddingBottom: 14, marginBottom: 16 }}>
-                <h3 style={{ fontFamily: 'var(--serif)', fontSize: 22, fontWeight: 600, margin: 0 }}>
-                    {title.title_no ?? '—'}
-                </h3>
-                <p className="text-ink-mid" style={{ fontSize: 12.5, margin: '5px 0 0' }}>
-                    {[title.type, title.status, title.land_district].filter(Boolean).join(' · ')}
-                </p>
-                {report.address && (
-                    <p className="text-ink" style={{ fontSize: 13, margin: '7px 0 0' }}>
-                        {report.address}
-                    </p>
-                )}
+            {/* Masthead — a title number is this screen's proper noun. */}
+            <div style={{ borderBottom: '1px solid var(--rule)', paddingBottom: 15, marginBottom: 16 }}>
+                <div className="flex items-start gap-3.5 flex-wrap">
+                    <span style={{ marginTop: 5 }}><LandMark size={34} /></span>
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                        <h3
+                            style={{
+                                fontFamily: 'var(--serif)', fontSize: 34, fontWeight: 600,
+                                margin: 0, lineHeight: 1.1, letterSpacing: '.01em',
+                                fontVariantNumeric: 'tabular-nums',
+                            }}
+                        >
+                            {title.title_no ?? '—'}
+                        </h3>
+                        <p className="text-ink-mid" style={{ fontSize: 12.5, margin: '5px 0 0' }}>
+                            {[title.type, title.status, title.land_district].filter(Boolean).join(' · ')}
+                        </p>
+                        {report.address && (
+                            <p className="text-ink" style={{ fontSize: 13, margin: '6px 0 0' }}>
+                                {report.address}
+                            </p>
+                        )}
+                    </div>
+                </div>
             </div>
 
+            {/* Stats strip — the answer to "what am I looking at" before scrolling. */}
+            <div
+                className="grid"
+                style={{ ...ruleStyle, gridTemplateColumns: 'repeat(3, 1fr)', marginBottom: 20 }}
+            >
+                <div style={{ padding: '10px 13px' }}>
+                    <b className="block" style={{ fontFamily: 'var(--serif)', fontSize: 21, fontWeight: 600, lineHeight: 1.2 }}>
+                        {events.length}
+                    </b>
+                    <Eyebrow>Memorials</Eyebrow>
+                </div>
+                <Stat value={liveCount} label="Live interests" accent={liveCount > 0} />
+                <Stat value={report.owners.length} label="Registered owners" />
+            </div>
+
+            {/* Owners as inkan pills — the same object the graph draws for a person. */}
             {report.owners.length > 0 && (
-                <div style={{ marginBottom: 16 }}>
-                    <h4
-                        className="text-ink-mid"
-                        style={{ fontFamily: 'var(--mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', margin: '0 0 7px' }}
-                    >
-                        Registered owners
-                    </h4>
-                    {report.owners.map((o, i) => (
-                        <p key={i} style={{ fontSize: 13, margin: '0 0 3px' }}>
-                            {o.corporate_name
-                                || [o.prime_other_names, o.prime_surname].filter(Boolean).join(' ')
-                                || 'Unnamed owner'}
-                            {o.estate_share && (
-                                <span className="text-ink-pale" style={{ fontFamily: 'var(--mono)', fontSize: 11, marginLeft: 8 }}>
-                                    {o.estate_share}
+                <div style={{ marginBottom: 24 }}>
+                    <Eyebrow className="mb-2">Registered owners</Eyebrow>
+                    <div className="flex flex-wrap" style={{ gap: 7 }}>
+                        {report.owners.map((o, i) => (
+                            <span
+                                key={i}
+                                className="inline-flex items-center"
+                                style={{
+                                    gap: 9, border: '1px solid var(--ink-mid)', borderRadius: 999,
+                                    padding: '3px 14px 3px 3px', fontSize: 12.5,
+                                }}
+                            >
+                                <span
+                                    aria-hidden="true"
+                                    className="inline-grid place-items-center flex-shrink-0"
+                                    style={{
+                                        width: 26, height: 26, borderRadius: 999,
+                                        border: '1px solid var(--accent)',
+                                        fontFamily: 'var(--serif)', fontSize: 12, color: 'var(--accent)',
+                                    }}
+                                >
+                                    印
                                 </span>
-                            )}
-                        </p>
-                    ))}
+                                {o.corporate_name
+                                    || [o.prime_other_names, o.prime_surname].filter(Boolean).join(' ')
+                                    || 'Unnamed owner'}
+                                {o.estate_share && (
+                                    <span
+                                        className="text-ink-pale"
+                                        style={{ fontFamily: 'var(--mono)', fontSize: 10.5 }}
+                                    >
+                                        {o.estate_share}
+                                    </span>
+                                )}
+                            </span>
+                        ))}
+                    </div>
                 </div>
             )}
 
-            <h4
-                className="text-ink-mid"
-                style={{ fontFamily: 'var(--mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.08em', margin: '0 0 2px' }}
-            >
-                Memorials — {events.length} shown, {currentCount} current
-            </h4>
-            {events.map(e => <EventRow key={e.id} event={e} />)}
+            {/* Chronology — dates in a mono gutter against a vertical rule. */}
+            <Eyebrow className="mb-2">
+                Chronology — {chronology.length} memorial{chronology.length === 1 ? '' : 's'}, {liveCount} live
+            </Eyebrow>
+            <div className="property-timeline">
+                {chronology.map(e => <EventRow key={e.id} event={e} />)}
+            </div>
+
+            {burdens.length > 0 && (
+                <div style={{ marginTop: 26, borderTop: '1px solid var(--rule)', paddingTop: 18 }}>
+                    <Eyebrow className="mb-2.5">Standing burdens — {burdens.length}</Eyebrow>
+                    <div style={ruleStyle}>
+                        {burdens.map(e => <BurdenRow key={e.id} event={e} />)}
+                    </div>
+                </div>
+            )}
 
             <p
                 className="text-ink-pale"
-                style={{ fontSize: 11, lineHeight: 1.6, marginTop: 20, borderTop: '1px solid var(--rule)', paddingTop: 12 }}
+                style={{ fontSize: 11, lineHeight: 1.6, marginTop: 22, borderTop: '1px solid var(--rule)', paddingTop: 13 }}
             >
                 Reference copy of the LINZ Title Register, not a title search. It may lag the
                 register and is not legal advice. Commentary is generated from the register's own
@@ -385,12 +680,12 @@ const ResultRow: React.FC<{
 }> = ({ left, main, meta, onClick }) => (
     <button
         onClick={onClick}
-        className="w-full flex items-center gap-4 text-left hover:bg-paper2"
-        style={{ ...ruleStyle, padding: '11px 13px', marginBottom: 6 }}
+        className="property-row w-full flex items-center gap-3.5 text-left transition-colors duration-150"
+        style={{ borderTop: '1px solid var(--rule)', padding: '11px 13px' }}
     >
         <span
-            className="text-accent"
-            style={{ fontFamily: 'var(--mono)', fontSize: 12, minWidth: 100, flexShrink: 0 }}
+            className="text-accent flex-shrink-0"
+            style={{ fontFamily: 'var(--mono)', fontSize: 12, fontVariantNumeric: 'tabular-nums', minWidth: 96 }}
         >
             {left}
         </span>
@@ -404,6 +699,11 @@ const ResultRow: React.FC<{
         </span>
         <ArrowRight size={13} strokeWidth={1.5} className="text-ink-pale flex-shrink-0" />
     </button>
+);
+
+/** Shared-hairline list: one bordered block, rows divided by a single rule. */
+const ResultList: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+    <div style={ruleStyle}>{children}</div>
 );
 
 const Search: React.FC<{ searcher: string; reference: string }> = ({ searcher, reference }) => {
@@ -460,18 +760,24 @@ const Search: React.FC<{ searcher: string; reference: string }> = ({ searcher, r
         />
     );
 
+    // 住 address / 名 name — the find screen's mode-line idiom, one level down.
+    const modes: { id: Mode; kanji: string; label: string }[] = [
+        { id: 'address', kanji: '住', label: 'Address' },
+        { id: 'owner', kanji: '名', label: 'Owner' },
+    ];
+
     return (
         <div className="text-left">
             <div
-                className="flex items-baseline justify-between"
-                style={{ marginBottom: 16, gap: 12, flexWrap: 'wrap' }}
+                className="flex items-baseline justify-between flex-wrap"
+                style={{ marginBottom: 16, gap: 12 }}
             >
                 <span className="text-ink-mid" style={{ fontSize: 12 }}>
                     Signed in as <span className="text-ink">{searcher}</span>
                 </span>
                 <button
                     onClick={() => { void logout(); }}
-                    className="text-ink-pale hover:text-ink"
+                    className="property-quiet text-ink-pale transition-colors duration-150"
                     style={{ fontFamily: 'var(--mono)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.07em' }}
                 >
                     Sign out
@@ -479,41 +785,24 @@ const Search: React.FC<{ searcher: string; reference: string }> = ({ searcher, r
             </div>
 
             <form onSubmit={submit}>
-                <div className="flex gap-3" style={{ marginBottom: 14, flexWrap: 'wrap' }}>
-                    {(['address', 'owner'] as const).map(m => (
-                        <button
-                            key={m}
-                            type="button"
-                            onClick={() => { setMode(m); clear(); }}
-                            style={{
-                                fontFamily: 'var(--mono)', fontSize: 10, textTransform: 'uppercase',
-                                letterSpacing: '.08em', padding: '6px 12px',
-                                border: `1px solid ${mode === m ? 'var(--accent)' : 'var(--rule)'}`,
-                                color: mode === m ? 'var(--ink)' : 'var(--ink-pale)',
-                            }}
-                        >
-                            {m === 'address' ? 'Property address' : 'Registered owner'}
-                        </button>
-                    ))}
-                </div>
-
-                <Field
-                    label="File / matter reference"
-                    hint="Required. Recorded with the search so it can be accounted for later."
+                {/* Fused search bar — the same frame as FindScreen's .find-bigsearch */}
+                <div
+                    className="property-bigsearch flex relative overflow-hidden"
+                    style={{ border: '1px solid var(--ink-mid)', background: 'var(--paper)' }}
                 >
+                    {busy && (
+                        <span
+                            className="property-loadbar absolute top-0 left-0 h-[2px] bg-accent"
+                            aria-hidden="true"
+                            style={{ width: '40%' }}
+                        />
+                    )}
                     <input
-                        className={inputClass}
-                        style={inputStyle}
-                        value={reference}
-                        onChange={(e) => setReference(e.target.value)}
-                        placeholder="e.g. MATTER-1234"
-                    />
-                </Field>
-
-                <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
-                    <input
-                        className={`${inputClass} flex-1`}
-                        style={{ ...inputStyle, minWidth: 220 }}
+                        className="flex-1 bg-transparent text-ink"
+                        style={{
+                            border: 'none', padding: '14px 16px', fontSize: 15,
+                            outline: 'none', minWidth: 0,
+                        }}
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         placeholder={mode === 'address'
@@ -521,13 +810,80 @@ const Search: React.FC<{ searcher: string; reference: string }> = ({ searcher, r
                             : 'Norak Properties Limited'}
                         aria-label={mode === 'address' ? 'Property address' : 'Registered owner'}
                     />
-                    <Button type="submit" busy={busy} disabled={!query.trim() || !reference.trim()}>
+                    <button
+                        type="submit"
+                        disabled={!query.trim() || !reference.trim() || busy}
+                        className="property-btn bg-ink text-paper inline-flex items-center gap-2 transition-colors duration-150 flex-shrink-0"
+                        style={{
+                            padding: '0 22px', fontSize: 14, letterSpacing: '.04em',
+                            opacity: !query.trim() || !reference.trim() || busy ? 0.45 : 1,
+                            cursor: !query.trim() || !reference.trim() || busy ? 'not-allowed' : 'pointer',
+                        }}
+                    >
+                        {busy
+                            ? <Loader2 size={14} className="animate-spin" aria-hidden="true" />
+                            : <SearchIcon size={15} strokeWidth={1.5} aria-hidden="true" />}
                         Search
-                    </Button>
+                    </button>
                 </div>
+
+                {/* Mode line + the file reference as an inline mono chip. It is a
+                    short mandatory token, not a paragraph-worthy field. */}
+                <div
+                    className="flex items-center flex-wrap text-ink-mid"
+                    style={{ marginTop: 12, gap: 2, fontSize: 12.5 }}
+                >
+                    {modes.map((m, i) => (
+                        <React.Fragment key={m.id}>
+                            {i > 0 && <span className="text-ink-wash">·</span>}
+                            <button
+                                type="button"
+                                onClick={() => { setMode(m.id); clear(); }}
+                                aria-current={mode === m.id}
+                                className="inline-flex items-baseline gap-1.5 transition-colors duration-150"
+                                style={{
+                                    borderBottom: `1px solid ${mode === m.id ? 'var(--accent)' : 'var(--rule)'}`,
+                                    padding: '2px 1px',
+                                    margin: '0 8px',
+                                    color: mode === m.id ? 'var(--ink)' : 'var(--ink-mid)',
+                                }}
+                            >
+                                <span
+                                    aria-hidden="true"
+                                    style={{ fontFamily: 'var(--serif)', color: mode === m.id ? 'var(--accent)' : 'var(--ink-pale)' }}
+                                >
+                                    {m.kanji}
+                                </span>
+                                {m.label}
+                            </button>
+                        </React.Fragment>
+                    ))}
+
+                    <label
+                        className="inline-flex items-baseline text-ink-pale"
+                        style={{ marginLeft: 14, gap: 6, fontSize: 11.5 }}
+                        title="Required. Recorded with the search so it can be accounted for later."
+                    >
+                        Ref
+                        <input
+                            className="property-ref bg-transparent text-ink"
+                            style={{
+                                width: 118, border: 'none',
+                                borderBottom: `1px solid ${reference.trim() ? 'var(--accent)' : 'var(--rule)'}`,
+                                fontFamily: 'var(--mono)', fontSize: 11.5, padding: '1px 2px',
+                            }}
+                            value={reference}
+                            onChange={(e) => setReference(e.target.value)}
+                            placeholder="MATTER-1234"
+                            aria-label="File or matter reference"
+                        />
+                    </label>
+                </div>
+
                 {!reference.trim() && query.trim() && (
                     <p className="text-ink-pale" style={{ fontSize: 11.5, marginTop: 8 }}>
-                        Add a file reference to search.
+                        Add a file reference to search — it's recorded with the search so it can be
+                        accounted for later.
                     </p>
                 )}
             </form>
@@ -537,28 +893,30 @@ const Search: React.FC<{ searcher: string; reference: string }> = ({ searcher, r
             {/* Address results */}
             {address?.resolution_status === 'needs_confirmation' && (
                 <div style={{ marginTop: 22 }}>
-                    <h4 className="text-ink-mid" style={{ fontSize: 12, marginBottom: 10 }}>
-                        {address.candidates?.length} addresses matched — choose the one you meant.
-                    </h4>
-                    {address.candidates?.map(c => (
-                        <ResultRow
-                            key={c.address_id}
-                            left={String(c.address_id)}
-                            main={c.full_address}
-                            meta={[c.suburb_locality, c.town_city, c.territorial_authority]
-                                .filter(Boolean).join(' · ')}
-                            onClick={() => pickCandidate(c.address_id)}
-                        />
-                    ))}
+                    <Eyebrow className="mb-2">
+                        {address.candidates?.length} addresses matched — choose the one you meant
+                    </Eyebrow>
+                    <ResultList>
+                        {address.candidates?.map(c => (
+                            <ResultRow
+                                key={c.address_id}
+                                left={String(c.address_id)}
+                                main={c.full_address}
+                                meta={[c.suburb_locality, c.town_city, c.territorial_authority]
+                                    .filter(Boolean).join(' · ')}
+                                onClick={() => pickCandidate(c.address_id)}
+                            />
+                        ))}
+                    </ResultList>
                 </div>
             )}
             {address?.resolution_status === 'ok' && (
                 <div style={{ marginTop: 22 }}>
-                    <h4 className="text-ink-mid" style={{ fontSize: 12, marginBottom: 10 }}>
+                    <Eyebrow className="mb-2">
                         {address.resolved_address?.full_address} — {address.titles?.length} title
                         {address.titles?.length === 1 ? '' : 's'}
-                    </h4>
-                    {address.titles?.map(titleRow)}
+                    </Eyebrow>
+                    <ResultList>{address.titles?.map(titleRow)}</ResultList>
                 </div>
             )}
             {address && ['not_found', 'no_title', 'no_geometry'].includes(address.resolution_status) && (
@@ -595,22 +953,24 @@ const Search: React.FC<{ searcher: string; reference: string }> = ({ searcher, r
                         }
                         return (
                             <>
-                                <h4 className="text-ink-mid" style={{ fontSize: 12, marginBottom: 10 }}>
+                                <Eyebrow className="mb-2">
                                     {rows.length} title{rows.length === 1 ? '' : 's'}
-                                </h4>
-                                {rows.map(r => (
-                                    <ResultRow
-                                        key={r.title_no}
-                                        left={r.title_no!}
-                                        main={r.corporate_name
-                                            || [r.prime_other_names, r.prime_surname].filter(Boolean).join(' ')
-                                            || 'Unnamed owner'}
-                                        meta={[r.title?.type, r.title?.status,
-                                            r.title?.land_district ?? r.land_district]
-                                            .filter(Boolean).join(' · ')}
-                                        onClick={() => openTitle(r.title_no!)}
-                                    />
-                                ))}
+                                </Eyebrow>
+                                <ResultList>
+                                    {rows.map(r => (
+                                        <ResultRow
+                                            key={r.title_no}
+                                            left={r.title_no!}
+                                            main={r.corporate_name
+                                                || [r.prime_other_names, r.prime_surname].filter(Boolean).join(' ')
+                                                || 'Unnamed owner'}
+                                            meta={[r.title?.type, r.title?.status,
+                                                r.title?.land_district ?? r.land_district]
+                                                .filter(Boolean).join(' · ')}
+                                            onClick={() => openTitle(r.title_no!)}
+                                        />
+                                    ))}
+                                </ResultList>
                             </>
                         );
                     })()}
@@ -625,7 +985,16 @@ const Search: React.FC<{ searcher: string; reference: string }> = ({ searcher, r
 export const PropertyScreen: React.FC = () => {
     const session = useSyncExternalStore(subscribe, getSession, () => null);
 
-    if (!session) return <SignIn />;
-    if (!session.acknowledged) return <Notice searcher={session.searcher} />;
-    return <Search searcher={session.searcher} reference={session.reference} />;
+    const face = !session
+        ? <SignIn />
+        : !session.acknowledged
+            ? <Notice searcher={session.searcher} />
+            : <Search searcher={session.searcher} reference={session.reference} />;
+
+    return (
+        <>
+            {face}
+            <PropertyStyles />
+        </>
+    );
 };
