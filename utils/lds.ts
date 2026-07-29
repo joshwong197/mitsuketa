@@ -532,6 +532,9 @@ export interface TitleReport {
     memorials: MemorialRow[];
     estates: Record<string, any>[];
     address: string | null;
+    /** Parcel outline, for the aerial map. Spatial only — carries no personal data. */
+    geometry: GeoJsonGeometry | null;
+    bbox: [number, number, number, number] | null;
 }
 
 /**
@@ -563,12 +566,19 @@ export async function titleReport(client: LDSClient, titleNo: string): Promise<T
         String(a.instrument_lodged_datetime ?? '')
             .localeCompare(String(b.instrument_lodged_datetime ?? '')));
 
+    // The outline drives the parcel map. Empty geometry is normal on some
+    // titles (unit titles carry none), so the map simply does not render.
+    const geometry = titleFeats.length > 0 ? geomOf(titleFeats[0]) : null;
+    const usable = geometry && !isEmptyGeom(geometry) ? geometry : null;
+
     return {
         title: titleFeats.length > 0 ? titleSummary(titleFeats[0]) : null,
         owners: props(ownerFeats),
         memorials,
         estates: props(estateFeats),
         address: titleFeats.length > 0 ? await addressOf(client, titleFeats[0]) : null,
+        geometry: usable,
+        bbox: usable ? bboxOf(usable) : null,
     };
 }
 

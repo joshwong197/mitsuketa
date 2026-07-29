@@ -68,9 +68,19 @@ export interface TitleReport {
     memorials: MemorialRow[];
     estates: Record<string, any>[];
     address: string | null;
+    /** Parcel outline for the aerial map; null when the title carries none. */
+    geometry?: { type: string; coordinates: any } | null;
+    bbox?: [number, number, number, number] | null;
 }
 
+
 const ENDPOINT = '/api/property';
+
+/** Aerial tile URL — proxied so the LINZ key never reaches the browser. */
+export function tileUrl(z: number, x: number, y: number): string {
+    return `${ENDPOINT}?mode=tile&z=${z}&x=${x}&y=${y}`;
+}
+
 
 async function request<T>(params: Record<string, string>): Promise<T> {
     const url = `${ENDPOINT}?${new URLSearchParams(params)}`;

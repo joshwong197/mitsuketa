@@ -4,6 +4,7 @@
 //   GET  /api/property?mode=address&q=&ref=[&address_id=]
 //   GET  /api/property?mode=owner&q=&ref=
 //   GET  /api/property?mode=title&title_no=&ref=
+//   GET  /api/property?mode=tile&z=&x=&y=
 //   POST /api/property?mode=logout
 //
 // This endpoint returns RESTRICTED personal data — the names of registered
@@ -24,6 +25,13 @@ import { add } from '../utils/audit.js';
 import {
     LDSClient, searchAddress, searchOwner, titleReport,
 } from '../utils/lds.js';
+
+// LINZ Basemaps aerial imagery, CC BY 4.0. Proxied rather than hit from the
+// browser for the same reason as every other LINZ call: the key stays here.
+// Basemaps issues its own key; LINZ_BASEMAPS_KEY is preferred and LINZ_API_KEY
+// is the fallback, so a deployment with one key still renders a map.
+const BASEMAPS = 'https://basemaps.linz.govt.nz/v1/tiles/aerial';
+const TILE_MAX_ZOOM = 22;
 
 const COOKIE = 'mitsuketa_property';
 const SESSION_HOURS = 12;
@@ -149,6 +157,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (req.method !== 'GET') return res.status(405).json({ error: 'GET required' });
+
+    // Aerial tiles sit above the reference gate on purpose. A tile is imagery,
+    // not a register search — it discloses nothing about a person and there is
+    // nothing to account for, so requiring a matter reference per tile would be
+    // noise in the audit log and would block the map on the report the search
+    // already recorded.
+    if (mode === 'tile') {
+        const z = Number(req.query.z);
+        const x = Number(req.query.x);
+        const y = Number(req.query.y);
+        const span = 2 ** z;
+        const sane = [z, x, y].every(Number.isInteger)
+            && z >= 0 && z <= TILE_MAX_ZOOM
+            && x >= 0 && x < span && y >= 0 && y < span;
+        if (!sane) return res.status(400).json({ error: 'bad_tile' });
+
+        const key = process.env.LINZ_BASEMAPS_KEY || process.env.LINZ_API_KEY || '';
+        const upstream = await fetch(
+            `${BASEMAPS}/3857/${z}/${x}/${y}.webp?api=${encodeURIComponent(key)}`);
+        if (!upstream.ok) {
+            // A missing tile is normal at the edge of coverage; say so
+            // quietly rather than failing the whole report.
+            return res.status(upstream.status === 404 ? 404 : 502)
+                .json({ error: 'tile_unavailable' });
+        }
+        // Aerial imagery is immutable per tile, and it is not personal data
+        // — but it is only served to a signed-in session, so the cache stays
+        // private to the browser that asked.
+        res.setHeader('Content-Type', upstream.headers.get('content-type') ?? 'image/webp');
+        res.setHeader('Cache-Control', 'private, max-age=86400');
+        return res.status(200).send(Buffer.from(await upstream.arrayBuffer()));
+    }
 
     // The reference is the accountability record — a shared credential cannot
     // say who searched, so it must at least say what for.

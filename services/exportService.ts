@@ -9,6 +9,8 @@ import {
     buildTitleView, closedVerb, formatDate, markFor, yearOf,
     type TitleReportData, type TitleView,
 } from '../utils/titleReport';
+import { ringsToPaths, scaleBar, tileGrid } from '../utils/tiles';
+import { tileUrl } from './propertyService';
 
 const esc = (s: unknown): string =>
     String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -358,10 +360,69 @@ export function buildPersonReportHtml(opts: {
 // deliberately unfiltered: whatever the screen is showing, the document carries
 // the full memorial set, because a filtered report is a misleading record.
 
+/**
+ * The parcel map, rendered to a standalone SVG with its aerial tiles inlined as
+ * data URIs — the export has to survive being emailed, so it cannot reference
+ * /api/property for imagery. Tiles that fail are simply omitted; the outline and
+ * the rest of the mosaic still read.
+ */
+async function buildMapSvg(report: TitleReportData & {
+    geometry?: { type: string; coordinates: any } | null;
+    bbox?: [number, number, number, number] | null;
+}): Promise<string> {
+    const { geometry, bbox } = report;
+    if (!geometry || !bbox) return '';
+
+    const width = 640;
+    const height = 300;
+    const grid = tileGrid(bbox, width, height);
+    const paths = ringsToPaths(geometry, grid);
+    const bar = scaleBar((bbox[1] + bbox[3]) / 2, grid.z);
+
+    const images = await Promise.all(grid.tiles.map(async t => {
+        try {
+            const resp = await fetch(tileUrl(t.z, t.x, t.y), { credentials: 'same-origin' });
+            if (!resp.ok) return '';
+            const blob = await resp.blob();
+            const data = await new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(String(reader.result));
+                reader.onerror = () => reject(reader.error);
+                reader.readAsDataURL(blob);
+            });
+            return `<image x="${t.left}" y="${t.top}" width="256" height="256" href="${esc(data)}"/>`;
+        } catch {
+            return '';
+        }
+    }));
+
+    if (images.every(i => !i)) return '';
+
+    return `<figure class="map">
+  <svg viewBox="0 0 ${width} ${height}" width="100%" preserveAspectRatio="none" role="img"
+       aria-label="Title boundary on aerial imagery">
+    <rect width="${width}" height="${height}" fill="#e9e6e0"/>
+    ${images.join('')}
+    ${paths.map(d => `<path d="${d}" fill="none" stroke="#f3f1ed" stroke-width="4.5" opacity=".65"/>
+    <path d="${d}" fill="#2f3f6b" fill-opacity=".14" stroke="#2f3f6b" stroke-width="2" stroke-linejoin="round"/>`).join('')}
+    <g transform="translate(12 ${height - 20})">
+      <rect x="-4" y="-11" width="${bar.px + 52}" height="22" fill="#f3f1ed" opacity=".82"/>
+      <path d="M0,-4 L0,3 M0,0 L${bar.px},0 M${bar.px},-4 L${bar.px},3" stroke="#2e2b26" stroke-width="1.2" fill="none"/>
+      <text x="${bar.px + 7}" y="4" fill="#2e2b26"
+            style="font-family:'Cascadia Mono',Consolas,ui-monospace,monospace;font-size:11px">${bar.metres} m</text>
+    </g>
+  </svg>
+  <figcaption>Title boundary over aerial imagery ·
+    <a href="https://basemaps.linz.govt.nz/">LINZ Basemaps</a> CC BY 4.0.
+    Imagery date varies by region and may predate recent works.</figcaption>
+</figure>`;
+}
+
 export async function downloadTitleReportHtml(report: TitleReportData): Promise<void> {
     const now = new Date();
     const view = buildTitleView(report);
-    const html = buildTitleReportHtml(view, now);
+    const map = await buildMapSvg(report);
+    const html = buildTitleReportHtml(view, now, map);
     downloadHtml(html, `mitsuketa-title-${safeName(view.titleNo)}-${now.toISOString().split('T')[0]}.html`);
 }
 
@@ -381,7 +442,7 @@ const mark = (e: MemorialEvent): string => {
 
 
 // Pure — also used to preview the report outside the app
-export function buildTitleReportHtml(view: TitleView, now: Date): string {
+export function buildTitleReportHtml(view: TitleView, now: Date, mapSvg = ''): string {
     const isLive = (view.status ?? '').toLowerCase().startsWith('live');
 
     const eventRow = (e: MemorialEvent) => `
@@ -507,6 +568,10 @@ dt:first-of-type,dt:first-of-type + dd{border-top:none}
 .ev-year span{position:relative;background:var(--paper);padding-right:12px}
 .ev-year + .ev{border-top:none}
 .hint{font-size:11.5px;color:var(--ink-pale);margin:-4px 0 8px;max-width:64ch}
+.map{margin:0}
+.map svg{display:block;border:1px solid var(--rule);background:#e9e6e0}
+.map figcaption{font-size:10.5px;color:var(--ink-pale);margin-top:5px;line-height:1.5}
+.map a{color:inherit}
 .colophon{font-size:11px;line-height:1.65;color:var(--ink-pale);margin-top:40px;
  border-top:1px solid var(--ink-wash);padding-top:14px;max-width:78ch}
 .colophon em{font-family:"Shippori Mincho","Yu Mincho",serif;font-style:normal;letter-spacing:.18em;
@@ -541,6 +606,8 @@ dt:first-of-type,dt:first-of-type + dd{border-top:none}
 <div class="rule2"></div>
 
 <div class="body">
+${mapSvg ? section('地図', 'Parcel', '', mapSvg) : ''}
+
 ${section('登記', 'Register detail', '', `<dl>${view.facts.map(f =>
     `<dt>${esc(f.label)}</dt><dd${f.mono ? ' class="mono"' : ''}>${esc(f.value)}</dd>`).join('')}</dl>`)}
 

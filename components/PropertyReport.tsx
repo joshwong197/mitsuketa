@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { ArrowLeft, Download } from 'lucide-react';
 import { PropertyStyles } from './PropertyStyles';
+import { TitleMap } from './TitleMap';
 import type { TitleReport } from '../services/propertyService.js';
 import { heldFor, type MemorialEvent } from '../utils/memorials.js';
 import {
@@ -279,6 +280,12 @@ export const PropertyReport: React.FC<PropertyReportProps> = ({
             <div style={{ borderTop: '1px solid var(--ink)', marginBottom: 30 }} />
 
             <div className="doc-body">
+                {report.bbox && report.geometry && (
+                    <Section mark="地図" title="Parcel">
+                        <TitleMap geometry={report.geometry} bbox={report.bbox} />
+                    </Section>
+                )}
+
                 <Section mark="登記" title="Register detail">
                     <dl className="ledger">
                         {view.facts.map(f => (

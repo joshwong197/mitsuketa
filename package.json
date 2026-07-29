@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "property": "node --env-file=.env utils/property.cli.ts",
     "check:memorials": "node utils/memorials.check.ts",
+    "check:tiles": "node utils/tiles.check.ts",
     "check:lds": "node utils/lds.check.ts",
     "check": "npm run check:memorials && npm run check:lds",
     "build:graph-bundle": "esbuild mcp/templates/graph-bundle.entry.ts --bundle --format=iife --minify --target=es2020 --outfile=mcp/templates/graph-bundle.js --log-level=info",
