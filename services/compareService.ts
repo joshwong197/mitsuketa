@@ -103,20 +103,48 @@ const makeEdge = (
   isCeased = false,
   roleKind?: 'shareholder' | 'director' | 'both'
 ): GraphEdge => ({
-  // Suffix by role so the same person can have a distinct shareholder edge AND
-  // a distinct director edge to the same company (two lines, not merged) —
-  // mirrors services/apiService.ts addEdge.
-  id: roleKind && roleKind !== 'both' ? `e-${source}-${target}-${roleKind}` : `e-${source}-${target}`,
+  id: `e-${source}-${target}`,
   source,
   target,
   data: { percentage: 0, label, relationshipType, isCeased, roleKind },
   style: isCeased
     ? { stroke: 'var(--ink-wash)', strokeWidth: 1.4, strokeDasharray: '6 5', opacity: 0.75 }
-    : roleKind === 'director'
+    : roleKind === 'director' || roleKind === 'both'
       ? { stroke: 'var(--ink-mid)', strokeDasharray: '5 4' }
       : { stroke: 'var(--ink-mid)' },
   markerEnd: 'arrowclosed',
 });
+
+// Combines a shareholder edge label and a director edge label for the same
+// person/company pair into one — mirrors apiService.ts mergeRoleEdgeLabels.
+const mergeRoleEdgeLabels = (a: string, b: string): string => {
+  const pct = a.match(/\((\d+)%\)/) || b.match(/\((\d+)%\)/);
+  return `▼ Director & Shareholder${pct ? ` (${pct[1]}%)` : ''}`;
+};
+
+/**
+ * Merges a shareholder Neighbor and a director Neighbor to the SAME node
+ * (person→company or company→company) into one 'both' edge. Two edges
+ * between the same node pair render as coincident, illegible lines on a real
+ * layout (both nodes have exactly one handle per side) — confirmed against a
+ * live chart — so this collapses them before they ever reach the graph.
+ */
+const mergeRoleNeighbors = (neighbors: Neighbor[]): Neighbor[] => {
+  const byNodeId = new Map<string, Neighbor>();
+  for (const n of neighbors) {
+    const existing = byNodeId.get(n.node.id);
+    if (existing && existing.edge.data?.roleKind && n.edge.data?.roleKind && existing.edge.data.roleKind !== n.edge.data.roleKind) {
+      existing.edge.data.roleKind = 'both';
+      existing.edge.data.label = mergeRoleEdgeLabels(existing.edge.data.label, n.edge.data.label);
+      if (!existing.edge.data.isCeased && !n.edge.data.isCeased) {
+        existing.edge.style = { stroke: 'var(--ink-mid)', strokeDasharray: '5 4' };
+      }
+      continue;
+    }
+    byNodeId.set(n.node.id, n);
+  }
+  return Array.from(byNodeId.values());
+};
 
 // Mirrors the strict-match normalization at apiService.ts:514 — the Roles API
 // fuzzy-matches aggressively, so downstream hits must be verified by name/NZBN.
@@ -241,7 +269,7 @@ export async function findConnection(
       }
     }
 
-    return neighbors;
+    return mergeRoleNeighbors(neighbors);
   };
 
   /**

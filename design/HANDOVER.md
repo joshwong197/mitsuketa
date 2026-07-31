@@ -72,8 +72,12 @@ while fixing it: the old code's `if (this.nodes.has(holderId)) continue` skipped
 *edge* too whenever the node already existed — with a stable id that meant a person's
 second, third, etc. shareholding would silently vanish. Now only the node-add is
 idempotent; every edge is still attempted. Same-person, same-company dual roles (director
-AND shareholder of one company) are drawn as two distinct edges (id carries a role
-suffix), not merged — see `utils/personRoles.ts` for the node-level rollup this feeds.
+AND shareholder of one company) were first drawn as two distinct edges, but that produced
+coincident, illegible overlapping lines on a real layout (both node types have exactly one
+handle per side) — confirmed against a live chart. Fixed to merge into one `roleKind: 'both'`
+edge labelled "▼ Director & Shareholder" instead (`mergeRoleEdgeLabels` in `apiService.ts`,
+mirrored in `compareService.ts`). See `utils/personRoles.ts` for the separate node-level
+rollup (union of roles across the whole chart) this feeds.
 
 Original report, kept for context:
 

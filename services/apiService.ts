@@ -5,6 +5,15 @@ import { computePersonRoleFlags } from '../utils/personRoles.js';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Combines a shareholder edge label and a director edge label for the same
+// person/company pair into one — e.g. "▼ Shareholder (30%)" + "▼ Director" →
+// "▼ Director & Shareholder (30%)". Order-independent; keeps whichever
+// percentage either label carried.
+function mergeRoleEdgeLabels(a: string, b: string): string {
+    const pct = a.match(/\((\d+)%\)/) || b.match(/\((\d+)%\)/);
+    return `▼ Director & Shareholder${pct ? ` (${pct[1]}%)` : ''}`;
+}
+
 // PERFORMANCE OPTIMIZATION FEATURE FLAG
 // Set to false to revert to legacy full endpoint fetching (slower but more data)
 // Set to true to use lightweight endpoints (70-80% faster for current graphs)
@@ -733,12 +742,25 @@ class OrgSpider {
     }
 
     private addEdge(source: string, target: string, label: string, type: 'parent' | 'subsidiary' | 'sibling' | 'common', isCeased: boolean = false, roleKind?: 'shareholder' | 'director') {
-        // Person edges carry the role in the id so the SAME person can have both a
-        // shareholder edge AND a director edge to the SAME company (drawn as two
-        // distinct lines, per design/HANDOVER.md §5 — not merged into one edge,
-        // since the point is to show which relationship is which).
-        const id = roleKind ? `e-${source}-${target}-${roleKind}` : `e-${source}-${target}`;
-        if (this.edges.some(e => e.id === id)) return;
+        const id = `e-${source}-${target}`;
+        const existing = this.edges.find(e => e.id === id);
+        if (existing) {
+            // Same person, same company, already has an edge from an earlier call
+            // (e.g. shareholder AND director of the one company) — merge into a
+            // single 'both' edge rather than adding a second edge on the exact
+            // same node pair. Both nodes only ever have one handle per side, so a
+            // real layout draws two same-pair edges as coincident lines with
+            // overlapping, illegible labels — confirmed against a live chart.
+            const existingKind = existing.data?.roleKind;
+            if (roleKind && existingKind && existingKind !== roleKind) {
+                existing.data!.roleKind = 'both';
+                existing.data!.label = mergeRoleEdgeLabels(existing.data!.label, label);
+                if (!existing.data!.isCeased && !isCeased) {
+                    existing.style = { stroke: 'var(--ink-mid)', strokeWidth: 1.6, strokeDasharray: '5 4', opacity: 0.8 };
+                }
+            }
+            return;
+        }
 
         // Status ramp edge dye: current roles solid ink-mid, ceased roles
         // dashed ink-wash (App.tsx restyles by depth, but exports/snapshots
