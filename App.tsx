@@ -226,8 +226,6 @@ function App() {
 
   // Network Console State
   const [apiLogs, setApiLogs] = useState<LogEntry[]>([]);
-  const [includeInactive, setIncludeInactive] = useState(false);
-  const [showInactiveWarning, setShowInactiveWarning] = useState(false);
 
   // Context Menu State
   const [contextMenu, setContextMenu] = useState<{
@@ -725,7 +723,7 @@ function App() {
     setCompareProgress({ hop: 1, entitiesExamined: 0, apiCalls: 0 });
 
     try {
-      const result = await findConnection(a, b, { ...config, includeInactive }, {
+      const result = await findConnection(a, b, { ...config, includeInactive: true }, {
         maxHops,
         onProgress: setCompareProgress,
         onLog: handleLog,
@@ -1098,7 +1096,7 @@ function App() {
       // Pass debug callback and logger
       const graph = await generateOrgChart(
         entity.nzbn,
-        { ...config, includeInactive },
+        { ...config, includeInactive: true },
         (type, data, message) => {
           setDebugData(prev => {
             if (type === 'audit') {
@@ -1139,7 +1137,7 @@ function App() {
         // Enrich nodes with insolvency/admin status BEFORE rendering
         // so all badges (PREV: IN LIQUIDATION, external admin, Removed, etc.) appear instantly
         console.log('🔍 Enriching nodes with NZBN status data before render...');
-        const enrichedNodes = await enrichGraphNodes(processedNodes, { ...config, includeInactive }, handleLog);
+        const enrichedNodes = await enrichGraphNodes(processedNodes, { ...config, includeInactive: true }, handleLog);
         console.log('✅ Enrichment complete, rendering graph with full status data');
 
         // Assign ink-depth (undirected BFS from target) before layout so edges + nodes tier
@@ -1521,7 +1519,7 @@ function App() {
     try {
       // Deep-clone the saved nodes so enrichment never mutates the save point.
       const clone: GraphNode[] = snap.nodes.map(n => ({ ...n, data: { ...n.data } }));
-      const freshNodes = await enrichGraphNodes(clone, { ...config, includeInactive }, handleLog);
+      const freshNodes = await enrichGraphNodes(clone, { ...config, includeInactive: true }, handleLog);
       const diffs = diffStatuses(snap.nodes, freshNodes);
       setNodeDiffs(diffs);
       setLastCheckedSavePointName(snap.name);
@@ -2195,10 +2193,6 @@ function App() {
                   compareNoLink={compareNoLink}
                   onCompareReset={() => setCompareNoLink(null)}
                   fetchCompanySuggestions={fetchCompareSuggestions}
-                  includeInactive={includeInactive}
-                  onIncludeInactiveToggle={(checked) => {
-                    if (checked) { setShowInactiveWarning(true); } else { setIncludeInactive(false); }
-                  }}
                   startOnProperty={activeMainTab === 'property'}
                   onPropertyFaceChange={(on) => {
                     // Keep the tab bar in step with the mode line: entering 地
@@ -2364,40 +2358,6 @@ function App() {
               />
             )}
 
-            {/* Inactive Entity Warning Dialog */}
-            {showInactiveWarning && (
-              <>
-                <div className="fixed inset-0 bg-black/50 z-50" onClick={() => setShowInactiveWarning(false)} />
-                <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-paper border border-rule p-6 max-w-md">
-                  <div className="flex items-start gap-3 mb-4">
-                    <AlertTriangle className="text-amber shrink-0 mt-1" size={24} strokeWidth={1.5} />
-                    <div>
-                      <h3 className="text-ink mb-2" style={{ fontFamily: 'var(--serif)', fontWeight: 600, fontSize: 17 }}>Include inactive entities?</h3>
-                      <p className="text-sm text-ink-mid">
-                        This adds struck-off and removed entities to your searches. It makes a few more API calls, so results may take a little longer.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-3 justify-end">
-                    <button
-                      onClick={() => setShowInactiveWarning(false)}
-                      className="px-4 py-2 text-sm font-medium text-ink border border-rule hover:border-ink-mid transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => {
-                        setIncludeInactive(true);
-                        setShowInactiveWarning(false);
-                      }}
-                      className="px-4 py-2 text-sm font-medium text-paper bg-ink hover:bg-accent hover:text-accent-ink transition-colors"
-                    >
-                      Proceed
-                    </button>
-                  </div>
-                </div>
-              </>
-            )}
           </div>
 
         </div>

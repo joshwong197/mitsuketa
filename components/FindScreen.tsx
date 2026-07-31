@@ -27,8 +27,6 @@ export interface FindScreenProps {
   compareNoLink: { hops: number; examined: number } | null;
   onCompareReset: () => void;
   fetchCompanySuggestions: (q: string) => Promise<EntitySearchResultItem[]>;
-  includeInactive: boolean;
-  onIncludeInactiveToggle: (checked: boolean) => void;
   /** Open straight on the 地 face — used when returning from a property tab. */
   startOnProperty?: boolean;
   /** Keeps the app's main tab in step with the 地 face of the mode line. */
@@ -203,8 +201,6 @@ export const FindScreen: React.FC<FindScreenProps> = ({
   compareNoLink,
   onCompareReset,
   fetchCompanySuggestions,
-  includeInactive,
-  onIncludeInactiveToggle,
   startOnProperty = false,
   onPropertyFaceChange,
   onOpenPropertyReport,
@@ -419,22 +415,6 @@ export const FindScreen: React.FC<FindScreenProps> = ({
             </span>
           </button>
         </div>
-        )}
-
-        {/* Include inactive/removed entities — off by default (fewer API calls) */}
-        {findFace && (
-          <label className="flex items-center gap-2 mt-3 cursor-pointer select-none text-left">
-            <input
-              type="checkbox"
-              checked={includeInactive}
-              onChange={(e) => onIncludeInactiveToggle(e.target.checked)}
-              className="w-4 h-4 accent-[color:var(--accent)] cursor-pointer"
-            />
-            <span className="text-ink-mid" style={{ fontSize: 12.5 }}>
-              Include inactive &amp; removed entities
-              <span className="text-ink-pale" style={{ fontSize: 12.5 }}> — slower, adds struck-off parents and subsidiaries</span>
-            </span>
-          </label>
         )}
 
         {/* Suggestions */}

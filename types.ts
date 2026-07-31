@@ -11,6 +11,11 @@ export interface ApiConfig {
   companiesKey: string;
   disqualifiedDirectorsKey: string;
   insolvencyKey: string; // Insolvency Register API Key
+  /**
+   * Always true. Inactive and removed entities are part of the answer — a
+   * struck-off parent is often the most interesting node on a chart — so the
+   * crawl no longer offers to leave them out.
+   */
   includeInactive?: boolean;
 }
 
