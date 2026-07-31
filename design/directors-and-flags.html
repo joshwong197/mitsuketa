@@ -92,6 +92,7 @@ ol.dec li{margin-bottom:12px;font-size:13.5px}
 .pnode .seal b{font-family:var(--serif);font-size:12px;font-weight:400;color:var(--accent)}
 .pnode .nm{font-size:12.5px;font-weight:700;margin:0}
 .pnode .role{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-pale);margin:0}
+.rk{font-family:var(--serif);font-size:11px;letter-spacing:0;color:var(--ink-mid);margin-right:4px}
 .pnode.crit{border-color:var(--crit);border-width:2px;padding:7px 17px 7px 8px}
 .pnode.crit .seal{border-color:var(--crit)}
 .pnode.crit .seal::after{border-color:oklch(from var(--crit) l c h / .35)}
@@ -144,8 +145,8 @@ ol.dec li{margin-bottom:12px;font-size:13.5px}
 .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
 
 /* timeline band */
-.band{position:relative;height:56px;margin:10px 0 4px}
-.band svg{width:100%;height:56px;display:block}
+.band{position:relative;height:74px;margin:10px 0 4px}
+.band svg{width:100%;height:74px;display:block}
 .bandcap{font-family:var(--mono);font-size:9.5px;color:var(--ink-pale);letter-spacing:.05em}
 
 .sortrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:14px;
@@ -161,6 +162,14 @@ ol.dec li{margin-bottom:12px;font-size:13.5px}
 .fold{border-top:1px dashed var(--crit);margin:0;position:relative;height:0}
 .fold span{position:absolute;right:0;top:-9px;background:var(--paper);padding-left:8px;
   font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--crit)}
+.tbl2{overflow-x:auto;border:1px solid var(--rule);margin:16px 0;max-width:78ch}
+.tbl2 table{border-collapse:collapse;width:100%;min-width:520px;font-size:12.5px}
+.tbl2 th,.tbl2 td{text-align:left;padding:8px 13px;border-top:1px solid var(--rule);vertical-align:top}
+.tbl2 thead th{border-top:0;font-family:var(--mono);font-size:9.5px;text-transform:uppercase;
+  letter-spacing:.09em;color:var(--ink-pale);font-weight:400;background:var(--paper2)}
+.tbl2 .mono{font-family:var(--mono);font-size:11px}
+.tbl2 .ok{color:var(--green);font-family:var(--mono);font-size:10.5px;text-transform:uppercase}
+.tbl2 .no{color:var(--amber);font-family:var(--mono);font-size:10.5px;text-transform:uppercase}
 </style>
 
 <div class="wrap">
@@ -215,6 +224,7 @@ screenshot. The <em>treatments</em> are faithful.</p>
       <path d="M258,300 C360,300 440,268 556,254" stroke="var(--ink-mid)" stroke-width="1.6" stroke-dasharray="5 4" opacity=".8" fill="none"/>
       <!-- Mani also directs Land Acquisitions #2 -->
       <path d="M150,254 C110,340 200,430 468,404" stroke="var(--ink-wash)" stroke-width="1.4" stroke-dasharray="6 5" opacity=".75" fill="none"/>
+      <path d="M258,386 C380,386 470,300 556,268" stroke="var(--ink)" stroke-width="1.6" opacity=".7" fill="none"/>
     </svg>
 
     <div class="toolbar">
@@ -260,7 +270,7 @@ screenshot. The <em>treatments</em> are faithful.</p>
       <span class="seal"><b>印</b></span>
       <div>
         <p class="nm">Ritesh Mani</p>
-        <div class="chiprow" style="margin-top:1px"><span class="k c">紅</span><span class="lbl c">2 INSOLVENCIES · MATCHED</span></div>
+        <div class="chiprow" style="margin-top:1px"><span class="rk">締</span><span class="k c">紅</span><span class="lbl c">2 INSOLVENCIES</span></div>
       </div>
     </div>
 
@@ -268,7 +278,15 @@ screenshot. The <em>treatments</em> are faithful.</p>
       <span class="seal"><b>印</b></span>
       <div>
         <p class="nm">Anjali Mani</p>
-        <p class="role">Director</p>
+        <p class="role"><span class="rk">締</span>Director</p>
+      </div>
+    </div>
+
+    <div class="pnode" style="left:24px;top:368px">
+      <span class="seal"><b>印</b></span>
+      <div>
+        <p class="nm">Anjali Mani</p>
+        <p class="role"><span class="rk">株</span>Shareholder · 50%</p>
       </div>
     </div>
   </div>
@@ -350,32 +368,43 @@ isn't aggressive enough. Here's today, cropped where your fold was:</p>
       </button>
       <div class="strip-body">
         <div class="band">
-          <svg viewBox="0 0 900 56" preserveAspectRatio="none" aria-label="Insolvency dates against directorship span">
-            <line x1="10" y1="40" x2="890" y2="40" stroke="var(--rule)" stroke-width="1"/>
-            <!-- directorship density -->
-            <rect x="120" y="30" width="700" height="7" fill="var(--accent)" opacity=".18"/>
-            <!-- adjudications -->
-            <line x1="196" y1="16" x2="196" y2="46" stroke="var(--crit)" stroke-width="2"/>
-            <line x1="520" y1="16" x2="520" y2="46" stroke="var(--crit)" stroke-width="2"/>
-            <text x="196" y="12" fill="var(--crit)" text-anchor="middle" style="font-family:var(--mono);font-size:10px">2002</text>
-            <text x="520" y="12" fill="var(--crit)" text-anchor="middle" style="font-family:var(--mono);font-size:10px">2011</text>
-            <text x="10" y="54" fill="var(--ink-pale)" style="font-family:var(--mono);font-size:9px">1998</text>
-            <text x="880" y="54" fill="var(--ink-pale)" text-anchor="end" style="font-family:var(--mono);font-size:9px">2026</text>
-            <text x="470" y="54" fill="var(--ink-pale)" text-anchor="middle" style="font-family:var(--mono);font-size:9px">directorships held</text>
+          <svg viewBox="0 0 900 74" preserveAspectRatio="none" aria-label="Bankruptcy periods against the span of directorships held">
+            <defs>
+              <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                <line x1="0" y1="0" x2="0" y2="6" stroke="var(--crit)" stroke-width="2" opacity=".5"/>
+              </pattern>
+            </defs>
+            <!-- directorships held -->
+            <rect x="70" y="20" width="800" height="9" fill="var(--accent)" opacity=".18"/>
+            <text x="470" y="16" fill="var(--ink-pale)" text-anchor="middle" style="font-family:var(--mono);font-size:9px">directorships held</text>
+            <!-- bankruptcy 1: adjudicated 16 Jan 2002, discharged 2005 -->
+            <rect x="136" y="34" width="94" height="10" fill="var(--crit)" opacity=".9"/>
+            <rect x="230" y="34" width="30" height="10" fill="url(#hatch)"/>
+            <text x="136" y="58" fill="var(--crit)" style="font-family:var(--mono);font-size:9.5px">2002 — 2005</text>
+            <!-- bankruptcy 2: adjudicated 18 Aug 2011, discharged 2014 -->
+            <rect x="419" y="34" width="94" height="10" fill="var(--crit)" opacity=".9"/>
+            <rect x="513" y="34" width="30" height="10" fill="url(#hatch)"/>
+            <text x="419" y="58" fill="var(--crit)" style="font-family:var(--mono);font-size:9.5px">2011 — 2014</text>
+            <!-- ruler -->
+            <line x1="10" y1="68" x2="890" y2="68" stroke="var(--rule)" stroke-width="1"/>
+            <text x="10" y="66" fill="var(--ink-pale)" style="font-family:var(--mono);font-size:9px">1998</text>
+            <text x="880" y="66" fill="var(--ink-pale)" text-anchor="end" style="font-family:var(--mono);font-size:9px">2026</text>
           </svg>
         </div>
         <div class="grp">
           <b>MANI, Ritesh — Creditor Application</b>
           <dl>
             <dt>Adjudicated</dt><dd class="mono">16 January 2002</dd>
-            <dt>Status</dt><dd>(Conditional) Discharged</dd>
+            <dt>Discharged</dt><dd class="mono">16 January 2005 · conditional</dd>
+            <dt>Conditions expire</dt><dd class="mono">16 January 2006</dd>
           </dl>
         </div>
         <div class="grp">
           <b>MANI, Ritesh — Creditor Application</b>
           <dl>
             <dt>Adjudicated</dt><dd class="mono">18 August 2011</dd>
-            <dt>Status</dt><dd>(Conditional) Discharged</dd>
+            <dt>Discharged</dt><dd class="mono">18 August 2014 · conditional</dd>
+            <dt>Conditions expire</dt><dd class="mono">18 August 2015</dd>
           </dl>
         </div>
       </div>
@@ -413,6 +442,71 @@ collapse it and watch the companies rise.</p>
   checks · clear" rather than a full card announcing nothing.</li>
 </ul>
 
+<h2><span class="kj">期</span>The dates check out — and there are more than two</h2>
+
+<p>You asked whether the register exposes both ends. It does, and the official schema in
+<code>docs/insolvency-trustee-services.json</code> carries four more fields we currently declare
+nowhere:</p>
+
+<div class="tbl2">
+  <table>
+    <thead><tr><th>Field</th><th>What it gives us</th><th>Read today?</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">adjudicationOrLiquidationDate</td><td>Start of the bankruptcy</td><td class="ok">yes</td></tr>
+      <tr><td class="mono">dischargeOrCompletionDate</td><td>End of it</td><td class="ok">yes</td></tr>
+      <tr><td class="mono">dischargeOrCompletionType</td><td>Reason for discharge</td><td class="no">no</td></tr>
+      <tr><td class="mono">dischargeConditionExpiryDate</td><td>When discharge conditions lapse — this is what "(conditional) discharged" is pointing at</td><td class="no">no</td></tr>
+      <tr><td class="mono">dischargeSuspended</td><td>Boolean. A suspended discharge means still bankrupt</td><td class="no">no</td></tr>
+      <tr><td class="mono">annulmentDate</td><td>Bankruptcy annulled rather than discharged</td><td class="no">no</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>So the timeline becomes a <strong>span, not a point</strong> — I've redrawn it above. Solid bar
+is the bankruptcy period, hatched tail is the conditional-discharge window from
+<code>dischargeConditionExpiryDate</code>.</p>
+
+<div class="q fix">
+  <p><strong>And that changes what the timeline is for.</strong> Two dots told you when something
+  happened. Two bars laid against the directorship band show whether the person held directorships
+  <em>during</em> a bankruptcy — and an undischarged bankrupt is prohibited from managing a company
+  in New Zealand. On this record both periods fall inside the band.</p>
+  <p>The app should state that as a mechanical overlap and nothing more — "2 directorships held
+  during a bankruptcy period" — never as a conclusion that anything was breached. Dates overlap for
+  innocent reasons, the register lags, and that call is the reader's. But it's exactly the kind of
+  thing a person would otherwise have to work out on paper, and we already hold every date needed
+  to compute it.</p>
+</div>
+
+<p><code>dischargeSuspended</code> is worth wiring on its own merits: a suspended discharge means
+the person is still bankrupt regardless of what <code>insolvencyStatus</code> reads, which is
+precisely the case where an amber "historic" flag would be wrong.</p>
+
+<h2><span class="kj">株</span>Different kanji for the two roles</h2>
+
+<p>Agreed, and it costs nothing since the pill already has a role line. Taking the key character of
+each register's own term:</p>
+
+<div class="tbl2">
+  <table>
+    <thead><tr><th>Mark</th><th>Role</th><th>From</th></tr></thead>
+    <tbody>
+      <tr><td><span class="rk" style="font-size:16px">株</span></td><td>Shareholder</td>
+          <td>株主 <em>kabunushi</em> — shareholder. The character means share/stock outright.</td></tr>
+      <tr><td><span class="rk" style="font-size:16px">締</span></td><td>Director</td>
+          <td>取締役 <em>torishimariyaku</em> — company director.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>I deliberately avoided <strong>役</strong>, which would be the obvious pick from 役員, because
+the property report already uses it for easements (地役権). One glyph meaning two unrelated things
+in one app is the kind of thing that reads fine on the day and confuses everyone later.</p>
+
+<p>Placement: the glyph sits on the role line rather than replacing 印 in the ring, so the inkan
+stays the person mark and the role reads as an attribute. On a flagged pill the role glyph survives
+next to the flag — Ritesh Mani above shows 締 紅 together, so you don't lose the role to the alert.</p>
+
 <h2><span class="kj">決</span>Decisions</h2>
 
 <ol class="dec">
@@ -424,7 +518,11 @@ collapse it and watch the companies rise.</p>
   shareholders? Following makes the chart far more revealing and considerably bigger.</li>
   <li><b>Does the summary strip expand automatically when there's a <em>current</em> insolvency?</b>
   My instinct is yes — collapsed for historic, open for current, since that's the case where you
-  want the detail without asking.</li>
+  want the detail without asking. <code>dischargeSuspended</code> should count as current.</li>
+  <li><b>Does the overlap count get stated?</b> "2 directorships held during a bankruptcy period"
+  on the summary line, computed from dates we already hold. I think yes, phrased mechanically —
+  but it is the single most consequential sentence the app would ever generate, so it is your
+  call rather than mine.</li>
 </ol>
 
 </div>
