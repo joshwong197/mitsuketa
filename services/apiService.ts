@@ -36,7 +36,7 @@ class OrgSpider {
     private logger?: LoggerCallback;
 
     // OPTIMIZATION: Entity cache to avoid duplicate fetches
-    private entityCache: Map<string, { name: string, status: string, sourceRegisterUniqueId?: string, timestamp: number }>;
+    private entityCache: Map<string, { name: string, status: string, sourceRegisterUniqueId?: string, roles?: NZBNFullEntity['roles'], timestamp: number }>;
 
     // OPTIMIZATION: Request timing for smart rate limiting
     private requestTimes: number[];
@@ -78,7 +78,7 @@ class OrgSpider {
     }
 
     // OPTIMIZATION #3: Entity caching
-    private async getCachedOrFetch(nzbn: string, fetchFn: () => Promise<{ entityName: string, entityStatusDescription: string, sourceRegisterUniqueId?: string }>): Promise<{ entityName: string, entityStatusDescription: string, sourceRegisterUniqueId?: string }> {
+    private async getCachedOrFetch(nzbn: string, fetchFn: () => Promise<{ entityName: string, entityStatusDescription: string, sourceRegisterUniqueId?: string, roles?: NZBNFullEntity['roles'] }>): Promise<{ entityName: string, entityStatusDescription: string, sourceRegisterUniqueId?: string, roles?: NZBNFullEntity['roles'] }> {
         if (!ENABLE_ENTITY_CACHE) {
             // Fallback: Always fetch
             return await fetchFn();
@@ -91,7 +91,8 @@ class OrgSpider {
             return {
                 entityName: cached.name,
                 entityStatusDescription: cached.status,
-                sourceRegisterUniqueId: cached.sourceRegisterUniqueId
+                sourceRegisterUniqueId: cached.sourceRegisterUniqueId,
+                roles: cached.roles
             };
         }
 
@@ -101,6 +102,7 @@ class OrgSpider {
             name: result.entityName,
             status: result.entityStatusDescription,
             sourceRegisterUniqueId: result.sourceRegisterUniqueId,
+            roles: result.roles,
             timestamp: Date.now()
         });
 
@@ -352,8 +354,8 @@ class OrgSpider {
             }
         } else if (details.roles && details.roles.length > 0) {
             // Processing non-company roles (e.g. General Partners of a Limited Partnership).
-            // Director roles are skipped here — crawlDirectors() below handles every
-            // director uniformly, whether or not this entity also has shareholdings.
+            // Director roles are skipped here — drawDirectorsFromRoles() below handles
+            // every director uniformly, whether or not this entity also has shareholdings.
             for (const role of details.roles) {
                 if ((role.roleType || '').toLowerCase() === 'director') continue;
 
@@ -442,7 +444,7 @@ class OrgSpider {
         // Directors are drawn regardless of whether this entity also has
         // shareholdings — `roles` is already returned by fetchEntityDetailsFull on
         // every crawl, so this costs no additional API calls (design/HANDOVER.md §3b).
-        await this.crawlDirectors(details);
+        this.drawDirectorsFromRoles(details.roles, details.nzbn);
     }
 
     // --- Directors: drawn only, never crawled further upstream by default. ---
@@ -450,8 +452,13 @@ class OrgSpider {
     // (that would cost an extra lookup per director and could blow up a complex
     // chart); a user who wants that picture uses "Search as Individual" on the
     // node, which runs a full person search on demand.
-    private async crawlDirectors(details: NZBNFullEntity) {
-        for (const role of details.roles || []) {
+    //
+    // Shared by crawlUpstream (root + upstream parents, via the full entity fetch)
+    // AND crawlDownstream (subsidiaries, via fetchEntitySummaryLight) — both hit the
+    // same NZBN entity endpoint, so `roles` is already in hand either way; this never
+    // triggers an extra API call on its own.
+    private drawDirectorsFromRoles(roles: NZBNFullEntity['roles'] | undefined, companyNzbn: string) {
+        for (const role of roles || []) {
             if ((role.roleType || '').toLowerCase() !== 'director') continue;
             if (!role.rolePerson?.fullName && !role.rolePerson?.firstName) continue;
 
@@ -474,7 +481,7 @@ class OrgSpider {
                 position: { x: 0, y: 0 }
             });
 
-            this.addEdge(holderId, details.nzbn, '▼ Director', 'parent', roleCeased, 'director');
+            this.addEdge(holderId, companyNzbn, '▼ Director', 'parent', roleCeased, 'director');
         }
     }
 
@@ -672,6 +679,11 @@ class OrgSpider {
                         },
                         position: { x: 0, y: (depth + 1) * 200 }
                     });
+
+                    // Directors for this subsidiary too — `childSummary` came from the
+                    // same entity fetch as the status/name above, so `roles` is already
+                    // in hand at no extra API cost (see drawDirectorsFromRoles).
+                    this.drawDirectorsFromRoles(childSummary.roles, childNzbn);
 
                     // Recurse downstream (skip for mega-node trustees to avoid 900+ API calls)
                     if (!isMegaNode) {
@@ -939,9 +951,11 @@ async function fetchEntityStatusOnly(nzbn: string, config: ApiConfig, baseUrl: s
 }
 
 
-// SELECTIVE OPTIMIZATION: Summary for subsidiaries (name + status only)
+// SELECTIVE OPTIMIZATION: Summary for subsidiaries (name + status — but same
+// endpoint/payload as the full fetch, so `roles` is included at no extra cost;
+// it's what lets crawlDownstream draw directors for subsidiaries for free).
 // Uses direct primary key lookup instead of slow full-text search
-async function fetchEntitySummaryLight(nzbn: string, config: ApiConfig, baseUrl: string, logger?: LoggerCallback): Promise<{ entityName: string, entityStatusDescription: string, sourceRegisterUniqueId?: string }> {
+async function fetchEntitySummaryLight(nzbn: string, config: ApiConfig, baseUrl: string, logger?: LoggerCallback): Promise<{ entityName: string, entityStatusDescription: string, sourceRegisterUniqueId?: string, roles?: NZBNFullEntity['roles'] }> {
     try {
         const proxyPath = `${API_PATHS.nzbn}/entities/${encodeURIComponent(nzbn)}`;
         const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
@@ -958,7 +972,8 @@ async function fetchEntitySummaryLight(nzbn: string, config: ApiConfig, baseUrl:
         return {
             entityName: data.entityName,
             entityStatusDescription: data.entityStatusDescription || 'Unknown',
-            sourceRegisterUniqueId: data.sourceRegisterUniqueId || data.sourceRegisterUniqueIdentifier
+            sourceRegisterUniqueId: data.sourceRegisterUniqueId || data.sourceRegisterUniqueIdentifier,
+            roles: data.roles
         };
     } catch (e) {
         console.warn(`Summary check failed for ${nzbn}`, e);

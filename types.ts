@@ -188,6 +188,7 @@ export interface PersonCompanyResult {
   status: string;
   roleType: string; // "Director", "Shareholder", or "Director & Shareholder"
   isInactive?: boolean; // If role is inactive (resigned/removed)
+  appointmentDate?: string; // Directorship start date — feeds the directorship-coverage band
   resignationDate?: string; // If director resigned
   entityStatusCode?: number; // Company status code (80=Removed, 90=Inactive, etc.)
   // Enriched status fields (from NZBN entity lookup)

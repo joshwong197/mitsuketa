@@ -20,6 +20,139 @@ const formatDate = (dateString: string): string => {
     }
 };
 
+// Epoch ms for an API date string, or undefined if it can't be parsed.
+const parseApiDate = (dateString?: string): number | undefined => {
+    if (!dateString) return undefined;
+    const cleanDate = dateString.split('+')[0].split('-').slice(0, 3).join('-');
+    const t = new Date(cleanDate).getTime();
+    return Number.isNaN(t) ? undefined : t;
+};
+
+interface Interval {
+    start: number;
+    end: number; // open-ended (ongoing) intervals are extended to "now" before merging
+}
+
+// Sorts and merges overlapping/adjacent intervals into the minimal set that
+// covers the same ground — the directorship "coverage" band is the union of
+// every company's tenure, so a gap between two directorships still reads as
+// a gap rather than one continuous (and misleading) bar.
+const mergeIntervals = (intervals: Interval[]): Interval[] => {
+    if (intervals.length === 0) return [];
+    const sorted = [...intervals].sort((a, b) => a.start - b.start);
+    const merged: Interval[] = [{ ...sorted[0] }];
+    for (let i = 1; i < sorted.length; i++) {
+        const last = merged[merged.length - 1];
+        const cur = sorted[i];
+        if (cur.start <= last.end) {
+            last.end = Math.max(last.end, cur.end);
+        } else {
+            merged.push({ ...cur });
+        }
+    }
+    return merged;
+};
+
+/**
+ * Directorship-coverage timeline (design/HANDOVER.md §"the timeline is the
+ * creative bit"): one merged band showing every window where this person held
+ * ANY directorship, bankruptcy periods overlaid on top. Answers "was he running
+ * companies while bankrupt?" without a row per company — a Gantt-per-company
+ * shape doesn't hold up for someone with 40+ directorships.
+ *
+ * The overlap COUNT stated below the chart is computed separately, from the
+ * granular per-company appointment/resignation dates (not the merged band) —
+ * merging trades away which specific company overlapped, but the count itself
+ * should still be exact.
+ */
+const DirectorshipTimeline: React.FC<{ results: PersonCompanyResult[]; insolvencyRecords: InsolvencyRecord[] }> = ({ results, insolvencyRecords }) => {
+    const now = Date.now();
+
+    const directorships = results
+        .filter(r => r.isDirector && r.appointmentDate)
+        .map(r => ({
+            result: r,
+            start: parseApiDate(r.appointmentDate)!,
+            end: r.resignationDate ? (parseApiDate(r.resignationDate) ?? now) : now,
+        }))
+        .filter(d => Number.isFinite(d.start));
+
+    const bankruptcies = insolvencyRecords
+        .map(r => ({
+            record: r,
+            start: parseApiDate(r.adjudicationOrLiquidationDate),
+            // A suspended discharge or an outright "current" status means still
+            // bankrupt right now, regardless of a discharge date on file.
+            end: isInsolvencyRecordCurrent(r) ? now : (parseApiDate(r.dischargeOrCompletionDate) ?? now),
+            conditionExpiry: parseApiDate(r.dischargeConditionExpiryDate),
+        }))
+        .filter(b => b.start !== undefined) as Array<{ record: InsolvencyRecord; start: number; end: number; conditionExpiry?: number }>;
+
+    if (directorships.length === 0 || bankruptcies.length === 0) return null;
+
+    const coverage = mergeIntervals(directorships.map(d => ({ start: d.start, end: d.end })));
+
+    // Mechanical overlap count — from the granular per-company dates, not the
+    // merged band, so merging the visual doesn't cost accuracy in the count.
+    const overlappingCount = directorships.filter(d =>
+        bankruptcies.some(b => d.start <= b.end && b.start <= d.end)
+    ).length;
+
+    const allTimes = [...coverage.flatMap(c => [c.start, c.end]), ...bankruptcies.flatMap(b => [b.start, b.conditionExpiry ?? b.end, b.end])];
+    const rawMin = Math.min(...allTimes);
+    const rawMax = Math.max(...allTimes, now);
+    const pad = Math.max((rawMax - rawMin) * 0.03, 86400000 * 30);
+    const min = rawMin - pad;
+    const max = rawMax + pad;
+    const W = 900;
+    const x = (t: number) => ((t - min) / (max - min)) * W;
+
+    const yearLabel = (t: number) => new Date(t).getFullYear();
+
+    return (
+        <div className="mb-3">
+            <svg viewBox={`0 0 ${W} 62`} width="100%" height={62} preserveAspectRatio="none" role="img"
+                aria-label="Directorship coverage against bankruptcy periods">
+                <defs>
+                    <pattern id="ins-hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                        <line x1="0" y1="0" x2="0" y2="6" stroke="var(--crit)" strokeWidth="2" opacity=".5" />
+                    </pattern>
+                </defs>
+                {/* Directorship coverage — union of every company's tenure, gaps visible */}
+                {coverage.map((c, i) => (
+                    <rect key={i} x={x(c.start)} y={10} width={Math.max(x(c.end) - x(c.start), 1.5)} height={9} fill="var(--accent)" opacity=".22" />
+                ))}
+                <text x={0} y={7} fill="var(--ink-pale)" style={{ fontFamily: 'var(--mono)', fontSize: 9 }}>directorships held</text>
+                {/* Bankruptcy periods — solid bar, hatched tail for a conditional-discharge window */}
+                {bankruptcies.map((b, i) => (
+                    <g key={i}>
+                        <rect x={x(b.start)} y={24} width={Math.max(x(Math.min(b.conditionExpiry ?? b.end, b.end)) - x(b.start), 1.5)} height={10} fill="var(--crit)" opacity=".9" />
+                        {b.conditionExpiry && b.conditionExpiry > b.end && (
+                            <rect x={x(b.end)} y={24} width={Math.max(x(b.conditionExpiry) - x(b.end), 1.5)} height={10} fill="url(#ins-hatch)" />
+                        )}
+                        <text x={x(b.start)} y={47} fill="var(--crit)" style={{ fontFamily: 'var(--mono)', fontSize: 9.5 }}>
+                            {yearLabel(b.start)}{isInsolvencyRecordCurrent(b.record) ? ' — current' : ` — ${yearLabel(b.end)}`}
+                        </text>
+                    </g>
+                ))}
+                <line x1={0} y1={58} x2={W} y2={58} stroke="var(--rule)" strokeWidth="1" />
+                <text x={0} y={56} fill="var(--ink-pale)" style={{ fontFamily: 'var(--mono)', fontSize: 9 }}>{yearLabel(min)}</text>
+                <text x={W} y={56} textAnchor="end" fill="var(--ink-pale)" style={{ fontFamily: 'var(--mono)', fontSize: 9 }}>{yearLabel(max)}</text>
+            </svg>
+            <p className="text-ink-mid mt-1" style={{ fontSize: '11.5px' }}>
+                {overlappingCount > 0 ? (
+                    <span className="text-crit font-bold">
+                        {overlappingCount} directorship{overlappingCount === 1 ? '' : 's'} held during a bankruptcy period
+                    </span>
+                ) : (
+                    'No directorship overlapped a bankruptcy period'
+                )}
+                {' — '}derived mechanically from dates on file; not a finding that anything was breached.
+            </p>
+        </div>
+    );
+};
+
 interface PersonSearchResultsProps {
     personName: string;
     results: PersonCompanyResult[];
@@ -436,6 +569,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                             </button>
                             {insOpen && (
                                 <div className="p-3 border-t border-rule bg-paper2 space-y-3">
+                                    <DirectorshipTimeline results={results} insolvencyRecords={insolvencyRecords!} />
                                     {insolvencyRecords!.map((record, idx) => (
                                         <div key={idx} className="min-w-0">
                                             <p className="font-bold text-ink" style={{ fontSize: '13px' }}>

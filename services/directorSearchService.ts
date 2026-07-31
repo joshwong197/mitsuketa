@@ -160,6 +160,7 @@ async function processPersonSearchResults(
 
                 const isInactive = role.status === 'inactive';
                 const resignationDate = role.resignationDate;
+                const appointmentDate = isDirector ? role.appointmentDate : undefined;
 
                 // sharePercentage is only populated by the API for jointly-held shareholdings.
                 // For a sole holding it's absent even though numberOfShares is present - track the
@@ -192,6 +193,9 @@ async function processPersonSearchResults(
                     existing.isInactive = existing.isInactive && isInactive;
                     if (resignationDate && !existing.resignationDate) {
                         existing.resignationDate = resignationDate;
+                    }
+                    if (appointmentDate && (!existing.appointmentDate || appointmentDate < existing.appointmentDate)) {
+                        existing.appointmentDate = appointmentDate;
                     }
                     existing.entityStatusCode = statusCode;
                     existing.status = companyStatus;
@@ -237,6 +241,7 @@ async function processPersonSearchResults(
                         status: companyStatus,
                         roleType,
                         isInactive,
+                        appointmentDate,
                         resignationDate,
                         entityStatusCode: statusCode
                     });
@@ -255,6 +260,7 @@ async function processPersonSearchResults(
             // Check if role is inactive (API spec line 377: status field)
             const isInactive = role.status === 'inactive';
             const resignationDate = role.resignationDate;
+            const appointmentDate = isDirector ? role.appointmentDate : undefined;
 
             // Calculate shareholding percentage
             let shareholding = 0;
@@ -281,6 +287,9 @@ async function processPersonSearchResults(
                 existing.isInactive = existing.isInactive && isInactive; // Active if any role is active
                 if (resignationDate && !existing.resignationDate) {
                     existing.resignationDate = resignationDate;
+                }
+                if (appointmentDate && (!existing.appointmentDate || appointmentDate < existing.appointmentDate)) {
+                    existing.appointmentDate = appointmentDate;
                 }
                 // Update status code (use the most recent/accurate one)
                 existing.entityStatusCode = statusCode;
@@ -332,6 +341,7 @@ async function processPersonSearchResults(
                     status: companyStatus,
                     roleType,
                     isInactive,
+                    appointmentDate,
                     resignationDate,
                     entityStatusCode: statusCode
                 });

@@ -3,15 +3,27 @@
 Branch: `claude/mitsuketa-search-report-redesign-4tg7du`
 
 > **Update (this session):** §3a–§3e are fixed, and the §4 decisions below are
-> resolved — see the note at the end of each item. Two things from the design
-> mocks were deliberately left out of this pass: the "N directorships held
-> during a bankruptcy period" overlap sentence, and the bankruptcy-span
-> timeline chart in `directors-and-flags.html` (the summary strip auto-expands
-> and shows full record detail, but not that derived chart/sentence). Also:
-> directors are drawn for the root entity and its upstream parent chain only
-> (wherever `fetchEntityDetailsFull` already runs) — not for downstream
-> subsidiaries, which are crawled via a lightweight endpoint that doesn't
-> return `roles` and would cost an extra fetch per subsidiary to add.
+> resolved — see the note at the end of each item.
+>
+> **Correction to an earlier claim in this same update:** directors were first
+> drawn for the root entity and its upstream parent chain only, on the
+> assumption that subsidiaries would need an extra fetch. That assumption was
+> wrong — `fetchEntitySummaryLight` (used for every subsidiary) hits the exact
+> same `/entities/{nzbn}` endpoint as the full fetch, it just wasn't reading
+> `roles` out of the response. Fixed: `drawDirectorsFromRoles()` is now shared
+> by `crawlUpstream` and `crawlDownstream`, so every company on the chart shows
+> its directors, still at zero extra API calls.
+>
+> A real chart also surfaced a second bug while testing this: a person who is
+> both director AND shareholder of the same company got two edges to it, which
+> render as coincident, illegible overlapping lines (both node types have one
+> handle per side). Fixed to merge into a single `roleKind: 'both'` edge
+> labelled "Director & Shareholder".
+>
+> The "N directorships held during a bankruptcy period" sentence and a
+> directorship-coverage timeline are now built — see §7 update below for the
+> shape (a merged coverage band, not a per-company Gantt, since one person can
+> hold 40+ directorships).
 
 Written to carry this work into a fresh session. Everything needed is in the repo: the design
 documents in this directory are self-contained HTML, openable in a browser. **Published artifact
@@ -98,14 +110,15 @@ graph never assigns. Fix is to use the existing `personId()`.
 
 ### 3b. Directors are never drawn — FIXED
 
-New `crawlDirectors()` runs unconditionally after `crawlUpstream`'s shareholding branch (for
-every entity reached via `fetchEntityDetailsFull` — the root and its upstream parent chain),
-filtering `details.roles` to active `Director` entries. **Drawn only, not crawled further** —
-a director's own other directorships/shareholdings are not followed automatically (that was
-the explicit call: default to drawn-only; a user who wants the fuller picture uses the
-existing "Search as Individual" context-menu action, which already runs a full person search
-on demand — no new expand-and-merge feature was needed). Director edges render dashed
-(`App.tsx` `styleEdgesByDepth` and `apiService.addEdge`) — control, not ownership.
+`drawDirectorsFromRoles()` runs for every company on the chart — root, upstream parents (via
+`crawlUpstream`), AND downstream subsidiaries (via `crawlDownstream`, added after discovering
+`fetchEntitySummaryLight` already returns `roles` from the same request) — filtering to active
+`Director` entries. **Drawn only, not crawled further** — a director's own other
+directorships/shareholdings are not followed automatically (that was the explicit call: default
+to drawn-only; a user who wants the fuller picture uses the existing "Search as Individual"
+context-menu action, which already runs a full person search on demand — no new expand-and-merge
+feature was needed). Director edges render dashed (`App.tsx` `styleEdgesByDepth` and
+`apiService.addEdge`) — control, not ownership.
 
 Original report: the upstream crawl built only from `shareholdings.shareAllocation.shareholder`;
 the `details.roles` branch existed only as an `else if` for General Partners of a Limited
@@ -160,17 +173,23 @@ nested scroll, and the one fact that matters isn't hidden behind a click.
 3. **Discharged records — RESOLVED: still crit**, never demoted to amber. `statusRamp.ts`'s
    `hasInsolvencyRecord` check doesn't distinguish current/historic for colour; `insolvencyCurrent`
    is a separate fact surfaced in the label/strip, not a colour softening.
-4. **Directors on by default? — RESOLVED: yes, always drawn**, no toggle (a toolbar show/hide for
-   Shareholders/Directors/Ceased from the mock was not built this pass).
+4. **Directors on by default? — RESOLVED: yes, always drawn**, for every company on the chart
+   (root, upstream parents, AND downstream subsidiaries — see the correction note at the top; the
+   subsidiary half was added after it turned out to cost nothing). No toggle (a toolbar show/hide
+   for Shareholders/Directors/Ceased from the mock was not built this pass).
 5. **Do directors get crawled, or only drawn? — RESOLVED: drawn only.** No automatic upstream
    crawl from a director node. The existing "Search as Individual" context-menu action already
    covers "I want this director's full picture" — a full person search on demand — so no new
    expand/merge-into-graph feature was built.
 6. **Does the summary strip auto-expand on a *current* insolvency? — RESOLVED: yes**,
    `dischargeSuspended` counts as current.
-7. **Does the overlap count get stated?** "N directorships held during a bankruptcy period",
-   computed from dates already held. Phrased mechanically, never as a conclusion that anything was
-   breached — but it would be the most consequential sentence the app generates.
+7. **Does the overlap count get stated? — RESOLVED: yes, built.** `PersonSearchResults.tsx`'s
+   `DirectorshipTimeline` states it mechanically ("N directorships held during a bankruptcy
+   period" / "No directorship overlapped a bankruptcy period"), computed from each company's
+   `appointmentDate`/`resignationDate` (now captured in `directorSearchService.ts`, previously
+   discarded) against each insolvency record's adjudication/discharge window. The count is exact
+   per-company even though the chart above it draws a merged coverage band, not a row per company
+   — see the shape note at the top.
 
 ### Corrections already absorbed
 - **Colour tiers.** `utils/statusRamp.ts` puts *current* liquidation/receivership in **amber 琥**
