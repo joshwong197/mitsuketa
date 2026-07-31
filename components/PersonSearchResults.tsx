@@ -3,7 +3,22 @@ import { Building2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { PersonCompanyResult } from '../types';
 import { KydVerificationPanel } from './KydVerificationPanel';
 import { DisqualifiedDirector } from '../src/api/disqualifiedDirectorsApi';
-import { InsolvencyRecord } from '../src/api/insolvencyApi';
+import { InsolvencyRecord, isInsolvencyRecordCurrent } from '../src/api/insolvencyApi';
+
+// Nicely formats an API date string (drops timezone offset, e.g. "+1200").
+const formatDate = (dateString: string): string => {
+    if (!dateString) return 'Unknown';
+    const cleanDate = dateString.split('+')[0].split('-').slice(0, 3).join('-');
+    try {
+        const date = new Date(cleanDate);
+        const day = date.getDate();
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+            'July', 'August', 'September', 'October', 'November', 'December'];
+        return `${day} ${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+    } catch (e) {
+        return dateString;
+    }
+};
 
 interface PersonSearchResultsProps {
     personName: string;
@@ -183,6 +198,13 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
     const [filterMode, setFilterMode] = useState<FilterMode>('all');
     const [currentPage, setCurrentPage] = useState(1);
     const [showKyd, setShowKyd] = useState(false);
+    // Register-check strips: collapsed by default, but a CURRENT record opens
+    // automatically — you shouldn't have to click to learn someone is presently
+    // bankrupt or disqualified (design/HANDOVER.md §3e/§4.3).
+    const [dqOpen, setDqOpen] = useState(() =>
+        !!disqualifiedDirectors?.some(d => d.disqualificationCriteria?.criteria?.some(c => !c.endDate))
+    );
+    const [insOpen, setInsOpen] = useState(() => !!insolvencyRecords?.some(isInsolvencyRecordCurrent));
 
     // Filter results
     const filteredResults = results.filter(r => {
@@ -227,30 +249,18 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
 
     console.log('PersonSearchResults - activeCount:', activeCount, 'total:', results.length);
 
-    // Helper function to format dates nicely
-    const formatDate = (dateString: string): string => {
-        if (!dateString) return 'Unknown';
-
-        // Remove timezone info (e.g., +1200, +1300) and parse
-        const cleanDate = dateString.split('+')[0].split('-').slice(0, 3).join('-');
-
-        try {
-            const date = new Date(cleanDate);
-            const day = date.getDate();
-            const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-                'July', 'August', 'September', 'October', 'November', 'December'];
-            const month = monthNames[date.getMonth()];
-            const year = date.getFullYear();
-
-            return `${day} ${month} ${year}`;
-        } catch (e) {
-            return dateString;
-        }
-    };
-
     const hasDisqualified = !!(disqualifiedDirectors && disqualifiedDirectors.length > 0);
     const hasInsolvency = !!(insolvencyRecords && insolvencyRecords.length > 0);
     const registersClear = !hasDisqualified && !hasInsolvency;
+
+    // "Current" gates the auto-expand: a disqualification with no end date is
+    // indefinite/current; an insolvency record counts as current when the
+    // register says so OR the discharge is suspended (a suspended discharge
+    // means still bankrupt regardless of what insolvencyStatus reads).
+    const disqualifiedCurrent = !!disqualifiedDirectors?.some(
+        d => d.disqualificationCriteria?.criteria?.some(c => !c.endDate)
+    );
+    const insolvencyCurrent = !!insolvencyRecords?.some(isInsolvencyRecordCurrent);
 
     const sortOptions: { value: SortMode; label: string }[] = [
         { value: 'default', label: 'Directors first' },
@@ -305,12 +315,15 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                     </button>
                 </div>
 
-                {/* REGISTER CHECKS: disqualified directors & insolvency. Bounded height with its own
-                    scroll so a long list of records can never push the masthead past the viewport
-                    and squeeze the company grid below into an overlapping/clipped state. */}
-                <div className="mt-4 space-y-2 max-h-[240px] overflow-y-auto">
+                {/* REGISTER CHECKS: one collapsed-by-default strip per register, not a
+                    scrolling stack of full cards — a long record list used to push the
+                    masthead past the viewport and squeeze the company grid below into a
+                    nested-scrollbar mess. A CURRENT record still opens automatically, so
+                    the one fact that matters most is never hidden behind a click
+                    (design/HANDOVER.md §3e/§4.3/§4.6). */}
+                <div className="mt-4 border border-rule">
                     {registersClear && (
-                        <div className="flex items-start gap-3 p-3 border border-rule bg-paper2">
+                        <div className="flex items-start gap-3 p-3 bg-paper2">
                             <CheckSquare tone="green" glyph="青" />
                             <div className="min-w-0">
                                 <p className="font-bold text-ink" style={{ fontSize: '13px' }}>
@@ -323,79 +336,157 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                         </div>
                     )}
 
-                    {hasDisqualified && disqualifiedDirectors!.map((director, idx) => (
-                        <div key={`dq-${idx}`} className="flex items-start gap-3 p-3 border border-rule bg-paper2">
-                            <CheckSquare tone="crit" glyph="紅" />
-                            <div className="min-w-0 flex-1">
-                                <p className="font-bold text-ink" style={{ fontSize: '13px' }}>
-                                    Disqualified director · {director.firstName} {director.middleName} {director.lastName}
-                                    <span className="font-mono text-ink-pale font-normal ml-2" style={{ fontSize: '10.5px', fontVariantNumeric: 'tabular-nums' }}>
-                                        ID {director.disqualifiedDirectorId}
-                                    </span>
-                                </p>
-                                {director.aliases && director.aliases.aliases && director.aliases.aliases.length > 0 && (
-                                    <p className="text-ink-mid" style={{ fontSize: '12px' }}>
-                                        Also known as: {director.aliases.aliases.join(', ')}
+                    {hasDisqualified && (
+                        <div className="border-t border-rule first:border-t-0">
+                            <button
+                                onClick={() => setDqOpen(o => !o)}
+                                aria-expanded={dqOpen}
+                                className="w-full flex items-center gap-3 p-3 bg-paper2 text-left"
+                            >
+                                <CheckSquare tone="crit" glyph="紅" />
+                                <span className="min-w-0 flex-1">
+                                    <p className="font-bold text-ink truncate" style={{ fontSize: '13px' }}>
+                                        Disqualified director
+                                        <span className="text-ink-mid font-normal ml-1" style={{ fontSize: '12px' }}>
+                                            · {disqualifiedDirectors!.length} {disqualifiedDirectors!.length === 1 ? 'record' : 'records'}
+                                        </span>
                                     </p>
-                                )}
-                                {director.disqualificationCriteria?.criteria?.map((c, i) => (
-                                    <div key={i} className="mt-1.5 text-ink-mid" style={{ fontSize: '12px' }}>
-                                        <p>
-                                            <span className="text-crit">Reason:</span> {c.criteria || 'Section 385 Companies Act 1993'}
-                                        </p>
-                                        <p>
-                                            <span className="text-crit">Period:</span>{' '}
-                                            {formatDate(c.startDate)} – {c.endDate ? formatDate(c.endDate) : 'Indefinite'}
-                                        </p>
-                                        {c.comments && (
-                                            <p className="italic mt-1 p-2 bg-paper border border-rule">
-                                                "{c.comments}"
+                                </span>
+                                <span
+                                    className={`uppercase font-bold whitespace-nowrap ${disqualifiedCurrent ? 'text-crit' : 'text-ink-pale'}`}
+                                    style={{ fontSize: '10px', letterSpacing: '.04em' }}
+                                >
+                                    {disqualifiedCurrent ? 'Current' : 'No current'}
+                                </span>
+                                <span
+                                    className="text-ink-pale"
+                                    style={{ fontSize: '11px', transition: 'transform .15s', transform: dqOpen ? 'rotate(90deg)' : 'none' }}
+                                    aria-hidden="true"
+                                >
+                                    ▸
+                                </span>
+                            </button>
+                            {dqOpen && (
+                                <div className="p-3 border-t border-rule bg-paper2 space-y-3">
+                                    {disqualifiedDirectors!.map((director, idx) => (
+                                        <div key={idx} className="min-w-0">
+                                            <p className="font-bold text-ink" style={{ fontSize: '13px' }}>
+                                                {director.firstName} {director.middleName} {director.lastName}
+                                                <span className="font-mono text-ink-pale font-normal ml-2" style={{ fontSize: '10.5px', fontVariantNumeric: 'tabular-nums' }}>
+                                                    ID {director.disqualifiedDirectorId}
+                                                </span>
                                             </p>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        </div>
-                    ))}
-
-                    {hasInsolvency && insolvencyRecords!.map((record, idx) => (
-                        <div key={`ins-${idx}`} className="flex items-start gap-3 p-3 border border-rule bg-paper2">
-                            <CheckSquare tone="crit" glyph="紅" />
-                            <div className="min-w-0 flex-1">
-                                <p className="font-bold text-ink" style={{ fontSize: '13px' }}>
-                                    Insolvency · {record.estateName}
-                                    <span className={`font-normal uppercase ml-2 ${record.insolvencyStatus.includes('Current') ? 'text-crit' : 'text-amber'}`} style={{ fontSize: '10px', letterSpacing: '.04em' }}>
-                                        {record.insolvencyStatus}
-                                    </span>
-                                </p>
-                                {record.alternateNames && record.alternateNames.length > 0 && (
-                                    <p className="text-ink-mid" style={{ fontSize: '12px' }}>
-                                        Also known as: {record.alternateNames.join(', ')}
-                                    </p>
-                                )}
-                                <div className="mt-1.5 text-ink-mid" style={{ fontSize: '12px' }}>
-                                    <p>
-                                        <span className="text-crit">Type:</span> {record.insolvencyTypeDescription}
-                                    </p>
-                                    <p>
-                                        <span className="text-crit">Adjudication:</span>{' '}
-                                        {formatDate(record.adjudicationOrLiquidationDate)}
-                                    </p>
-                                    {record.dischargeOrCompletionDate && (
-                                        <p>
-                                            <span className="text-crit">Discharge/completion:</span>{' '}
-                                            {formatDate(record.dischargeOrCompletionDate)}
-                                        </p>
-                                    )}
-                                    {record.multipleInsolvencies && (
-                                        <p className="text-amber uppercase mt-1" style={{ fontSize: '10px', letterSpacing: '.04em' }}>
-                                            Multiple insolvencies on record
-                                        </p>
-                                    )}
+                                            {director.aliases && director.aliases.aliases && director.aliases.aliases.length > 0 && (
+                                                <p className="text-ink-mid" style={{ fontSize: '12px' }}>
+                                                    Also known as: {director.aliases.aliases.join(', ')}
+                                                </p>
+                                            )}
+                                            {director.disqualificationCriteria?.criteria?.map((c, i) => (
+                                                <div key={i} className="mt-1.5 text-ink-mid" style={{ fontSize: '12px' }}>
+                                                    <p>
+                                                        <span className="text-crit">Reason:</span> {c.criteria || 'Section 385 Companies Act 1993'}
+                                                    </p>
+                                                    <p>
+                                                        <span className="text-crit">Period:</span>{' '}
+                                                        {formatDate(c.startDate)} – {c.endDate ? formatDate(c.endDate) : 'Indefinite'}
+                                                    </p>
+                                                    {c.comments && (
+                                                        <p className="italic mt-1 p-2 bg-paper border border-rule">
+                                                            "{c.comments}"
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ))}
                                 </div>
-                            </div>
+                            )}
                         </div>
-                    ))}
+                    )}
+
+                    {hasInsolvency && (
+                        <div className="border-t border-rule first:border-t-0">
+                            <button
+                                onClick={() => setInsOpen(o => !o)}
+                                aria-expanded={insOpen}
+                                className="w-full flex items-center gap-3 p-3 bg-paper2 text-left"
+                            >
+                                <CheckSquare tone="crit" glyph="紅" />
+                                <span className="min-w-0 flex-1">
+                                    <p className="font-bold text-ink truncate" style={{ fontSize: '13px' }}>
+                                        Insolvency
+                                        <span className="text-ink-mid font-normal ml-1" style={{ fontSize: '12px' }}>
+                                            · {insolvencyRecords!.length} {insolvencyRecords!.length === 1 ? 'record' : 'records'}
+                                        </span>
+                                    </p>
+                                </span>
+                                <span
+                                    className={`uppercase font-bold whitespace-nowrap ${insolvencyCurrent ? 'text-crit' : 'text-ink-pale'}`}
+                                    style={{ fontSize: '10px', letterSpacing: '.04em' }}
+                                >
+                                    {insolvencyCurrent ? 'Current' : 'No current'}
+                                </span>
+                                <span
+                                    className="text-ink-pale"
+                                    style={{ fontSize: '11px', transition: 'transform .15s', transform: insOpen ? 'rotate(90deg)' : 'none' }}
+                                    aria-hidden="true"
+                                >
+                                    ▸
+                                </span>
+                            </button>
+                            {insOpen && (
+                                <div className="p-3 border-t border-rule bg-paper2 space-y-3">
+                                    {insolvencyRecords!.map((record, idx) => (
+                                        <div key={idx} className="min-w-0">
+                                            <p className="font-bold text-ink" style={{ fontSize: '13px' }}>
+                                                {record.estateName}
+                                                <span className={`font-normal uppercase ml-2 ${isInsolvencyRecordCurrent(record) ? 'text-crit' : 'text-amber'}`} style={{ fontSize: '10px', letterSpacing: '.04em' }}>
+                                                    {record.insolvencyStatus}{record.dischargeSuspended ? ' · discharge suspended' : ''}
+                                                </span>
+                                            </p>
+                                            {record.alternateNames && record.alternateNames.length > 0 && (
+                                                <p className="text-ink-mid" style={{ fontSize: '12px' }}>
+                                                    Also known as: {record.alternateNames.join(', ')}
+                                                </p>
+                                            )}
+                                            <div className="mt-1.5 text-ink-mid" style={{ fontSize: '12px' }}>
+                                                <p>
+                                                    <span className="text-crit">Type:</span> {record.insolvencyTypeDescription}
+                                                </p>
+                                                <p>
+                                                    <span className="text-crit">Adjudication:</span>{' '}
+                                                    {formatDate(record.adjudicationOrLiquidationDate)}
+                                                </p>
+                                                {record.dischargeOrCompletionDate && (
+                                                    <p>
+                                                        <span className="text-crit">Discharge/completion:</span>{' '}
+                                                        {formatDate(record.dischargeOrCompletionDate)}
+                                                        {record.dischargeOrCompletionType ? ` · ${record.dischargeOrCompletionType}` : ''}
+                                                    </p>
+                                                )}
+                                                {record.dischargeConditionExpiryDate && (
+                                                    <p>
+                                                        <span className="text-crit">Conditions expire:</span>{' '}
+                                                        {formatDate(record.dischargeConditionExpiryDate)}
+                                                    </p>
+                                                )}
+                                                {record.annulmentDate && (
+                                                    <p>
+                                                        <span className="text-crit">Annulled:</span> {formatDate(record.annulmentDate)}
+                                                    </p>
+                                                )}
+                                                {record.multipleInsolvencies && (
+                                                    <p className="text-amber uppercase mt-1" style={{ fontSize: '10px', letterSpacing: '.04em' }}>
+                                                        Multiple insolvencies on record
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
 

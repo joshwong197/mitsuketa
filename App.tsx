@@ -27,6 +27,7 @@ import { ConfirmOrgChartDialog } from './components/ConfirmOrgChartDialog';
 import { TabBar } from './components/TabBar';
 import { CasePanel } from './components/CasePanel';
 import { enrichCompanyResults, enrichGraphNodes } from './src/api/companyStatusApi';
+import { enrichPersonNodes } from './src/api/personStatusApi';
 import { markDirectLineage, calculateHiddenDescendants, expandNodeSubtree, collapseNodeSubtree } from './utils/graphVisibility';
 import { getLayoutedElements } from './services/layoutService';
 import { tidyUpLayout } from './services/layoutOptimizer';
@@ -97,8 +98,13 @@ const styleEdgesByDepth = <E extends Edge>(edges: E[], nodesById: Map<string, Gr
     } else if (relType === 'sibling') {
       style = { stroke: 'var(--ink-wash)', strokeWidth: 1.3 };
     } else if (isPersonNode(src) || isPersonNode(tgt)) {
-      // Status ramp: current roles are solid --ink-mid (mockup .edge-line)
-      style = { stroke: 'var(--ink-mid)', strokeWidth: 1.6, opacity: 0.85 };
+      // Status ramp: current roles are solid --ink-mid (mockup .edge-line) —
+      // except a director edge, which is dashed: directors control rather than
+      // own, so the line should read differently from a shareholding at a glance.
+      const roleKind = (edge.data as any)?.roleKind;
+      style = (roleKind === 'director' || roleKind === 'both')
+        ? { stroke: 'var(--ink-mid)', strokeWidth: 1.6, strokeDasharray: '5 4', opacity: 0.8 }
+        : { stroke: 'var(--ink-mid)', strokeWidth: 1.6, opacity: 0.85 };
     } else {
       const depth = Math.max(src?.data.depth ?? 2, tgt?.data.depth ?? 2);
       style = depth <= 1
@@ -1135,9 +1141,19 @@ function App() {
         );
 
         // Enrich nodes with insolvency/admin status BEFORE rendering
-        // so all badges (PREV: IN LIQUIDATION, external admin, Removed, etc.) appear instantly
-        console.log('🔍 Enriching nodes with NZBN status data before render...');
-        const enrichedNodes = await enrichGraphNodes(processedNodes, { ...config, includeInactive: true }, handleLog);
+        // so all badges (PREV: IN LIQUIDATION, external admin, Removed, etc.) appear instantly.
+        // Company and person enrichment run in parallel — they touch disjoint node
+        // types, and person checks are already deduplicated to one call per unique
+        // individual by the graph itself (personId gives every person exactly one
+        // node, however many companies they appear on — design/HANDOVER.md §4.1).
+        console.log('🔍 Enriching nodes with NZBN status + register-check data before render...');
+        const [companyEnriched, personEnriched] = await Promise.all([
+          enrichGraphNodes(processedNodes, { ...config, includeInactive: true }, handleLog),
+          enrichPersonNodes(processedNodes, config, handleLog),
+        ]);
+        const enrichedNodes = processedNodes.map((n, i) =>
+          n.data.type === 'company' ? companyEnriched[i] : n.data.type === 'person' ? personEnriched[i] : n
+        );
         console.log('✅ Enrichment complete, rendering graph with full status data');
 
         // Assign ink-depth (undirected BFS from target) before layout so edges + nodes tier

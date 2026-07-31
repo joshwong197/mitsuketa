@@ -2,6 +2,17 @@
 
 Branch: `claude/mitsuketa-search-report-redesign-4tg7du`
 
+> **Update (this session):** §3a–§3e are fixed, and the §4 decisions below are
+> resolved — see the note at the end of each item. Two things from the design
+> mocks were deliberately left out of this pass: the "N directorships held
+> during a bankruptcy period" overlap sentence, and the bankruptcy-span
+> timeline chart in `directors-and-flags.html` (the summary strip auto-expands
+> and shows full record detail, but not that derived chart/sentence). Also:
+> directors are drawn for the root entity and its upstream parent chain only
+> (wherever `fetchEntityDetailsFull` already runs) — not for downstream
+> subsidiaries, which are crawled via a lightweight endpoint that doesn't
+> return `roles` and would cost an extra fetch per subsidiary to add.
+
 Written to carry this work into a fresh session. Everything needed is in the repo: the design
 documents in this directory are self-contained HTML, openable in a browser. **Published artifact
 URLs are not reproduced here — they are private to the account that published them and will not
@@ -53,7 +64,19 @@ anything they disagree about.
 
 These are real defects in shipped code, discovered while drawing mocks. None have been touched.
 
-### 3a. People can never deduplicate on the graph
+### 3a. People can never deduplicate on the graph — FIXED
+
+`apiService.ts` now mints person node ids via `personId()` (moved to `utils/personId.ts`
+so `apiService` can import it without a cycle through `compareService`). One catch found
+while fixing it: the old code's `if (this.nodes.has(holderId)) continue` skipped the
+*edge* too whenever the node already existed — with a stable id that meant a person's
+second, third, etc. shareholding would silently vanish. Now only the node-add is
+idempotent; every edge is still attempted. Same-person, same-company dual roles (director
+AND shareholder of one company) are drawn as two distinct edges (id carries a role
+suffix), not merged — see `utils/personRoles.ts` for the node-level rollup this feeds.
+
+Original report, kept for context:
+
 `services/apiService.ts` (lines ~259 and ~350) mints person node ids as:
 
 ```js
@@ -69,24 +92,34 @@ tokens). Case notes are keyed `nzbn ?? personId(label)`, so `App.tsx:1436` highl
 duplicate of a person when a note is attached to one — the note system assumes an identity the
 graph never assigns. Fix is to use the existing `personId()`.
 
-### 3b. Directors are never drawn
-The upstream crawl builds only from `shareholdings.shareAllocation.shareholder`. There is a
-`details.roles` branch at `apiService.ts:334`, but it is an `else if` that fires only when a company
-has **no shareholdings at all** — it exists for General Partners of a Limited Partnership.
+### 3b. Directors are never drawn — FIXED
 
-The NZBN entity response carries directors in that same `roles` collection ("the persons and
-business entities that are directors, trustees, partners, officers"), and `fetchEntityDetailsFull`
-already returns it. **Drawing directors costs no additional API calls.**
+New `crawlDirectors()` runs unconditionally after `crawlUpstream`'s shareholding branch (for
+every entity reached via `fetchEntityDetailsFull` — the root and its upstream parent chain),
+filtering `details.roles` to active `Director` entries. **Drawn only, not crawled further** —
+a director's own other directorships/shareholdings are not followed automatically (that was
+the explicit call: default to drawn-only; a user who wants the fuller picture uses the
+existing "Search as Individual" context-menu action, which already runs a full person search
+on demand — no new expand-and-merge feature was needed). Director edges render dashed
+(`App.tsx` `styleEdgesByDepth` and `apiService.addEdge`) — control, not ownership.
 
-### 3c. `isDisqualified` is rendered but never set
-`NodeData.isDisqualified` exists, `CustomNodes` renders a crit inkan for it, and both
-`statusRamp.ts` and `statusDiff.ts` handle it. Nothing anywhere assigns it — `enrichGraphNodes`
-filters to `n.data.type === 'company'`. The rendering half of the person-flag feature is already
-built against a permanently-false field.
+Original report: the upstream crawl built only from `shareholdings.shareAllocation.shareholder`;
+the `details.roles` branch existed only as an `else if` for General Partners of a Limited
+Partnership (no shareholdings at all). Directors were fetched (`fetchEntityDetailsFull` already
+returns `roles`) and discarded.
 
-### 3d. Insolvency fields fetched and discarded
-`src/api/insolvencyApi.ts` declares four fewer fields than the official schema in
-`docs/insolvency-trustee-services.json` provides:
+### 3c. `isDisqualified` is rendered but never set — FIXED
+
+New `src/api/personStatusApi.ts` (`enrichPersonNodes`) checks every unique person node against
+the Disqualified Directors and Insolvency registers, called alongside `enrichGraphNodes` in
+`App.tsx`. Because 3a now gives one node per person, this already checks each individual
+exactly once no matter how many companies they appear on across the chart — no separate dedup
+step was needed. Sets `isDisqualified`, `hasInsolvencyRecord`, `insolvencyCurrent`.
+
+### 3d. Insolvency fields fetched and discarded — FIXED
+
+`src/api/insolvencyApi.ts` now declares all six fields from
+`docs/insolvency-trustee-services.json`:
 
 | Field | Why it matters | Declared? |
 |---|---|---|
@@ -97,34 +130,40 @@ built against a permanently-false field.
 | `dischargeSuspended` | **a suspended discharge means still bankrupt**, whatever `insolvencyStatus` reads | **no** |
 | `annulmentDate` | annulled rather than discharged | **no** |
 
-`dischargeSuspended` is the one worth wiring on its own merits — it is exactly the case where an
-amber "historic" flag would be actively wrong.
+`dischargeSuspended` is wired into `isInsolvencyRecordCurrent()` (`insolvencyApi.ts`) — a
+suspended discharge counts as current regardless of what `insolvencyStatus` reads, and that
+function now gates both the person-node crit "current" label and the summary strip auto-expand
+(3e).
 
-### 3e. The individual masthead blocks the page
-`components/PersonSearchResults.tsx:311` bounds the register-check block at
-`max-h-[240px] overflow-y-auto`. Two insolvency records render as two full cards (~350px), so the
-user gets a nested scrollbar *and* a masthead consuming the viewport — the company grid starts
-below the fold. Confirmed on a real search (ritesh mani, 45 companies, 2 records).
+### 3e. The individual masthead blocks the page — FIXED
 
-An earlier attempt at scroll-driven auto-collapse did not hold up. Proposal is a
-**collapsed-by-default disclosure** instead: deterministic height, no nested scroll. See
-`directors-and-flags.html`.
+`components/PersonSearchResults.tsx` replaced the `max-h-[240px] overflow-y-auto` card stack
+with one collapsed-by-default strip per register (disqualified / insolvency), matching
+`directors-and-flags.html`. A strip opens automatically when it holds a *current* record
+(indefinite disqualification, or `isInsolvencyRecordCurrent()`) — deterministic height, no
+nested scroll, and the one fact that matters isn't hidden behind a click.
 
 ---
 
 ## 4. Decisions still open
 
-1. **Insolvency checks: automatic or behind a button?** Two API calls per unique individual —
-   roughly 80 extra on a 40-director chart. The graph-derived tiers are free and should always run.
-   *This is the one gating a build.*
-2. **Does an unverified "name match" flag go into the exported chart?** The evidence card does not
-   travel with an exported PNG.
-3. **Discharged records:** crit red when corroborated, or does currency demote to amber?
-4. **Directors on by default?** Drawn with a toolbar toggle in the mock; on by default.
-5. **Do directors get crawled, or only drawn?** Drawing is free. Following a director's other
-   shareholdings upstream makes charts far more revealing and considerably bigger.
-6. **Does the summary strip auto-expand on a *current* insolvency?** (`dischargeSuspended` should
-   count as current.)
+1. **Insolvency checks: automatic or behind a button? — RESOLVED: automatic.** Concern raised was
+   whether a complex chart re-checks the same person repeatedly; it doesn't — 3a's dedup means
+   one node per unique individual, so `enrichPersonNodes` checks each person exactly once
+   regardless of how many companies they appear on.
+2. **Does an unverified "name match" flag go into the exported chart?** Still open — not addressed
+   this pass.
+3. **Discharged records — RESOLVED: still crit**, never demoted to amber. `statusRamp.ts`'s
+   `hasInsolvencyRecord` check doesn't distinguish current/historic for colour; `insolvencyCurrent`
+   is a separate fact surfaced in the label/strip, not a colour softening.
+4. **Directors on by default? — RESOLVED: yes, always drawn**, no toggle (a toolbar show/hide for
+   Shareholders/Directors/Ceased from the mock was not built this pass).
+5. **Do directors get crawled, or only drawn? — RESOLVED: drawn only.** No automatic upstream
+   crawl from a director node. The existing "Search as Individual" context-menu action already
+   covers "I want this director's full picture" — a full person search on demand — so no new
+   expand/merge-into-graph feature was built.
+6. **Does the summary strip auto-expand on a *current* insolvency? — RESOLVED: yes**,
+   `dischargeSuspended` counts as current.
 7. **Does the overlap count get stated?** "N directorships held during a bankruptcy period",
    computed from dates already held. Phrased mechanically, never as a conclusion that anything was
    breached — but it would be the most consequential sentence the app generates.
@@ -139,25 +178,21 @@ An earlier attempt at scroll-driven auto-collapse did not hold up. Proposal is a
 
 ---
 
-## 5. UNRESOLVED — the role mark
+## 5. The role mark — RESOLVED and built
 
-The last message on this thread pointed at the split-ring seal (印 in a ring that is half solid,
-half dashed) and said *"this is the kanji that I think we should replace for directors and
-shareholders"*. That is ambiguous and was never clarified. Two readings:
-
-- **(a)** Replace the 株 / 締 text glyphs on the role line — the split ring alone carries the
-  role distinction, and the role line goes back to plain words.
-- **(b)** Replace **印** *inside* the seal with the role kanji — 株 for a shareholder, 締 for a
-  director, and the split ring only for someone who is both.
-
-Reading (b) is the more interesting design and probably what was meant, but it trades away the
-inkan as a consistent person mark, which is a real cost — 印 currently identifies "this node is a
-person" across the graph, the export viewer and `PersonSearchResults`.
-
-**Ask before building either.**
-
-Current state as drawn in `directors-and-flags.html`: 印 stays in the ring; the ring is solid for
-shareholders, dashed for directors, half-and-half for both; 株 / 締 / 株締 sit on the role line.
+Asked, and the answer was **(b), with a variant**: 印 is replaced by the role kanji inside the
+seal — 株 (shareholder), 締 (director). For someone who is both, rather than showing 株締 as text
+beside a merely-split ring, the *glyph itself* is sliced down the middle — left half of 株, right
+half of 締, with a thin dividing line so the split reads as deliberate rather than a rendering
+glitch. Rationale given: most readers can't parse the kanji anyway, so the shape carrying the
+signal matters more than either character staying legible. The ring still echoes the same split
+(solid arc / dashed arc). Implemented in `components/CustomNodes.tsx` (`SealGlyph`, `SealRing`
+in the `PersonNode`) via `clip-path: inset()` on two overlaid glyphs — flows through to exports
+and `graph.html` for free, since both reuse `PersonNode`. A plain-English role label
+(Shareholder / Director / Shareholder · Director) still sits under the name for readers who
+can't parse kanji at all. Role is rolled up per-node from every edge touching that person
+(`utils/personRoles.ts`) — the union across the whole chart, so directing company A and holding
+shares in company B still gets one "both" node, not two single-role ones.
 
 ---
 

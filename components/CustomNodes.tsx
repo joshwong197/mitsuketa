@@ -251,17 +251,80 @@ export const CompanyNode = memo(({ data, selected }: NodeProps<NodeData>) => {
   );
 });
 
+// The seal (印) is replaced by the person's role — 株 (株主 kabunushi,
+// shareholder) or 締 (取締役 torishimariyaku, director). Someone who is both
+// (data.roleKind === 'both', rolled up across every edge touching this node —
+// see utils/personRoles.ts) gets both roles sliced clean down the middle and
+// set side by side, with a dividing line so the split reads as deliberate
+// rather than a rendering glitch — most readers can't parse the kanji anyway,
+// the shape is the signal. The ring echoes the same split: solid arc for
+// ownership, dashed arc for control.
+const SealGlyph = ({ roleKind, color }: { roleKind?: 'shareholder' | 'director' | 'both'; color: string }) => {
+  if (roleKind === 'both') {
+    return (
+      <span className="relative grid place-items-center" style={{ width: 14, height: 15 }} aria-hidden="true">
+        <span style={{ position: 'absolute', inset: 0, fontFamily: 'var(--serif)', fontSize: 12, lineHeight: '15px', color, clipPath: 'inset(0 50% 0 0)' }}>株</span>
+        <span style={{ position: 'absolute', inset: 0, fontFamily: 'var(--serif)', fontSize: 12, lineHeight: '15px', color, clipPath: 'inset(0 0 0 50%)' }}>締</span>
+        <span style={{ position: 'absolute', top: -1, bottom: -1, left: '50%', width: 1, background: color, opacity: 0.7 }} />
+      </span>
+    );
+  }
+  return (
+    <span style={{ fontFamily: 'var(--serif)', fontSize: 12, color }} aria-hidden="true">
+      {roleKind === 'director' ? '締' : '株'}
+    </span>
+  );
+};
+
+// Ring per role: solid (shareholder/ownership), dashed (director/control), or —
+// for both — one circle carrying two stroke styles via SVG arcs, since a CSS
+// border can't be half-dashed.
+const SealRing = ({ roleKind, color }: { roleKind?: 'shareholder' | 'director' | 'both'; color: string }) => {
+  if (roleKind === 'both') {
+    return (
+      <svg viewBox="0 0 30 30" aria-hidden="true" className="absolute inset-0" style={{ width: 30, height: 30 }}>
+        <path d="M15,0.5 A14.5,14.5 0 0,0 15,29.5" fill="none" stroke={color} strokeWidth="1" />
+        <path d="M15,0.5 A14.5,14.5 0 0,1 15,29.5" fill="none" stroke={color} strokeWidth="1" strokeDasharray="3 2.5" />
+        <path d="M15,2.5 A12.5,12.5 0 0,0 15,27.5" fill="none" stroke={color} strokeWidth="1" opacity=".35" />
+        <path d="M15,2.5 A12.5,12.5 0 0,1 15,27.5" fill="none" stroke={color} strokeWidth="1" opacity=".35" strokeDasharray="3 2.5" />
+      </svg>
+    );
+  }
+  const borderStyle = roleKind === 'director' ? 'dashed' : 'solid';
+  return (
+    <>
+      <div className="absolute inset-0 rounded-full" style={{ border: `1px solid ${color}`, borderStyle }} />
+      <div className="absolute rounded-full" style={{ inset: 2, border: `1px solid oklch(from ${color} l c h / .35)`, borderStyle }} />
+    </>
+  );
+};
+
 export const PersonNode = memo(({ data, selected }: NodeProps<NodeData>) => {
   const isHighlighted = data.isHighlighted;
   const isDisqualified = data.isDisqualified;
+  const hasInsolvencyRecord = data.hasInsolvencyRecord;
+
+  // Discharged is still crit, not demoted to amber — currency is a separate
+  // fact (below), not a colour softening (design/HANDOVER.md §4.3).
+  const critLabels: string[] = [];
+  if (isDisqualified) critLabels.push('Disqualified');
+  if (hasInsolvencyRecord) critLabels.push(data.insolvencyCurrent ? 'Current insolvency' : 'Insolvency record');
+  const isCrit = critLabels.length > 0;
+
+  const sealColor = isCrit ? 'var(--crit)' : 'var(--accent)';
+  const roleLabel =
+    data.roleKind === 'both' ? 'Shareholder · Director'
+      : data.roleKind === 'director' ? 'Director'
+        : data.roleKind === 'shareholder' ? 'Shareholder'
+          : 'Individual';
 
   return (
     <div
-      className={`relative flex items-center min-w-[180px]${isDisqualified ? ' node-crit' : ''}`}
+      className={`relative flex items-center min-w-[180px]${isCrit ? ' node-crit' : ''}`}
       style={{
         borderRadius: 999,
-        border: isDisqualified ? '2px solid var(--crit)' : '1px solid var(--ink-mid)',
-        borderColor: selected ? 'var(--accent)' : isDisqualified ? 'var(--crit)' : 'var(--ink-mid)',
+        border: isCrit ? '2px solid var(--crit)' : '1px solid var(--ink-mid)',
+        borderColor: selected ? 'var(--accent)' : isCrit ? 'var(--crit)' : 'var(--ink-mid)',
         background: 'var(--paper)',
         padding: '8px 18px 8px 9px',
         gap: 10,
@@ -274,27 +337,25 @@ export const PersonNode = memo(({ data, selected }: NodeProps<NodeData>) => {
           sits inside the (possibly crit 2px) border, not outside the pill. */}
       {data.hasNote && <NoteDogEar flagged={data.noteFlagged} inset={18} />}
 
-      <div
-        className="relative shrink-0 grid place-items-center"
-        style={{ width: 30, height: 30, borderRadius: '50%', border: `1px solid ${isDisqualified ? 'var(--crit)' : 'var(--accent)'}` }}
-      >
-        <div className="absolute rounded-full" style={{ inset: 2, border: `1px solid oklch(from ${isDisqualified ? 'var(--crit)' : 'var(--accent)'} l c h / .35)` }} />
-        <span style={{ fontFamily: 'var(--serif)', fontSize: 12, color: isDisqualified ? 'var(--crit)' : 'var(--accent)' }}>印</span>
+      <div className="relative shrink-0 grid place-items-center" style={{ width: 30, height: 30 }}>
+        <SealRing roleKind={data.roleKind} color={sealColor} />
+        <SealGlyph roleKind={data.roleKind} color={sealColor} />
       </div>
       <div>
         <p className="text-[12.5px] font-bold text-ink">{data.label}</p>
-        {isDisqualified ? (
-          <div className="flex items-center gap-[5px] status-chip" title="Disqualified director">
+        <p className="text-[10px] uppercase tracking-wider text-ink-pale">{roleLabel}</p>
+        {isCrit && (
+          <div className="flex items-center gap-[5px] mt-0.5 status-chip" title={critLabels.join(' · ')}>
             <span
               className="grid place-items-center shrink-0"
               style={{ width: 15, height: 15, fontFamily: 'var(--serif)', fontSize: 11, lineHeight: 1, color: 'var(--accent-ink)', background: 'var(--crit)' }}
             >
               紅
             </span>
-            <span className="text-[10px] uppercase font-bold text-crit" style={{ letterSpacing: '.08em' }}>Disqualified</span>
+            <span className="text-[10px] uppercase font-bold text-crit truncate" style={{ letterSpacing: '.08em' }}>
+              {critLabels.join(' · ')}
+            </span>
           </div>
-        ) : (
-          <p className="text-[10px] uppercase tracking-wider text-ink-pale">Individual</p>
         )}
       </div>
 

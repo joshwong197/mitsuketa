@@ -62,6 +62,16 @@ export interface NodeData {
   hasHistoricInsolvency?: boolean;
   historicInsolvencyType?: string;
   isDisqualified?: boolean; // Person node: on the disqualified directors register (crit)
+  // Person node: insolvency register match (crit regardless of discharged/current —
+  // see utils/statusRamp.ts). Deduped by node id (personId), so this is set once per
+  // unique person no matter how many edges/companies they're attached to.
+  hasInsolvencyRecord?: boolean;
+  insolvencyCurrent?: boolean; // At least one record is a current bankruptcy (includes a suspended discharge)
+  // Person node: union of roles across every edge touching this node (one node per
+  // person — see services/apiService.ts crawlUpstream). Drives the seal glyph/ring
+  // in CustomNodes' PersonNode: 株 solid ring (shareholder), 締 dashed ring (director),
+  // both → split glyph + split ring.
+  roleKind?: 'shareholder' | 'director' | 'both';
   // Compare mode (FindScreen A ↔ B connection search)
   onComparePath?: boolean;      // Node lies on a shortest connection path (full ink)
   isCompareEndpoint?: boolean;  // Node is endpoint A or B (also gets isTarget for the stamp)
@@ -83,6 +93,11 @@ export interface EdgeData {
   label: string;
   relationshipType?: 'parent' | 'subsidiary' | 'sibling' | 'common';
   isCeased?: boolean; // Role has ended (resigned/inactive) — rendered dashed ink-wash
+  // Person → company edges only: which register relationship this specific edge
+  // represents. A person's node-level roleKind is the union across all their edges;
+  // this field is the per-edge specific (used for the edge's own dashed/solid style
+  // and the "▼ Director" vs "▼ Shareholder" label — never both on one edge).
+  roleKind?: 'shareholder' | 'director' | 'both';
 }
 
 export interface GraphNode {

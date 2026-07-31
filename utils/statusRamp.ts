@@ -20,8 +20,11 @@ export type StatusBucket = 'active' | 'warning' | 'faded' | 'crit' | 'amalgamate
 export function getStatusBucket(data: NodeData): StatusBucket {
   const s = (data.status || '').toLowerCase();
 
-  // crit first — it must win over everything else
-  if (data.isDisqualified || data.hasHistoricInsolvency) return 'crit';
+  // crit first — it must win over everything else. A discharged insolvency
+  // stays crit rather than demoting to amber (explicit decision, design/HANDOVER.md
+  // §4.3) — currency is a separate fact, surfaced via data.insolvencyCurrent /
+  // dischargeSuspended in the UI, not by softening the colour.
+  if (data.isDisqualified || data.hasHistoricInsolvency || data.hasInsolvencyRecord) return 'crit';
   if (s.includes('insolven') || s.includes('bankrupt')) return 'crit';
 
   if (s.includes('amalgamat')) return 'amalgamated';

@@ -1,6 +1,9 @@
 import { ApiConfig, GraphEdge, GraphNode, LoggerCallback, NodeType } from '../types.js';
 import { fetchEntityDetails, fetchRolesByEntityName } from './apiService.js';
 import { searchByPersonName } from './directorSearchService.js';
+import { personId, displayPersonName } from '../utils/personId.js';
+
+export { personId, displayPersonName };
 
 /**
  * Compare feature — bidirectional BFS between two endpoints (company/person)
@@ -56,26 +59,6 @@ const MAX_CONTEXT_NODES = 40;
 
 const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/**
- * Deterministic person ID: `P-` + normalized uppercase name.
- * Tokens are sorted so "Smith, John" and "John Smith" intersect — the two
- * frontiers discover the same individual through different registers that
- * disagree on name ordering. (Caveat surfaced in UI: same-name individuals
- * cannot be distinguished.)
- */
-export const personId = (name: string): string =>
-  'P-' +
-  name
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, ' ')
-    .trim()
-    .split(/\s+/)
-    .sort()
-    .join('-');
-
-const displayPersonName = (name: string): string =>
-  name.replace(/\s+/g, ' ').trim();
-
 interface Neighbor {
   node: GraphNode;
   edge: GraphEdge;
@@ -117,15 +100,21 @@ const makeEdge = (
   target: string,
   label: string,
   relationshipType: 'parent' | 'subsidiary' | 'sibling' | 'common',
-  isCeased = false
+  isCeased = false,
+  roleKind?: 'shareholder' | 'director' | 'both'
 ): GraphEdge => ({
-  id: `e-${source}-${target}`,
+  // Suffix by role so the same person can have a distinct shareholder edge AND
+  // a distinct director edge to the same company (two lines, not merged) —
+  // mirrors services/apiService.ts addEdge.
+  id: roleKind && roleKind !== 'both' ? `e-${source}-${target}-${roleKind}` : `e-${source}-${target}`,
   source,
   target,
-  data: { percentage: 0, label, relationshipType, isCeased },
+  data: { percentage: 0, label, relationshipType, isCeased, roleKind },
   style: isCeased
     ? { stroke: 'var(--ink-wash)', strokeWidth: 1.4, strokeDasharray: '6 5', opacity: 0.75 }
-    : { stroke: 'var(--ink-mid)' },
+    : roleKind === 'director'
+      ? { stroke: 'var(--ink-mid)', strokeDasharray: '5 4' }
+      : { stroke: 'var(--ink-mid)' },
   markerEnd: 'arrowclosed',
 });
 
@@ -215,7 +204,7 @@ export async function findConnection(
               `${holder.individualShareholder.firstName || ''} ${holder.individualShareholder.lastName || ''}`;
             if (!fullName.trim()) continue;
             const node = makePersonNode(fullName);
-            neighbors.push({ node, edge: makeEdge(node.id, nzbn, edgeLabel, 'parent') });
+            neighbors.push({ node, edge: makeEdge(node.id, nzbn, edgeLabel, 'parent', false, 'shareholder') });
           } else if (holder.otherShareholder?.nzbn) {
             const parentNzbn = holder.otherShareholder.nzbn;
             const node = makeCompanyNode(
@@ -243,7 +232,7 @@ export async function findConnection(
             .join(' ');
         if (!fullName.trim()) continue;
         const node = makePersonNode(fullName);
-        neighbors.push({ node, edge: makeEdge(node.id, nzbn, '▼ Director', 'parent') });
+        neighbors.push({ node, edge: makeEdge(node.id, nzbn, '▼ Director', 'parent', false, 'director') });
       } else if (role.roleEntity?.nzbn) {
         // Non-person roles (e.g. General Partner of a Limited Partnership)
         if (!isActive) continue;
@@ -313,8 +302,10 @@ export async function findConnection(
           : r.isDirector
             ? '▼ Director'
             : `▼ Shareholder${r.shareholding > 0 ? ` (${r.shareholding}%)` : ''}`;
+      const roleKind: 'shareholder' | 'director' | 'both' =
+        r.roleType === 'Director & Shareholder' ? 'both' : r.isDirector ? 'director' : 'shareholder';
       const node = makeCompanyNode(r.nzbn, r.companyName, r.status);
-      neighbors.push({ node, edge: makeEdge(pid, r.nzbn, label, 'parent', !!r.isInactive) });
+      neighbors.push({ node, edge: makeEdge(pid, r.nzbn, label, 'parent', !!r.isInactive, roleKind) });
     }
     return neighbors;
   };

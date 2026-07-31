@@ -1,5 +1,7 @@
 import { ApiConfig, GraphEdge, GraphNode, NodeType, NZBNFullEntity, EntitySearchResultItem, EntitySearchResponse, CompaniesRoleSearchResult, DebugCallback, LoggerCallback } from '../types.js';
 import { BASE_API_URL, API_PATHS } from '../constants.js';
+import { personId } from '../utils/personId.js';
+import { computePersonRoleFlags } from '../utils/personRoles.js';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -200,7 +202,7 @@ class OrgSpider {
         console.log(`✅ Graph build complete in ${durationSeconds}s (${this.nodes.size} nodes, ${this.edges.length} edges)`);
 
         return {
-            nodes: Array.from(this.nodes.values()),
+            nodes: computePersonRoleFlags(Array.from(this.nodes.values()), this.edges),
             edges: this.edges,
         };
     }
@@ -256,7 +258,10 @@ class OrgSpider {
                     if (holder.individualShareholder) {
                         holderLabel = holder.individualShareholder.fullName ||
                             `${holder.individualShareholder.firstName} ${holder.individualShareholder.lastName}`;
-                        holderId = `IND-${holderLabel.replace(/\s+/g, '-')}-${Math.random().toString(36).substr(2, 5)}`;
+                        // Stable id (personId, not a random suffix) so the same person
+                        // holding shares in multiple subsidiaries collapses to one node —
+                        // see design/HANDOVER.md §3a.
+                        holderId = personId(holderLabel);
                         isPerson = true;
                     } else if (holder.otherShareholder) {
                         holderLabel = holder.otherShareholder.currentEntityName || 'Unknown Company';
@@ -292,9 +297,14 @@ class OrgSpider {
                         }
                     }
 
-                    if (!holderId || this.nodes.has(holderId)) continue;
+                    if (!holderId) continue;
 
-                    // Add Node
+                    // Add Node — addNode() itself no-ops if this id already exists, so a
+                    // person (or company) that recurs across multiple shareholdings still
+                    // gets exactly one node. Do NOT skip the edge below just because the
+                    // node already exists: that would drop this specific relationship
+                    // (see design/HANDOVER.md §3a — one node per person, but every
+                    // shareholding is still its own edge).
                     this.addNode({
                         id: holderId,
                         type: isPerson ? 'personNode' : 'companyNode',
@@ -312,7 +322,7 @@ class OrgSpider {
                     const edgeLabel = sharePercent > 0
                         ? `▼ Shareholder (${sharePercent}%)`
                         : '▼ Shareholder';
-                    this.addEdge(holderId, details.nzbn, edgeLabel, 'parent');
+                    this.addEdge(holderId, details.nzbn, edgeLabel, 'parent', false, isPerson ? 'shareholder' : undefined);
 
                     // Recursive Upstream for Corporate Parents
                     if (!isPerson && parentNzbn && !this.visited.has(parentNzbn)) {
@@ -332,8 +342,12 @@ class OrgSpider {
                 }
             }
         } else if (details.roles && details.roles.length > 0) {
-            // Processing non-company roles (e.g. General Partners of a Limited Partnership)
+            // Processing non-company roles (e.g. General Partners of a Limited Partnership).
+            // Director roles are skipped here — crawlDirectors() below handles every
+            // director uniformly, whether or not this entity also has shareholdings.
             for (const role of details.roles) {
+                if ((role.roleType || '').toLowerCase() === 'director') continue;
+
                 // Ceased (resigned/inactive) roles are skipped by default, but kept
                 // as dashed ink-wash edges when includeInactive is on.
                 const roleCeased = !!role.roleStatus && role.roleStatus.toLowerCase() !== 'active';
@@ -347,7 +361,7 @@ class OrgSpider {
 
                 if (role.rolePerson?.fullName || role.rolePerson?.firstName) {
                     holderLabel = role.rolePerson.fullName || `${role.rolePerson.firstName} ${role.rolePerson.lastName}`;
-                    holderId = `IND-${holderLabel.replace(/\s+/g, '-')}-${Math.random().toString(36).substr(2, 5)}`;
+                    holderId = personId(holderLabel);
                     isPerson = true;
                 } else if (role.roleEntity?.name || role.roleEntity?.nzbn) {
                     holderLabel = role.roleEntity.name || 'Unknown Entity';
@@ -385,7 +399,7 @@ class OrgSpider {
                     continue; // Skip if no person or entity details
                 }
 
-                if (!holderId || this.nodes.has(holderId)) continue;
+                if (!holderId) continue;
 
                 this.addNode({
                     id: holderId,
@@ -414,6 +428,44 @@ class OrgSpider {
                     }
                 }
             }
+        }
+
+        // Directors are drawn regardless of whether this entity also has
+        // shareholdings — `roles` is already returned by fetchEntityDetailsFull on
+        // every crawl, so this costs no additional API calls (design/HANDOVER.md §3b).
+        await this.crawlDirectors(details);
+    }
+
+    // --- Directors: drawn only, never crawled further upstream by default. ---
+    // A director's OTHER directorships/shareholdings are not followed automatically
+    // (that would cost an extra lookup per director and could blow up a complex
+    // chart); a user who wants that picture uses "Search as Individual" on the
+    // node, which runs a full person search on demand.
+    private async crawlDirectors(details: NZBNFullEntity) {
+        for (const role of details.roles || []) {
+            if ((role.roleType || '').toLowerCase() !== 'director') continue;
+            if (!role.rolePerson?.fullName && !role.rolePerson?.firstName) continue;
+
+            // Ceased (resigned) directorships are skipped by default, kept as
+            // dashed ink-wash edges when includeInactive is on — same rule as
+            // every other role edge.
+            const roleCeased = !!role.roleStatus && role.roleStatus.toLowerCase() !== 'active';
+            if (roleCeased && !this.config.includeInactive) continue;
+
+            const holderLabel = role.rolePerson.fullName || `${role.rolePerson.firstName} ${role.rolePerson.lastName}`;
+            const holderId = personId(holderLabel);
+
+            this.addNode({
+                id: holderId,
+                type: 'personNode',
+                data: {
+                    label: holderLabel,
+                    type: NodeType.PERSON,
+                },
+                position: { x: 0, y: 0 }
+            });
+
+            this.addEdge(holderId, details.nzbn, '▼ Director', 'parent', roleCeased, 'director');
         }
     }
 
@@ -680,22 +732,30 @@ class OrgSpider {
         }
     }
 
-    private addEdge(source: string, target: string, label: string, type: 'parent' | 'subsidiary' | 'sibling' | 'common', isCeased: boolean = false) {
-        const id = `e-${source}-${target}`;
+    private addEdge(source: string, target: string, label: string, type: 'parent' | 'subsidiary' | 'sibling' | 'common', isCeased: boolean = false, roleKind?: 'shareholder' | 'director') {
+        // Person edges carry the role in the id so the SAME person can have both a
+        // shareholder edge AND a director edge to the SAME company (drawn as two
+        // distinct lines, per design/HANDOVER.md §5 — not merged into one edge,
+        // since the point is to show which relationship is which).
+        const id = roleKind ? `e-${source}-${target}-${roleKind}` : `e-${source}-${target}`;
         if (this.edges.some(e => e.id === id)) return;
 
         // Status ramp edge dye: current roles solid ink-mid, ceased roles
         // dashed ink-wash (App.tsx restyles by depth, but exports/snapshots
-        // keep these token-dyed defaults).
+        // keep these token-dyed defaults). Directors control rather than own,
+        // so a director edge is dashed even when active — distinct from a
+        // ceased edge, which is also dashed but faded to ink-wash.
         this.edges.push({
             id,
             source,
             target,
-            data: { percentage: 0, label, relationshipType: type, isCeased },
+            data: { percentage: 0, label, relationshipType: type, isCeased, roleKind },
             animated: type === 'subsidiary',
             style: isCeased
                 ? { stroke: 'var(--ink-wash)', strokeWidth: 1.4, strokeDasharray: '6 5', opacity: 0.75 }
-                : { stroke: type === 'sibling' ? 'var(--ink-wash)' : 'var(--ink-mid)' },
+                : roleKind === 'director'
+                    ? { stroke: 'var(--ink-mid)', strokeWidth: 1.6, strokeDasharray: '5 4', opacity: 0.8 }
+                    : { stroke: type === 'sibling' ? 'var(--ink-wash)' : 'var(--ink-mid)' },
             markerEnd: 'arrowclosed' as any // Fix: Use string instead of object
         });
     }

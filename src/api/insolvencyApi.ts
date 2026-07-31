@@ -16,6 +16,10 @@ export interface InsolvencyRecord {
     officer?: string;
     alternateNames?: string[];
     dischargeOrCompletionDate?: string;
+    dischargeOrCompletionType?: string; // Reason for discharge/completion
+    dischargeConditionExpiryDate?: string; // What "(conditional) discharged" points at
+    dischargeSuspended?: boolean; // A suspended discharge means still bankrupt, regardless of insolvencyStatus
+    annulmentDate?: string; // Annulled rather than discharged
 }
 
 export interface InsolvencySearchResult {
@@ -89,6 +93,18 @@ const COMPANY_INSOLVENCY_TYPES = [
     'interim liquidation',
     'liquidation agency',
 ];
+
+/**
+ * Whether a record represents a CURRENT bankruptcy — either the register says so
+ * outright, or the discharge has been suspended, which per the register schema
+ * means the person is still bankrupt regardless of what insolvencyStatus reads
+ * (design/HANDOVER.md §3d/§4.6). Drives the person-node crit "current" flag and
+ * the PersonSearchResults summary strip's auto-expand.
+ */
+export function isInsolvencyRecordCurrent(record: InsolvencyRecord): boolean {
+    if (record.dischargeSuspended) return true;
+    return record.insolvencyStatus.toLowerCase().includes('current');
+}
 
 /**
  * Check if all words in the search name appear in the estate name (case-insensitive).
