@@ -177,8 +177,15 @@ export async function fetchCompanyStatus(
         );
         const externalAdminType = isInExternalAdmin ? statusDesc : undefined;
 
-        // Check removal commenced
-        const removalCommenced = companyDetails?.removalCommenced === true;
+        // "Removal commenced" is meant to mean removal is IN PROGRESS (types.ts:
+        // "True if registered but removal process has started"). The register keeps
+        // the flag set after removal COMPLETES, which made an already-removed
+        // company render "REMOVED" and "REMOVAL IN PROGRESS" side by side —
+        // contradictory, confirmed against a live entity. Gate it on the entity not
+        // already being removed, so downstream consumers (the graph node badge, the
+        // statusRamp bucket, exports) all get the intended meaning from one place.
+        const alreadyRemoved = statusDesc.toLowerCase().includes('removed') || statusDesc.toLowerCase() === 'inactive';
+        const removalCommenced = companyDetails?.removalCommenced === true && !alreadyRemoved;
 
         // Check historic insolvency (for removed companies)
         let hasHistoricInsolvency = false;
@@ -219,7 +226,7 @@ export async function fetchCompanyStatus(
             historicInsolvencyType = Array.from(allInsolvencies).join(' & ');
         }
 
-        const isRemoved = removalCommenced || statusDesc.toLowerCase().includes('removed') || statusDesc.toLowerCase() === 'inactive';
+        const isRemoved = alreadyRemoved || companyDetails?.removalCommenced === true;
 
         // --- DEBUG LOGGING ---
         if (isRemoved) {

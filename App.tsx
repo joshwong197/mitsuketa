@@ -2144,13 +2144,18 @@ function App() {
 
         {/* Graph Area */}
         <div className="flex-1 flex flex-col h-full bg-paper relative">
-          {isGraphLoading && (
+          {/* Also covers the person search (isLoading), which "Search as Individual"
+              fires from the graph view. That path used to give NO feedback at all:
+              a 40-directorship subject takes tens of seconds to come back, so the
+              click read as a dead button. Excluded while the find screen is open,
+              which has its own inline spinner for search-as-you-type. */}
+          {(isGraphLoading || (isLoading && !searchViewOpen)) && (
             <div className="absolute top-0 left-0 right-0 z-50">
               <div className="h-0.5 bg-paper2 overflow-hidden relative">
                 <div className="loadsweep absolute inset-y-0 left-0 w-1/3 bg-accent" />
               </div>
               <div className="bg-paper border-b border-rule py-1.5 text-center text-ink-mid" style={{ fontSize: 12 }}>
-                Mapping corporate structure…
+                {isGraphLoading ? 'Mapping corporate structure…' : 'Searching registers…'}
               </div>
             </div>
           )}
@@ -2327,6 +2332,7 @@ function App() {
                 onSearchPerson={(name: string) => {
                   setContextMenu(null);
                   setSearchMode('person');
+                  setSearchQuery(name); // keep the search box in step, as the director-panel path does
                   handlePersonSearch(name);
                 }}
                 onAddNote={openNoteEditor}

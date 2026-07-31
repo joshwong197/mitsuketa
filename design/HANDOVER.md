@@ -20,10 +20,18 @@ Branch: `claude/mitsuketa-search-report-redesign-4tg7du`
 > handle per side). Fixed to merge into a single `roleKind: 'both'` edge
 > labelled "Director & Shareholder".
 >
-> The "N directorships held during a bankruptcy period" sentence and a
-> directorship-coverage timeline are now built — see §7 update below for the
-> shape (a merged coverage band, not a per-company Gantt, since one person can
-> hold 40+ directorships).
+> The "N directorships held during a bankruptcy period" sentence and the
+> directorship timeline were built, then **removed after testing against live
+> data** — the register carries no discharge date for these records, so both the
+> chart and the count were artefacts of a missing-date fallback. See §7. The
+> panel now shows only register-stated dates.
+>
+> Also fixed from live testing: `removalCommenced` stays set after removal
+> completes, so an already-removed company rendered "REMOVED" and "REMOVAL IN
+> PROGRESS" at once. Gated at the data layer (`companyStatusApi.ts`) so the graph
+> badge, the `statusRamp` amber bucket and exports all get the intended meaning.
+> And the graph view now shows a loading bar for person searches — "Search as
+> Individual" fired a 30s search with zero feedback and read as a dead button.
 
 Written to carry this work into a fresh session. Everything needed is in the repo: the design
 documents in this directory are self-contained HTML, openable in a browser. **Published artifact
@@ -183,13 +191,19 @@ nested scroll, and the one fact that matters isn't hidden behind a click.
    expand/merge-into-graph feature was built.
 6. **Does the summary strip auto-expand on a *current* insolvency? — RESOLVED: yes**,
    `dischargeSuspended` counts as current.
-7. **Does the overlap count get stated? — RESOLVED: yes, built.** `PersonSearchResults.tsx`'s
-   `DirectorshipTimeline` states it mechanically ("N directorships held during a bankruptcy
-   period" / "No directorship overlapped a bankruptcy period"), computed from each company's
-   `appointmentDate`/`resignationDate` (now captured in `directorSearchService.ts`, previously
-   discarded) against each insolvency record's adjudication/discharge window. The count is exact
-   per-company even though the chart above it draws a merged coverage band, not a row per company
-   — see the shape note at the top.
+7. **Does the overlap count get stated? — RESOLVED: NO. Built, tested against live data, and
+   deliberately removed.** A merged-coverage timeline plus a "N directorships held during a
+   bankruptcy period" sentence was built, then pulled after seeing it on a real subject. Both
+   of Ritesh Mani's records are "(Conditional) Discharged" with **no `dischargeOrCompletionDate`
+   on file**, so the code's missing-date fallback ran every bankruptcy to today — producing a bar
+   labelled "2002 — 2026" and the headline "43 directorships held during a bankruptcy period".
+   Both numbers were artefacts of the fallback, not facts. The handover warned this would be the
+   most consequential sentence the app generates; an accusation resting on a guessed end date is
+   worse than no chart at all, so the panel now states only what the register actually gives:
+   adjudication date, and the discharge date **or an explicit "not recorded on the register"**
+   (never silently blank, which reads as "still bankrupt"). Per-company appointment/resignation
+   dates are shown on the company cards instead. Do not reinstate the derived count without a
+   real discharge date per record.
 
 ### Corrections already absorbed
 - **Colour tiers.** `utils/statusRamp.ts` puts *current* liquidation/receivership in **amber 琥**
