@@ -5,6 +5,7 @@ import { KydVerificationPanel } from './KydVerificationPanel';
 import { DisqualifiedDirector } from '../src/api/disqualifiedDirectorsApi';
 import { InsolvencyRecord, isInsolvencyRecordCurrent } from '../src/api/insolvencyApi';
 import { summariseAddresses } from '../utils/addressSummary';
+import { usePrimarySignature } from '../hooks/usePrimarySignature';
 
 // Nicely formats an API date string (drops timezone offset, e.g. "+1200").
 const formatDate = (dateString: string): string => {
@@ -19,6 +20,29 @@ const formatDate = (dateString: string): string => {
     } catch (e) {
         return dateString;
     }
+};
+
+/**
+ * The name to show for the subject. Prefers the register's own spelling — the
+ * role records carry firstName/lastName as filed — so a search typed as
+ * "julie jang" displays as the registered "Julie Jang" rather than being
+ * guessed at. Falls back to title-casing the query when the register gives us
+ * nothing, and leaves an already mixed-case string alone (it either came from
+ * the register or the user capitalised it deliberately).
+ */
+const displayPersonName = (query: string, results: PersonCompanyResult[]): string => {
+    const first = results.find(r => r.firstName)?.firstName?.trim();
+    const last = results.find(r => r.lastName)?.lastName?.trim();
+    if (first && last) return `${first} ${last}`;
+
+    const s = query.trim();
+    if (!s || (s !== s.toLowerCase() && s !== s.toUpperCase())) return s;
+    return s
+        .toLowerCase()
+        .replace(/(^|[\s,'’-])([a-z])/g, (_m, sep, c) => sep + c.toUpperCase())
+        // "mcgill" → "Mcgill" above, then → "McGill". Mac- is left alone on
+        // purpose: Mackenzie takes it, Macey does not, and we can't tell which.
+        .replace(/\bMc([a-z])/g, (_m, c) => 'Mc' + c.toUpperCase());
 };
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
@@ -202,11 +226,14 @@ const CheckSquare: React.FC<{ tone: 'crit' | 'green'; glyph: string }> = ({ tone
     </span>
 );
 
-// 19px severity kanji square for company-card flags
-const FlagSquare: React.FC<{ tone: 'crit' | 'amber' | 'green'; glyph: string }> = ({ tone, glyph }) => (
+// 19px severity kanji square. 'wash' is the dead-entity tone from the status ramp
+// — neutral ink, deliberately not one of the severity colours.
+const FlagSquare: React.FC<{ tone: 'crit' | 'amber' | 'green' | 'wash'; glyph: string }> = ({ tone, glyph }) => (
     <span
         aria-hidden="true"
-        className={`shrink-0 flex items-center justify-center ${tone === 'crit' ? 'bg-crit' : tone === 'amber' ? 'bg-amber' : 'bg-green'}`}
+        className={`shrink-0 flex items-center justify-center ${
+            tone === 'crit' ? 'bg-crit' : tone === 'amber' ? 'bg-amber' : tone === 'green' ? 'bg-green' : 'bg-ink-mid'
+        }`}
         style={{ width: 19, height: 19, fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--paper)' }}
     >
         {glyph}
@@ -227,26 +254,26 @@ const Marker: React.FC<{ kanji: string; label: string }> = ({ kanji, label }) =>
 /**
  * Identity spine — who this person is, held still while the findings scroll.
  *
- * Everything here is already in memory: the address grouping is derived from the
- * person search results, and DOB/occupation come from the insolvency detail
- * record we already fetch. So pulling the KYD summary forward costs no extra API
- * calls. Signature extraction is NOT auto-run — it downloads a PDF per company
- * and pulls in pdf.js — so the panel stays one click away.
+ * Deliberately does NOT show date of birth, occupation or aliases. Those exist
+ * only on the insolvency register, so presenting them as general identity facts
+ * would be misleading twice over: absent for anyone with a clean record, and for
+ * anyone else an implicit statement that they have been bankrupt, made outside
+ * the register-checks section where that finding belongs. They stay on the
+ * insolvency record cards, in context and attributed.
+ *
+ * The address summary is derived from results already in memory, so it costs
+ * nothing. One signature is fetched lazily (see usePrimarySignature); the rest
+ * stay in the KYD panel.
  */
 const IdentitySpine: React.FC<{
     personName: string;
     results: PersonCompanyResult[];
-    insolvencyRecords?: InsolvencyRecord[];
     onOpenKyd: () => void;
-}> = ({ personName, results, insolvencyRecords, onOpenKyd }) => {
+}> = ({ personName, results, onOpenKyd }) => {
     const addresses = summariseAddresses(results);
     const top = addresses[0];
     const withAddress = addresses.reduce((n, a) => n + a.companies.length, 0);
-
-    // Registry identity details, taken from the most recent record that has them.
-    const detail = [...(insolvencyRecords ?? [])].reverse().find(r => r.yearOfBirth || r.occupationAtAdjudicationOrIndustryAtLiquidation);
-    const born = formatBirth(detail?.monthOfBirth, detail?.yearOfBirth);
-    const aliases = [...new Set((insolvencyRecords ?? []).flatMap(r => r.alternateNames ?? []))];
+    const signature = usePrimarySignature(results);
 
     const isDirector = results.some(r => r.isDirector);
     const isShareholder = results.some(r => r.shareholding > 0);
@@ -282,21 +309,7 @@ const IdentitySpine: React.FC<{
                 </div>
             </div>
 
-            {(born || detail?.occupationAtAdjudicationOrIndustryAtLiquidation || aliases.length > 0) && (
-                <dl className="mt-4 pt-3 border-t border-rule grid gap-y-1.5" style={{ gridTemplateColumns: 'auto 1fr', columnGap: 12, fontSize: '12.5px' }}>
-                    {born && (<><dt className="uppercase text-ink-pale pt-0.5" style={{ fontSize: '10px', letterSpacing: '.1em' }}>Born</dt><dd className="m-0 text-ink">{born}</dd></>)}
-                    {detail?.occupationAtAdjudicationOrIndustryAtLiquidation && (
-                        <><dt className="uppercase text-ink-pale pt-0.5" style={{ fontSize: '10px', letterSpacing: '.1em' }}>Occupation</dt>
-                          <dd className="m-0 text-ink">{detail.occupationAtAdjudicationOrIndustryAtLiquidation}</dd></>
-                    )}
-                    {aliases.length > 0 && (
-                        <><dt className="uppercase text-ink-pale pt-0.5" style={{ fontSize: '10px', letterSpacing: '.1em' }}>Aliases</dt>
-                          <dd className="m-0 text-ink">{aliases.join(', ')}</dd></>
-                    )}
-                </dl>
-            )}
-
-            <div className="mt-7">
+            <div className="mt-7 pt-1 border-t border-rule">
                 <Marker kanji="印" label="Verification" />
 
                 {top ? (
@@ -326,13 +339,34 @@ const IdentitySpine: React.FC<{
                     <p className="text-ink-pale" style={{ fontSize: '11.5px' }}>No residential address filed against these roles.</p>
                 )}
 
+                {/* Signature — one, fetched lazily. White ground stays: the crop is a
+                    PNG of a paper form, not a themed surface. */}
+                {(signature.loading || signature.imageDataUrl) && (
+                    <div className="mt-4">
+                        <div className="border border-rule flex items-center justify-center" style={{ background: '#fff', minHeight: 54 }}>
+                            {signature.imageDataUrl ? (
+                                <img src={signature.imageDataUrl} alt={`Signature from ${signature.companyName ?? 'a consent form'}`} className="w-full block" />
+                            ) : (
+                                <span className="text-ink-pale py-4" style={{ fontSize: '11px' }}>Reading consent form…</span>
+                            )}
+                        </div>
+                        {signature.imageDataUrl && (
+                            <div className="flex justify-between gap-2 mt-1.5 text-ink-pale" style={{ fontSize: '10.5px' }}>
+                                <span className="truncate" title={signature.companyName ?? ''}>{signature.companyName}</span>
+                                {signature.filingDate && <span className="font-mono tabular-nums shrink-0">{formatDate(signature.filingDate)}</span>}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                 <button
                     onClick={onOpenKyd}
                     className="mt-3 w-full border border-rule px-2.5 py-1.5 text-left text-ink-mid hover:border-ink-mid hover:text-ink transition-colors"
                     style={{ fontSize: '11.5px' }}
                 >
                     <span aria-hidden="true" className="text-accent mr-1.5" style={{ fontFamily: 'var(--serif)' }}>印</span>
-                    Open KYD verification · signatures →
+                    Open KYD verification
+                    {signature.otherCount > 0 ? ` · ${signature.otherCount} more form${signature.otherCount === 1 ? '' : 's'} →` : ' →'}
                 </button>
             </div>
         </aside>
@@ -365,7 +399,23 @@ const RosterRow: React.FC<{ result: PersonCompanyResult; onClick: () => void }> 
     const roles = [
         isDirector ? 'Director' : null,
         shareholding > 0 ? `Shareholder · ${shareholding.toFixed(1)}%` : null,
-    ].filter(Boolean).join(' & ').replace('Director & Shareholder', 'Director & Shareholder');
+    ].filter(Boolean).join(' & ');
+
+    // Company-level marks, worst first. 消 (struck off) is deliberately ink rather
+    // than amber: 琥 amber means removal is *in progress* and still stoppable,
+    // whereas a completed removal is a dead entity, which the status ramp renders
+    // faded. It also carries no inline label — the struck-through name and the
+    // status column already say "removed", so a third repetition would only cost
+    // width; the square is there to make the row scannable.
+    const stamps: Array<{ glyph: string; tone: 'crit' | 'amber' | 'wash'; title: string; label?: string; className?: string }> = [];
+    if (isInExternalAdmin) stamps.push({ glyph: '紅', tone: 'crit', title: displayStatus, label: displayStatus, className: 'text-crit font-bold' });
+    if (isCompanyRemoved && hasHistoricInsolvency) {
+        const type = historicInsolvencyType ? historicInsolvencyType.replace(/^in\s+/i, '') : 'Insolvency';
+        stamps.push({ glyph: '紅', tone: 'crit', title: `Previously in ${type}`, label: `Prev: ${type}`, className: 'text-crit' });
+    }
+    if (removalCommenced && !isCompanyRemoved) stamps.push({ glyph: '琥', tone: 'amber', title: 'Removal in progress', label: 'Removal in progress', className: 'text-amber' });
+    if (isCompanyRemoved) stamps.push({ glyph: '消', tone: 'wash', title: 'Removed from the register' });
+    const stampLabels = stamps.filter(s => s.label);
 
     return (
         <tr onClick={onClick} className="cursor-pointer group hover:bg-paper2 transition-colors">
@@ -374,27 +424,39 @@ const RosterRow: React.FC<{ result: PersonCompanyResult; onClick: () => void }> 
                     {companyName}
                 </div>
                 <div className="font-mono text-ink-pale" style={{ fontSize: '11px', fontVariantNumeric: 'tabular-nums' }}>{nzbn}</div>
-                {(isInExternalAdmin || (removalCommenced && !isCompanyRemoved) || (isCompanyRemoved && hasHistoricInsolvency)) && (
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
-                        {isInExternalAdmin && (
-                            <span className="flex items-center gap-1.5"><FlagSquare tone="crit" glyph="紅" />
-                                <span className="text-crit uppercase font-bold" style={{ fontSize: '9.5px', letterSpacing: '.05em' }}>{displayStatus}</span></span>
-                        )}
-                        {removalCommenced && !isCompanyRemoved && (
-                            <span className="flex items-center gap-1.5"><FlagSquare tone="amber" glyph="琥" />
-                                <span className="text-amber uppercase" style={{ fontSize: '9.5px', letterSpacing: '.05em' }}>Removal in progress</span></span>
-                        )}
-                        {isCompanyRemoved && hasHistoricInsolvency && (
-                            <span className="flex items-center gap-1.5"><FlagSquare tone="crit" glyph="紅" />
-                                <span className="text-crit uppercase" style={{ fontSize: '9.5px', letterSpacing: '.05em' }}>
-                                    Prev: {historicInsolvencyType ? historicInsolvencyType.replace(/^in\s+/i, '') : 'Insolvency'}</span></span>
+                {/* Company stamps. Squares are grouped and the labels share one line so
+                    a company carrying several marks costs one row of height, not three. */}
+                {stamps.length > 0 && (
+                    <div className="flex items-center gap-1.5 mt-1">
+                        <span className="flex items-center gap-1 shrink-0">
+                            {stamps.map((s, i) => (
+                                <span key={i} title={s.title} className="flex"><FlagSquare tone={s.tone} glyph={s.glyph} /></span>
+                            ))}
+                        </span>
+                        {stampLabels.length > 0 && (
+                            <span className="uppercase leading-tight" style={{ fontSize: '9.5px', letterSpacing: '.05em' }}>
+                                {stampLabels.map((s, i) => (
+                                    <span key={i} className={s.className}>
+                                        {i > 0 && <span className="text-ink-pale"> · </span>}{s.label}
+                                    </span>
+                                ))}
+                            </span>
                         )}
                     </div>
                 )}
             </td>
-            <td className="align-top py-2 pr-3 border-b border-rule text-accent whitespace-nowrap" style={{ fontSize: '12px' }}>
-                {roles || '—'}
-                {result.isInactive && <span className="text-ink-pale"> · resigned</span>}
+            <td className="align-top py-2 pr-3 border-b border-rule whitespace-nowrap" style={{ fontSize: '12px' }}>
+                <span className={result.isInactive ? 'text-ink-mid' : 'text-accent'}>{roles || '—'}</span>
+                {/* A ceased role is a fact about the PERSON, not a mark against the
+                    company — so it is an outlined neutral tag in the role column, never
+                    a filled severity square like the company stamps beside it. */}
+                {result.isInactive && (
+                    <span className="ml-2 inline-flex items-center gap-1 border border-rule px-1.5 py-px align-middle text-ink-mid"
+                          style={{ fontSize: '9.5px', letterSpacing: '.05em' }}>
+                        <span aria-hidden="true" style={{ fontFamily: 'var(--serif)' }}>辞</span>
+                        <span className="uppercase">Resigned</span>
+                    </span>
+                )}
             </td>
             <td className="align-top py-2 pr-3 border-b border-rule text-ink-pale whitespace-nowrap tabular-nums" style={{ fontSize: '11px' }}>
                 {from ? `${from} — ${to}` : '—'}
@@ -491,6 +553,9 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
     // every record they hold, so it is read once rather than printed per record.
     const multipleInsolvencies = !!insolvencyRecords?.some(r => r.multipleInsolvencies);
 
+    // Prefer the register's spelling of the name over whatever was typed.
+    const subjectName = displayPersonName(personName, results);
+
     const sortOptions: { value: SortMode; label: string }[] = [
         { value: 'default', label: 'Directors first' },
         { value: 'shareholding', label: 'Shareholding %' },
@@ -533,9 +598,8 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
             <div className="flex-1 overflow-y-auto">
               <div className="max-w-[1240px] mx-auto px-6 grid gap-x-7 lg:grid-cols-[300px_minmax(0,1fr)] pt-6">
                 <IdentitySpine
-                    personName={personName}
+                    personName={subjectName}
                     results={results}
-                    insolvencyRecords={insolvencyRecords}
                     onOpenKyd={() => setShowKyd(true)}
                 />
 
@@ -557,7 +621,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                                     Register checks · clear
                                 </p>
                                 <p className="text-ink-mid" style={{ fontSize: '12px' }}>
-                                    No records for "{personName}" in the Disqualified Directors or Insolvency registers.
+                                    No records for "{subjectName}" in the Disqualified Directors or Insolvency registers.
                                 </p>
                             </div>
                         </div>
