@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { PersonCompanyResult } from '../types';
 import { renderSignatureCrop } from '../utils/signatureCrop';
 
-interface PrimarySignature {
-    loading: boolean;
+export interface PrimarySignature {
+    /** 'none' means we looked and there was nothing to show — distinct from 'idle'. */
+    status: 'idle' | 'loading' | 'ready' | 'none';
     imageDataUrl: string | null;
     companyName: string | null;
     filingDate: string | null;
@@ -11,7 +12,7 @@ interface PrimarySignature {
     otherCount: number;
 }
 
-const IDLE: PrimarySignature = { loading: false, imageDataUrl: null, companyName: null, filingDate: null, otherCount: 0 };
+const IDLE: PrimarySignature = { status: 'idle', imageDataUrl: null, companyName: null, filingDate: null, otherCount: 0 };
 
 /**
  * Fetches ONE signature — the most recently filed consent form — for the identity
@@ -23,25 +24,36 @@ const IDLE: PrimarySignature = { loading: false, imageDataUrl: null, companyName
  * them, so this resolves the consent-form list (one request) and renders only the
  * newest. Everything else stays behind the panel.
  *
- * Non-fatal throughout: any failure just leaves the spine without a signature.
+ * The effect depends on stable primitives, NOT on the `results` array identity.
+ * That matters: App.tsx replaces the results array when background status
+ * enrichment lands, and keying the effect on the array meant the in-flight
+ * request was cancelled mid-flight while a "already started" guard blocked the
+ * retry — leaving the spine stuck on its loading state forever.
  */
 export function usePrimarySignature(results: PersonCompanyResult[]): PrimarySignature {
     const [state, setState] = useState<PrimarySignature>(IDLE);
-    const startedRef = useRef(false);
+
+    const firstName = results.find(r => r.firstName)?.firstName?.trim() || '';
+    const lastName = results.find(r => r.lastName)?.lastName?.trim() || '';
+
+    // Consent forms are only filed for live directorships, and the lookup is keyed
+    // on company number — the same eligibility rule the KYD panel applies.
+    const active = useMemo(
+        () => results.filter(r => r.companyNumber && (r.entityStatusCode || 0) < 80 && !r.isInactive),
+        [results]
+    );
+    // Stable identity for the request: same person, same companies → same key, so
+    // enrichment re-rendering with a fresh array does not restart anything.
+    const activeKey = active.map(c => c.companyNumber).sort().join(',');
 
     useEffect(() => {
-        if (startedRef.current) return;
+        if (!firstName || !lastName || !activeKey) {
+            setState(IDLE);
+            return;
+        }
 
-        const firstName = results.find(r => r.firstName)?.firstName || '';
-        const lastName = results.find(r => r.lastName)?.lastName || '';
-        // Consent forms are only filed for live directorships, and the lookup is
-        // keyed on company number — same eligibility rule the KYD panel uses.
-        const active = results.filter(r => r.companyNumber && (r.entityStatusCode || 0) < 80 && !r.isInactive);
-        if (!firstName || !lastName || active.length === 0) return;
-
-        startedRef.current = true;
         let cancelled = false;
-        setState({ ...IDLE, loading: true });
+        setState({ ...IDLE, status: 'loading' });
 
         (async () => {
             try {
@@ -51,43 +63,50 @@ export function usePrimarySignature(results: PersonCompanyResult[]): PrimarySign
                     body: JSON.stringify({
                         firstName,
                         lastName,
-                        companies: active.map(c => ({ companyNumber: c.companyNumber!, status: 'active' })),
+                        companies: activeKey.split(',').map(companyNumber => ({ companyNumber, status: 'active' })),
                     }),
                 });
-                if (!res.ok) throw new Error(String(res.status));
+                if (!res.ok) throw new Error(`consent-forms ${res.status}`);
                 const data = await res.json();
 
                 const found = Object.entries(data.results || {})
-                    .filter(([, link]) => !!link)
+                    .filter(([, link]) => !!(link as any)?.url)
                     .map(([companyNumber, link]) => ({
-                        companyNumber,
                         url: (link as any).url as string,
                         filingDate: ((link as any).filingDate as string) || '',
                         companyName: results.find(r => r.companyNumber === companyNumber)?.companyName || '',
                     }))
-                    // Newest filing first — an old signature is the least useful one to lead with.
+                    // Newest filing first — an old signature is the least useful to lead with.
                     .sort((a, b) => (b.filingDate || '').localeCompare(a.filingDate || ''));
 
-                if (found.length === 0) { if (!cancelled) setState(IDLE); return; }
+                if (cancelled) return;
+                if (found.length === 0) { setState({ ...IDLE, status: 'none' }); return; }
 
                 const primary = found[0];
                 const imageDataUrl = await renderSignatureCrop(primary.url);
                 if (cancelled) return;
 
-                setState({
-                    loading: false,
-                    imageDataUrl,
-                    companyName: primary.companyName,
-                    filingDate: primary.filingDate || null,
-                    otherCount: found.length - 1,
-                });
-            } catch {
-                if (!cancelled) setState(IDLE);
+                setState(imageDataUrl
+                    ? {
+                        status: 'ready',
+                        imageDataUrl,
+                        companyName: primary.companyName,
+                        filingDate: primary.filingDate || null,
+                        otherCount: found.length - 1,
+                    }
+                    // The form exists but page 1 wouldn't render — say nothing was shown
+                    // rather than leaving an empty frame.
+                    : { ...IDLE, status: 'none', otherCount: found.length - 1 });
+            } catch (err) {
+                console.warn('[KYD] primary signature lookup failed:', err);
+                if (!cancelled) setState({ ...IDLE, status: 'none' });
             }
         })();
 
         return () => { cancelled = true; };
-    }, [results]);
+        // results is intentionally omitted — see the note above; activeKey covers it.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [firstName, lastName, activeKey]);
 
     return state;
 }

@@ -286,20 +286,23 @@ const IdentitySpine: React.FC<{
 
             <div className="flex items-start gap-3">
                 {/* Inkan — the same split 株/締 seal the graph node uses */}
+                {/* Inkan. The glyph is a direct grid child with line-height 1 so the seal
+                    optically centres — a wrapper box sized to the glyph left the CJK
+                    character sitting high and off-centre inside the ring. */}
                 <span aria-hidden="true" className="relative shrink-0 grid place-items-center" style={{ width: 44, height: 44 }}>
                     <span className="absolute inset-0 rounded-full" style={{ border: '1px solid var(--accent)' }} />
                     <span className="absolute rounded-full" style={{ inset: 3, border: '1px solid oklch(from var(--accent) l c h / .35)' }} />
-                    <span className="relative grid place-items-center" style={{ width: 19, height: 20 }}>
-                        {isDirector && isShareholder ? (
-                            <>
-                                <span style={{ position: 'absolute', inset: 0, fontFamily: 'var(--serif)', fontSize: 17, lineHeight: '20px', color: 'var(--accent)', clipPath: 'inset(0 50% 0 0)' }}>株</span>
-                                <span style={{ position: 'absolute', inset: 0, fontFamily: 'var(--serif)', fontSize: 17, lineHeight: '20px', color: 'var(--accent)', clipPath: 'inset(0 0 0 50%)' }}>締</span>
-                                <span style={{ position: 'absolute', top: -1, bottom: -1, left: '50%', width: 1, background: 'var(--accent)', opacity: .7 }} />
-                            </>
-                        ) : (
-                            <span style={{ fontFamily: 'var(--serif)', fontSize: 17, color: 'var(--accent)' }}>{isDirector ? '締' : '株'}</span>
-                        )}
-                    </span>
+                    {isDirector && isShareholder ? (
+                        <span className="relative block" style={{ width: 18, height: 18 }}>
+                            <span className="absolute inset-0 grid place-items-center" style={{ fontFamily: 'var(--serif)', fontSize: 18, lineHeight: 1, color: 'var(--accent)', clipPath: 'inset(0 50% 0 0)' }}>株</span>
+                            <span className="absolute inset-0 grid place-items-center" style={{ fontFamily: 'var(--serif)', fontSize: 18, lineHeight: 1, color: 'var(--accent)', clipPath: 'inset(0 0 0 50%)' }}>締</span>
+                            <span className="absolute" style={{ top: -2, bottom: -2, left: '50%', width: 1, background: 'var(--accent)', opacity: .7 }} />
+                        </span>
+                    ) : (
+                        <span className="block" style={{ fontFamily: 'var(--serif)', fontSize: 18, lineHeight: 1, color: 'var(--accent)' }}>
+                            {isDirector ? '締' : '株'}
+                        </span>
+                    )}
                 </span>
                 <div className="min-w-0">
                     <h2 className="text-ink" style={{ fontFamily: 'var(--serif)', fontWeight: 600, fontSize: 27, lineHeight: 1.12 }}>
@@ -339,24 +342,30 @@ const IdentitySpine: React.FC<{
                     <p className="text-ink-pale" style={{ fontSize: '11.5px' }}>No residential address filed against these roles.</p>
                 )}
 
-                {/* Signature — one, fetched lazily. White ground stays: the crop is a
-                    PNG of a paper form, not a themed surface. */}
-                {(signature.loading || signature.imageDataUrl) && (
-                    <div className="mt-4">
-                        <div className="border border-rule flex items-center justify-center" style={{ background: '#fff', minHeight: 54 }}>
-                            {signature.imageDataUrl ? (
-                                <img src={signature.imageDataUrl} alt={`Signature from ${signature.companyName ?? 'a consent form'}`} className="w-full block" />
-                            ) : (
-                                <span className="text-ink-pale py-4" style={{ fontSize: '11px' }}>Reading consent form…</span>
-                            )}
-                        </div>
-                        {signature.imageDataUrl && (
-                            <div className="flex justify-between gap-2 mt-1.5 text-ink-pale" style={{ fontSize: '10.5px' }}>
-                                <span className="truncate" title={signature.companyName ?? ''}>{signature.companyName}</span>
-                                {signature.filingDate && <span className="font-mono tabular-nums shrink-0">{formatDate(signature.filingDate)}</span>}
-                            </div>
-                        )}
+                {/* Signature — one, fetched lazily. White ground stays on the frame: the
+                    crop is a PNG of a paper form, not a themed surface. 'none' is stated
+                    rather than rendering nothing, so "no form on record" can't be
+                    mistaken for "still loading" or for a silent failure. */}
+                {signature.status === 'loading' && (
+                    <div className="mt-4 border border-rule grid place-items-center" style={{ background: '#fff', minHeight: 54 }}>
+                        <span className="text-ink-pale" style={{ fontSize: '11px' }}>Reading consent form…</span>
                     </div>
+                )}
+                {signature.status === 'ready' && signature.imageDataUrl && (
+                    <div className="mt-4">
+                        <div className="border border-rule" style={{ background: '#fff' }}>
+                            <img src={signature.imageDataUrl} alt={`Signature from ${signature.companyName || 'a consent form'}`} className="w-full block" />
+                        </div>
+                        <div className="flex justify-between gap-2 mt-1.5 text-ink-pale" style={{ fontSize: '10.5px' }}>
+                            <span className="truncate" title={signature.companyName ?? ''}>{signature.companyName}</span>
+                            {signature.filingDate && <span className="font-mono tabular-nums shrink-0">{formatDate(signature.filingDate)}</span>}
+                        </div>
+                    </div>
+                )}
+                {signature.status === 'none' && (
+                    <p className="mt-4 text-ink-pale" style={{ fontSize: '11px' }}>
+                        No consent form signature available for the current directorships.
+                    </p>
                 )}
 
                 <button
