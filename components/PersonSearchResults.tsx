@@ -20,16 +20,161 @@ const formatDate = (dateString: string): string => {
     }
 };
 
-// NOTE: a directorship-coverage timeline chart (with a derived "N directorships
-// held during a bankruptcy period" count) was built here and then deliberately
-// removed. It could not be drawn honestly from this data: these records are
-// "(Conditional) Discharged" with NO dischargeOrCompletionDate on file, so every
-// bankruptcy bar ran to today's date and every directorship "overlapped" it —
-// producing a bar reading "2002 — 2026" and a headline claim of 43 overlapping
-// directorships, both artefacts of a missing-date fallback rather than facts.
-// A derived accusation resting on a guessed end date is worse than no chart, so
-// the panel now states only the dates the register actually gives us.
-// Do not reinstate it without a real discharge date per record.
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+
+// The register returns monthOfBirth as a bare number ("1"), which rendered as
+// "Born 1 1976". Map it to a name; pass anything non-numeric straight through in
+// case the field ever arrives already spelled out.
+const formatBirth = (month?: string, year?: string): string | null => {
+    if (!year) return null;
+    if (!month) return year;
+    const n = parseInt(month, 10);
+    return `${Number.isInteger(n) && n >= 1 && n <= 12 ? MONTH_NAMES[n - 1] : month} ${year}`;
+};
+
+// Epoch ms for an API date string, or undefined if it can't be parsed.
+const parseApiDate = (dateString?: string): number | undefined => {
+    if (!dateString) return undefined;
+    const cleanDate = dateString.split('+')[0].split('-').slice(0, 3).join('-');
+    const t = new Date(cleanDate).getTime();
+    return Number.isNaN(t) ? undefined : t;
+};
+
+interface Span { start: number; end: number }
+
+// Merges overlapping/adjacent spans into the minimal covering set, so the
+// directorship band shows genuine gaps rather than one continuous bar.
+const mergeSpans = (spans: Span[]): Span[] => {
+    if (spans.length === 0) return [];
+    const sorted = [...spans].sort((a, b) => a.start - b.start);
+    const merged: Span[] = [{ ...sorted[0] }];
+    for (let i = 1; i < sorted.length; i++) {
+        const last = merged[merged.length - 1];
+        if (sorted[i].start <= last.end) last.end = Math.max(last.end, sorted[i].end);
+        else merged.push({ ...sorted[i] });
+    }
+    return merged;
+};
+
+/**
+ * Directorship coverage against bankruptcy periods.
+ *
+ * This chart was built once before, shipped, and pulled the same day: with no
+ * discharge dates coming through (we were not fetching the detail record — see
+ * insolvencyApi.ts) every bankruptcy ran to "today" and every directorship
+ * trivially overlapped it, yielding a bar labelled "2002 — 2026" and a headline
+ * claim of 43 overlapping directorships. Both were artefacts of a fallback.
+ *
+ * Rebuilt on real dates, with the rule that caused that failure inverted: a
+ * period with no known end is NEVER extended to today — it is excluded from the
+ * chart and from the count, and the exclusion is stated. The count is deliberately
+ * conservative: it counts only directorships whose own dates prove an overlap.
+ * Undercounting is recoverable; overcounting is an accusation.
+ */
+const DirectorshipTimeline: React.FC<{ results: PersonCompanyResult[]; insolvencyRecords: InsolvencyRecord[] }> = ({ results, insolvencyRecords }) => {
+    const now = Date.now();
+
+    // A bankruptcy is drawable only with a known start AND a known end — either a
+    // real discharge date, or a status that genuinely means "still bankrupt today".
+    const periods: Array<{ start: number; end: number; current: boolean; conditionExpiry?: number }> = [];
+    let undatedRecords = 0;
+    for (const r of insolvencyRecords) {
+        const start = parseApiDate(r.adjudicationOrLiquidationDate);
+        if (start === undefined) { undatedRecords++; continue; }
+        const discharge = parseApiDate(r.dischargeOrCompletionDate);
+        if (isInsolvencyRecordCurrent(r)) {
+            periods.push({ start, end: now, current: true, conditionExpiry: parseApiDate(r.dischargeConditionExpiryDate) });
+        } else if (discharge !== undefined) {
+            periods.push({ start, end: discharge, current: false, conditionExpiry: parseApiDate(r.dischargeConditionExpiryDate) });
+        } else {
+            undatedRecords++; // no discharge date and not current — refuse to guess
+        }
+    }
+
+    // A directorship counts only when its start is known. Its end is the
+    // resignation date; if it has ended but the date is missing, the span is
+    // indeterminate and is excluded from the overlap count rather than assumed.
+    const spans = results
+        .filter(r => r.isDirector)
+        .map(r => {
+            const start = parseApiDate(r.appointmentDate);
+            const resigned = parseApiDate(r.resignationDate);
+            const end = resigned ?? (r.isInactive ? undefined : now);
+            return { start, end };
+        })
+        .filter((s): s is Span => s.start !== undefined && s.end !== undefined && s.end >= s.start);
+
+    if (periods.length === 0 || spans.length === 0) {
+        if (undatedRecords === 0) return null;
+        return (
+            <p className="text-ink-pale mb-3" style={{ fontSize: '11.5px' }}>
+                No timeline drawn — {undatedRecords} record{undatedRecords === 1 ? ' has' : 's have'} no discharge date on file,
+                and an end date is not assumed.
+            </p>
+        );
+    }
+
+    const coverage = mergeSpans(spans);
+    const overlapping = spans.filter(s => periods.some(p => s.start <= p.end && p.start <= s.end)).length;
+    const excludedDirectorships = results.filter(r => r.isDirector).length - spans.length;
+
+    const times = [...coverage.flatMap(c => [c.start, c.end]), ...periods.flatMap(p => [p.start, p.end, p.conditionExpiry ?? p.end])];
+    const rawMin = Math.min(...times);
+    const rawMax = Math.max(...times);
+    const pad = Math.max((rawMax - rawMin) * 0.04, 86400000 * 60);
+    const min = rawMin - pad;
+    const max = rawMax + pad;
+    const W = 900;
+    const x = (t: number) => ((t - min) / (max - min)) * W;
+    const year = (t: number) => new Date(t).getFullYear();
+
+    return (
+        <div className="mb-3">
+            <svg viewBox={`0 0 ${W} 64`} width="100%" height={64} preserveAspectRatio="none" role="img"
+                aria-label={`Directorship coverage against ${periods.length} bankruptcy period(s)`}>
+                <text x={0} y={8} fill="var(--ink-pale)" style={{ fontFamily: 'var(--mono)', fontSize: 9 }}>directorships held</text>
+                {coverage.map((c, i) => (
+                    <rect key={i} x={x(c.start)} y={12} width={Math.max(x(c.end) - x(c.start), 1.5)} height={9}
+                        fill="var(--accent)" opacity=".25" />
+                ))}
+                <text x={0} y={34} fill="var(--crit)" style={{ fontFamily: 'var(--mono)', fontSize: 9 }}>bankrupt</text>
+                {periods.map((p, i) => (
+                    <g key={i}>
+                        <rect x={x(p.start)} y={38} width={Math.max(x(p.end) - x(p.start), 1.5)} height={9}
+                            fill="var(--crit)" opacity=".85" />
+                        <text x={x(p.start)} y={58} fill="var(--crit)" style={{ fontFamily: 'var(--mono)', fontSize: 9.5 }}>
+                            {year(p.start)} — {p.current ? 'current' : year(p.end)}
+                        </text>
+                    </g>
+                ))}
+                <line x1={0} y1={62} x2={W} y2={62} stroke="var(--rule)" strokeWidth="1" />
+            </svg>
+            <div className="flex justify-between text-ink-pale" style={{ fontFamily: 'var(--mono)', fontSize: 9 }}>
+                <span>{year(min)}</span><span>{year(max)}</span>
+            </div>
+            <p className="text-ink-mid mt-1.5" style={{ fontSize: '11.5px' }}>
+                {overlapping > 0 ? (
+                    <span className="text-crit font-bold">
+                        {overlapping} directorship{overlapping === 1 ? '' : 's'} overlapped a bankruptcy period
+                    </span>
+                ) : (
+                    'No directorship overlapped a bankruptcy period'
+                )}
+                {' — '}derived mechanically from dates on file; not a finding that anything was breached.
+                {(undatedRecords > 0 || excludedDirectorships > 0) && (
+                    <span className="text-ink-pale">
+                        {' '}Excluded as undated:{' '}
+                        {[
+                            undatedRecords > 0 ? `${undatedRecords} insolvency record${undatedRecords === 1 ? '' : 's'}` : null,
+                            excludedDirectorships > 0 ? `${excludedDirectorships} directorship${excludedDirectorships === 1 ? '' : 's'}` : null,
+                        ].filter(Boolean).join(' and ')}.
+                    </span>
+                )}
+            </p>
+        </div>
+    );
+};
 
 interface PersonSearchResultsProps {
     personName: string;
@@ -274,6 +419,9 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
         d => d.disqualificationCriteria?.criteria?.some(c => !c.endDate)
     );
     const insolvencyCurrent = !!insolvencyRecords?.some(isInsolvencyRecordCurrent);
+    // A property of the person, not of any one record — the register stamps it on
+    // every record they hold, so it is read once rather than printed per record.
+    const multipleInsolvencies = !!insolvencyRecords?.some(r => r.multipleInsolvencies);
 
     const sortOptions: { value: SortMode; label: string }[] = [
         { value: 'default', label: 'Directors first' },
@@ -432,6 +580,11 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                                             · {insolvencyRecords!.length} {insolvencyRecords!.length === 1 ? 'record' : 'records'}
                                         </span>
                                     </p>
+                                    {multipleInsolvencies && (
+                                        <p className="text-amber uppercase font-bold" style={{ fontSize: '10px', letterSpacing: '.04em' }}>
+                                            Multiple insolvencies on record
+                                        </p>
+                                    )}
                                 </span>
                                 <span
                                     className={`uppercase font-bold whitespace-nowrap ${insolvencyCurrent ? 'text-crit' : 'text-ink-pale'}`}
@@ -449,6 +602,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                             </button>
                             {insOpen && (
                                 <div className="p-3 border-t border-rule bg-paper2 space-y-3">
+                                    <DirectorshipTimeline results={results} insolvencyRecords={insolvencyRecords!} />
                                     {insolvencyRecords!.map((record, idx) => (
                                         <div key={idx} className="min-w-0">
                                             <p className="font-bold text-ink" style={{ fontSize: '13px' }}>
@@ -468,7 +622,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                                             {(record.yearOfBirth || record.occupationAtAdjudicationOrIndustryAtLiquidation) && (
                                                 <p className="text-ink-pale" style={{ fontSize: '11.5px' }}>
                                                     {[
-                                                        record.yearOfBirth ? `Born ${[record.monthOfBirth, record.yearOfBirth].filter(Boolean).join(' ')}` : null,
+                                                        formatBirth(record.monthOfBirth, record.yearOfBirth) && `Born ${formatBirth(record.monthOfBirth, record.yearOfBirth)}`,
                                                         record.occupationAtAdjudicationOrIndustryAtLiquidation,
                                                     ].filter(Boolean).join(' · ')}
                                                 </p>
@@ -506,11 +660,10 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                                                         <span className="text-crit">Annulled:</span> {formatDate(record.annulmentDate)}
                                                     </p>
                                                 )}
-                                                {record.multipleInsolvencies && (
-                                                    <p className="text-amber uppercase mt-1" style={{ fontSize: '10px', letterSpacing: '.04em' }}>
-                                                        Multiple insolvencies on record
-                                                    </p>
-                                                )}
+                                                {/* "Multiple insolvencies" is a fact about the PERSON, not this
+                                                    record — the register sets it on every record belonging to
+                                                    them, so printing it per-record repeated it N times. Stated
+                                                    once, in the always-visible strip header. */}
                                             </div>
                                         </div>
                                     ))}
