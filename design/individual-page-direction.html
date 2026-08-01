@@ -24,111 +24,140 @@
   --amber:      light-dark(oklch(0.60 0.10 78),  oklch(0.72 0.10 78));
   --green:      light-dark(oklch(0.50 0.08 150), oklch(0.68 0.09 150));
   --grain-op:   light-dark(.35, .22);
+  /* painterly ink sits heavier on washi than it does on a dark ground */
+  --brush-op:   light-dark(.115, .085);
+  --enso-op:    light-dark(.085, .06);
 
   --serif:  "Shippori Mincho", "Yu Mincho", "Hiragino Mincho ProN", serif;
   --gothic: "Zen Kaku Gothic New", "Yu Gothic UI", "Hiragino Sans", system-ui, sans-serif;
   --mono:   "Cascadia Mono", Consolas, ui-monospace, monospace;
 }
-/* The viewer's theme toggle stamps data-theme; flipping color-scheme makes every
-   light-dark() token follow it, in both directions. Same mechanism as index.css. */
 :root[data-theme="light"]{ color-scheme: light }
 :root[data-theme="dark"] { color-scheme: dark }
 
-*{ box-sizing: border-box }
+*{ box-sizing:border-box }
 body{
-  margin:0; background: var(--paper); color: var(--ink);
-  font-family: var(--gothic); font-size:14px; line-height:1.5;
-  -webkit-font-smoothing: antialiased;
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:var(--gothic); font-size:14px; line-height:1.5;
+  -webkit-font-smoothing:antialiased;
 }
-/* Washi grain — one fixed layer, never on scrolling containers */
 body::before{
   content:""; position:fixed; inset:0; z-index:9999; pointer-events:none;
-  opacity: var(--grain-op);
+  opacity:var(--grain-op);
   background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
 }
-h1,h2,h3{ margin:0; font-weight:500; text-wrap:balance }
+h1,h2,h3,h4{ margin:0; font-weight:500; text-wrap:balance }
 p{ margin:0 }
-ul{ margin:0; padding:0; list-style:none }
 a{ color:var(--accent); text-decoration:none }
 a:hover{ text-decoration:underline }
 button{ font:inherit; color:inherit; background:none; border:0; cursor:pointer }
 :focus-visible{ outline:2px solid var(--accent); outline-offset:2px }
+summary{ list-style:none } summary::-webkit-details-marker{ display:none }
 .mono{ font-family:var(--mono); font-variant-numeric:tabular-nums }
-.tnum{ font-variant-numeric:tabular-nums }
 
-/* ── App nav ─────────────────────────────────────────────── */
+/* ── brush primitives ────────────────────────────────────── */
+.brush{ display:block; fill:var(--ink); opacity:var(--brush-op) }
+.rule-brush{ height:9px; width:100%; overflow:visible }
+.rule-brush path{ fill:var(--ink); opacity:var(--brush-op) }
+
+/* ── nav ─────────────────────────────────────────────────── */
 .nav{
   height:53px; border-bottom:1px solid var(--rule); background:var(--paper);
-  display:flex; align-items:center; gap:12px; padding:0 20px;
-  position:sticky; top:0; z-index:20;
+  display:flex; align-items:center; gap:12px; padding:0 20px; position:sticky; top:0; z-index:30;
 }
 .hanko{
   width:30px; height:30px; background:var(--accent); color:var(--accent-ink);
   font-family:var(--serif); font-weight:700; font-size:17px;
-  display:grid; place-items:center; box-shadow: inset 0 0 14px oklch(0 0 0/.22);
+  display:grid; place-items:center; box-shadow:inset 0 0 14px oklch(0 0 0/.22);
 }
-.wordmark{ font-family:var(--serif); font-weight:600; font-size:18px; letter-spacing:.01em }
+.wordmark{ font-family:var(--serif); font-weight:600; font-size:18px }
 .wordmark span{ font-size:11px; letter-spacing:.24em; color:var(--ink-mid); margin-left:8px }
-.nav-right{ margin-left:auto; display:flex; align-items:center; gap:16px; font-size:12px; color:var(--ink-mid) }
+.nav-right{ margin-left:auto; display:flex; gap:16px; font-size:12px; color:var(--ink-mid) }
 .dot{ width:7px; height:7px; background:var(--green); display:inline-block; margin-right:6px }
 
-/* ── Dossier shell ───────────────────────────────────────── */
-.sheet{ max-width:1240px; margin:0 auto; padding:0 20px 64px }
-.chosho{ display:grid; grid-template-columns:312px minmax(0,1fr); gap:0 }
-.spine{
-  border-right:1px solid var(--rule); padding:28px 26px 40px 0;
-  position:sticky; top:53px; align-self:start; max-height:calc(100vh - 53px); overflow-y:auto;
-}
-.findings{ padding:28px 0 40px 26px; min-width:0 }
+/* ── sheet ───────────────────────────────────────────────── */
+.sheet{ max-width:1300px; margin:0 auto; padding:0 22px 72px; position:relative }
+.chosho{ display:grid; grid-template-columns:52px 300px minmax(0,1fr); gap:0; position:relative }
 
-/* section marker: kanji + rule. Encodes the register the section draws on. */
-.marker{ display:flex; align-items:baseline; gap:9px; margin-bottom:14px }
-.marker .k{ font-family:var(--serif); font-size:15px; color:var(--accent); line-height:1 }
-.marker .t{ font-size:10.5px; text-transform:uppercase; letter-spacing:.16em; color:var(--ink-pale) }
-.marker .r{ flex:1; height:1px; background:var(--rule) }
-
-/* ── Identity ────────────────────────────────────────────── */
-.subject{ display:flex; align-items:flex-start; gap:13px; margin-bottom:6px }
-.inkan{
-  width:46px; height:46px; border-radius:50%; flex:none; position:relative;
-  display:grid; place-items:center;
+/* tategaki document label — vertical Mincho down the outer edge, as on a bound file */
+.tate{
+  writing-mode:vertical-rl; text-orientation:upright;
+  padding:30px 0 0; display:flex; flex-direction:column; align-items:center; gap:20px;
+  font-family:var(--serif); position:sticky; top:53px; align-self:start; height:calc(100vh - 53px);
 }
-.inkan .ring, .inkan .ring2{ position:absolute; border-radius:50%; }
+.tate .big{ font-size:27px; letter-spacing:.30em; color:var(--ink); font-weight:600 }
+.tate .sub{ font-size:11.5px; letter-spacing:.34em; color:var(--ink-pale) }
+.tate .num{ font-family:var(--mono); font-size:10px; letter-spacing:.1em; color:var(--ink-pale); writing-mode:vertical-rl }
+.tate .stem{ flex:1; width:9px; position:relative }
+.tate .stem svg{ position:absolute; inset:0; width:9px; height:100% }
+
+.spine{ padding:28px 26px 44px 6px; position:sticky; top:53px; align-self:start;
+        max-height:calc(100vh - 53px); overflow-y:auto; overflow-x:hidden }
+.findings{ padding:28px 0 44px 30px; min-width:0; position:relative }
+/* brushed vertical rule replaces the hairline between spine and findings */
+.vrule{ position:absolute; left:0; top:0; bottom:0; width:10px; pointer-events:none }
+.vrule svg{ width:10px; height:100%; }
+.vrule path{ fill:var(--ink); opacity:var(--brush-op) }
+
+/* ── section markers ─────────────────────────────────────── */
+.marker{ margin-bottom:15px }
+.marker .row{ display:flex; align-items:baseline; gap:10px }
+.marker .k{ font-family:var(--serif); font-size:16px; color:var(--accent); line-height:1 }
+.marker .t{ font-size:10.5px; text-transform:uppercase; letter-spacing:.17em; color:var(--ink-pale) }
+.marker .rule-brush{ margin-top:3px }
+
+/* ── subject ─────────────────────────────────────────────── */
+.subjwrap{ position:relative }
+.enso{ position:absolute; left:50%; top:52%; width:330px; height:330px;
+       transform:translate(-50%,-50%); pointer-events:none; z-index:0 }
+.enso path{ fill:var(--ink); opacity:var(--enso-op) }
+.subject{ display:flex; align-items:flex-start; gap:13px; position:relative; z-index:1 }
+.inkan{ width:48px; height:48px; border-radius:50%; flex:none; position:relative; display:grid; place-items:center }
+.inkan .ring,.inkan .ring2{ position:absolute; border-radius:50% }
 .inkan .ring{ inset:0; border:1px solid var(--accent) }
 .inkan .ring2{ inset:3px; border:1px solid var(--accent); opacity:.35 }
-.inkan .g{ font-family:var(--serif); font-size:19px; color:var(--accent); position:relative; display:flex }
-.inkan .g i{ font-style:normal; width:9.5px; overflow:hidden; display:block }
+.inkan .g{ font-family:var(--serif); font-size:20px; color:var(--accent); position:relative; display:flex }
+.inkan .g i{ font-style:normal; width:10px; overflow:hidden; display:block }
 .inkan .g i:first-child{ direction:rtl }
 .inkan .split{ position:absolute; top:-2px; bottom:-2px; left:50%; width:1px; background:var(--accent); opacity:.7 }
-.name{ font-family:var(--serif); font-size:29px; line-height:1.12; font-weight:600 }
-.role{ font-size:10.5px; text-transform:uppercase; letter-spacing:.12em; color:var(--ink-pale); margin-top:5px }
-.bio{ font-size:12.5px; color:var(--ink-mid); margin-top:12px; padding-top:12px; border-top:1px solid var(--rule) }
+.name{ font-family:var(--serif); font-size:30px; line-height:1.1; font-weight:600 }
+.role{ font-size:10.5px; text-transform:uppercase; letter-spacing:.12em; color:var(--ink-pale); margin-top:6px }
+.bio{ position:relative; z-index:1; font-size:12.5px; margin-top:16px; padding-top:13px; border-top:1px solid var(--rule) }
 .bio dl{ margin:0; display:grid; grid-template-columns:auto 1fr; gap:5px 12px }
 .bio dt{ font-size:10px; text-transform:uppercase; letter-spacing:.1em; color:var(--ink-pale); padding-top:2px }
 .bio dd{ margin:0; color:var(--ink) }
 
-.block{ margin-top:26px }
+.block{ margin-top:30px; position:relative }
 .addr{ border:1px solid var(--rule); background:var(--paper2); padding:10px 11px }
 .addr .line{ font-size:12.5px; line-height:1.45 }
 .addr .meta{ font-size:11px; color:var(--ink-pale); margin-top:5px }
 .verdict{ display:flex; align-items:center; gap:6px; font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; margin-bottom:7px }
 .sq{ width:19px; height:19px; flex:none; display:grid; place-items:center; font-family:var(--serif); font-size:11px; color:var(--paper) }
 .sq.amber{ background:var(--amber) } .sq.crit{ background:var(--crit) } .sq.green{ background:var(--green) }
-.other-addr{ font-size:11.5px; color:var(--ink-mid); margin-top:7px; padding-left:11px; border-left:1px solid var(--rule) }
-
+.other-addr{ font-size:11.5px; color:var(--ink-mid); margin-top:8px; padding-left:11px; border-left:1px solid var(--rule); line-height:1.7 }
 .sig{ border:1px solid var(--rule); background:#fff; padding:6px 8px 2px }
 .sig svg{ display:block; width:100%; height:52px }
 .sigcap{ font-size:10.5px; color:var(--ink-pale); margin-top:6px; display:flex; justify-content:space-between; gap:8px }
-.btn-quiet{
-  margin-top:9px; width:100%; border:1px solid var(--rule); padding:6px 10px;
-  font-size:11.5px; color:var(--ink-mid); text-align:left; transition:border-color .15s,color .15s;
-}
+.btn-quiet{ margin-top:9px; width:100%; border:1px solid var(--rule); padding:6px 10px;
+            font-size:11.5px; color:var(--ink-mid); text-align:left; transition:border-color .15s,color .15s }
 .btn-quiet:hover{ border-color:var(--ink-mid); color:var(--ink) }
 
-/* ── Register strips ─────────────────────────────────────── */
+/* ── hanko seals ─────────────────────────────────────────── */
+.seal{
+  width:52px; height:52px; border-radius:50%; flex:none;
+  display:grid; place-items:center; position:relative;
+  border:2px solid var(--crit); color:var(--crit);
+  font-family:var(--serif); font-weight:700; font-size:15px; line-height:1.02; text-align:center;
+  transform:rotate(-8deg); box-shadow:inset 0 0 14px oklch(0 0 0/.22);
+}
+.seal::after{ content:""; position:absolute; inset:3px; border:1px solid var(--crit); border-radius:50%; opacity:.45 }
+.seal.settled{ width:38px; height:38px; font-size:16px; border-color:var(--ink-mid); color:var(--ink-mid); transform:rotate(6deg) }
+.seal.settled::after{ border-color:var(--ink-mid) }
+
+/* ── register strips ─────────────────────────────────────── */
 .strips{ border:1px solid var(--rule) }
 .strip + .strip{ border-top:1px solid var(--rule) }
-.strip-head{ width:100%; display:flex; align-items:center; gap:12px; padding:11px 12px; background:var(--paper2); text-align:left }
+.strip-head{ width:100%; display:flex; align-items:center; gap:13px; padding:12px; background:var(--paper2); text-align:left; cursor:pointer }
 .sq34{ width:34px; height:34px; flex:none; display:grid; place-items:center; font-family:var(--serif); font-size:17px; color:var(--paper) }
 .sq34.crit{ background:var(--crit) } .sq34.green{ background:var(--green) }
 .strip-title{ flex:1; min-width:0 }
@@ -138,99 +167,145 @@ button{ font:inherit; color:inherit; background:none; border:0; cursor:pointer }
 .pill-state{ font-size:10px; text-transform:uppercase; letter-spacing:.04em; font-weight:700; color:var(--ink-pale); white-space:nowrap }
 .caret{ font-size:11px; color:var(--ink-pale); transition:transform .15s }
 .strip[open] .caret{ transform:rotate(90deg) }
-.strip-body{ padding:14px 12px; border-top:1px solid var(--rule) }
-.rec + .rec{ margin-top:14px; padding-top:14px; border-top:1px solid var(--rule) }
-.rec h4{ margin:0; font-size:13px; font-weight:700 }
+.strip-body{ padding:15px 13px; border-top:1px solid var(--rule); position:relative }
+.rec{ display:flex; gap:13px; align-items:flex-start }
+.rec + .rec{ margin-top:15px; padding-top:15px; border-top:1px solid var(--rule) }
+.rec .body{ flex:1; min-width:0 }
+.rec h4{ font-size:13px; font-weight:700 }
 .rec .st{ font-size:10px; text-transform:uppercase; letter-spacing:.04em; margin-left:7px; font-weight:400; color:var(--amber) }
 .rec .ident{ font-size:11.5px; color:var(--ink-pale); margin-top:2px }
-.rec dl{ margin:7px 0 0; display:grid; grid-template-columns:auto 1fr; gap:3px 10px; font-size:12px }
+.rec dl{ margin:8px 0 0; display:grid; grid-template-columns:auto 1fr; gap:3px 10px; font-size:12px }
 .rec dt{ color:var(--crit) } .rec dd{ margin:0; color:var(--ink-mid) }
-.rec dd.unset{ color:var(--ink-pale) }
 
 /* timeline */
-.tl{ margin-bottom:14px }
-.tl svg{ display:block; width:100%; height:64px }
+.tl{ margin-bottom:16px }
+.tl svg{ display:block; width:100%; height:70px }
 .tl .axis{ display:flex; justify-content:space-between; font-family:var(--mono); font-size:9px; color:var(--ink-pale) }
-.tl .say{ font-size:11.5px; color:var(--ink-mid); margin-top:6px }
-.tl .say b{ color:var(--crit) }
-.tl .say .ex{ color:var(--ink-pale) }
+.tl .say{ font-size:11.5px; color:var(--ink-mid); margin-top:7px }
+.tl .say b{ color:var(--crit) } .tl .say .ex{ color:var(--ink-pale) }
 
-/* ── Roster ──────────────────────────────────────────────── */
-.controls{ display:flex; flex-wrap:wrap; gap:14px; align-items:center; margin-bottom:12px; font-size:12px }
+/* ── roster ──────────────────────────────────────────────── */
+.watermark{
+  position:absolute; right:-8px; top:40px; font-family:var(--serif); font-size:280px; line-height:1;
+  color:var(--ink); opacity:.030; pointer-events:none; user-select:none; z-index:0;
+}
+.controls{ display:flex; flex-wrap:wrap; gap:14px; align-items:center; margin-bottom:13px; font-size:12px; position:relative; z-index:1 }
 .seg{ display:flex; border:1px solid var(--rule) }
 .seg button{ padding:4px 11px; font-size:11.5px; color:var(--ink-mid); border-right:1px solid var(--rule); transition:background .15s,color .15s }
 .seg button:last-child{ border-right:0 }
 .seg button[aria-pressed="true"]{ background:var(--ink); color:var(--paper) }
 .seg button:not([aria-pressed="true"]):hover{ color:var(--ink) }
 .lbl{ font-size:10.5px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-pale) }
-
+.tablewrap{ overflow-x:auto; position:relative; z-index:1 }
 table{ width:100%; border-collapse:collapse; font-size:12.5px }
-thead th{
-  text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.1em;
-  color:var(--ink-pale); font-weight:500; padding:0 10px 6px 0; border-bottom:1px solid var(--rule);
-}
-tbody td{ padding:7px 10px 7px 0; border-bottom:1px solid var(--rule); vertical-align:top }
+thead th{ text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:.1em;
+          color:var(--ink-pale); font-weight:500; padding:0 10px 7px 0; border-bottom:1px solid var(--rule) }
+tbody td{ padding:8px 10px 8px 0; border-bottom:1px solid var(--rule); vertical-align:top }
 tbody tr:hover td{ background:var(--paper2) }
 .co{ font-weight:700 }
 .co.dead{ color:var(--ink-mid); text-decoration:line-through; text-decoration-thickness:1px }
 .nzbn{ font-family:var(--mono); font-variant-numeric:tabular-nums; font-size:11px; color:var(--ink-pale); white-space:nowrap }
 .rolecell{ color:var(--accent); white-space:nowrap }
-.dates{ color:var(--ink-pale); font-size:11px; white-space:nowrap }
+.dates{ color:var(--ink-pale); font-size:11px; white-space:nowrap; font-variant-numeric:tabular-nums }
 .st-cell{ white-space:nowrap; font-size:10px; text-transform:uppercase; letter-spacing:.05em }
-.st-reg{ color:var(--green) } .st-rem{ color:var(--ink-pale) } .st-crit{ color:var(--crit) } .st-amb{ color:var(--amber) }
-.flagrow{ display:flex; align-items:center; gap:5px; margin-top:3px }
+.st-reg{ color:var(--green) } .st-rem{ color:var(--ink-pale) } .st-amb{ color:var(--amber) }
+.flagrow{ display:flex; align-items:center; gap:5px; margin-top:4px }
 .flagrow .sq{ width:15px; height:15px; font-size:9px }
 .flagrow span{ font-size:9.5px; text-transform:uppercase; letter-spacing:.05em }
+.note{ margin-top:30px; padding-top:13px; font-size:11.5px; color:var(--ink-pale); max-width:66ch; position:relative; z-index:1 }
+.note b{ color:var(--ink-mid) }
 
-.note{
-  margin-top:34px; border-top:1px solid var(--rule); padding-top:12px;
-  font-size:11.5px; color:var(--ink-pale); max-width:64ch;
+/* corner registration ticks — a printed document, not a web page */
+.tick{ position:absolute; width:13px; height:13px; pointer-events:none; opacity:.34 }
+.tick::before,.tick::after{ content:""; position:absolute; background:var(--ink-mid) }
+.tick::before{ width:13px; height:1px } .tick::after{ width:1px; height:13px }
+.tick.tl-{ left:0; top:-14px } .tick.tr-{ right:0; top:-14px }
+.tick.tr- ::before{ right:0 }
+
+/* ── orchestrated ink entrance ───────────────────────────── */
+@keyframes ink-in{ from{ opacity:0; transform:translate(-50%,-50%) scale(.955) } to{ opacity:1; transform:translate(-50%,-50%) scale(1) } }
+@keyframes draw-x{ from{ transform:scaleX(0) } to{ transform:scaleX(1) } }
+@keyframes draw-y{ from{ transform:scaleY(0) } to{ transform:scaleY(1) } }
+@keyframes stamp{ 0%{ opacity:0; transform:rotate(-16deg) scale(1.55) } 62%{ opacity:1; transform:rotate(-6deg) scale(.965) } 100%{ opacity:1; transform:rotate(-8deg) scale(1) } }
+@keyframes stamp-s{ 0%{ opacity:0; transform:rotate(14deg) scale(1.5) } 62%{ opacity:1; transform:rotate(4deg) scale(.97) } 100%{ opacity:1; transform:rotate(6deg) scale(1) } }
+@keyframes rise{ from{ opacity:0; transform:translateY(7px) } to{ opacity:1; transform:none } }
+
+.enso{ animation:ink-in 1.5s cubic-bezier(.22,.61,.36,1) .15s both }
+.rule-brush path{ transform-origin:left center; animation:draw-x .85s cubic-bezier(.33,.9,.4,1) both }
+.marker:nth-of-type(1) .rule-brush path{ animation-delay:.30s }
+.rule-brush path{ animation-delay:.34s }
+.vrule path{ transform-origin:top center; animation:draw-y 1.25s cubic-bezier(.33,.9,.4,1) .2s both }
+.tate .stem path{ transform-origin:top center; animation:draw-y 1.1s cubic-bezier(.33,.9,.4,1) .1s both }
+.seal{ animation:stamp .62s cubic-bezier(.2,.8,.3,1) .95s both }
+.seal.settled{ animation:stamp-s .55s cubic-bezier(.2,.8,.3,1) 1.15s both }
+.subject,.bio{ animation:rise .6s ease-out .35s both }
+.tate .big,.tate .sub{ animation:rise .7s ease-out .25s both }
+
+@media (prefers-reduced-motion: reduce){
+  *{ animation:none !important; transition:none !important }
+  .enso{ opacity:1 } .seal{ opacity:1 }
 }
-@media (max-width: 900px){
+@media (max-width: 980px){
   .chosho{ grid-template-columns:1fr }
-  .spine{ position:static; max-height:none; border-right:0; border-bottom:1px solid var(--rule); padding:24px 0 28px }
-  .findings{ padding:24px 0 0 }
+  .tate{ display:none }
+  .spine{ position:static; max-height:none; padding:24px 0 30px }
+  .findings{ padding:26px 0 0 }
+  .vrule{ display:none }
+  .watermark{ display:none }
 }
-@media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important } }
 </style>
 
 <nav class="nav">
   <div class="hanko" aria-hidden="true">見</div>
   <div class="wordmark">Mitsuketa<span>見つけた</span></div>
-  <div class="nav-right">
-    <span><i class="dot"></i>Registers · connected</span>
-    <span>About</span>
-  </div>
+  <div class="nav-right"><span><i class="dot"></i>Registers · connected</span><span>About</span></div>
 </nav>
 
 <div class="sheet">
+  <span class="tick tl-"></span><span class="tick tr-"></span>
   <div class="chosho">
 
-    <!-- ═══ SPINE: who this person is ═══ -->
-    <aside class="spine">
-      <div class="marker"><span class="k">人</span><span class="t">Subject</span><span class="r"></span></div>
+    <!-- ═══ tategaki document label ═══ -->
+    <div class="tate" aria-hidden="true">
+      <div class="big">調書</div>
+      <div class="sub">個人記録</div>
+      <div class="stem"><svg viewBox="0 0 10 900" preserveAspectRatio="none"><path d="M5.62,0.00 L6.39,3.00 L6.76,6.00 L7.07,9.00 L7.33,12.00 L7.57,15.00 L7.79,18.00 L8.00,21.00 L8.20,24.00 L8.38,27.00 L8.41,30.00 L8.43,33.00 L8.45,36.00 L8.47,39.00 L8.49,42.00 L8.51,45.00 L8.52,48.00 L8.54,51.00 L8.55,54.00 L8.56,57.00 L8.56,60.00 L8.57,63.00 L8.58,66.00 L8.58,69.00 L8.58,72.00 L8.58,75.00 L8.58,78.00 L8.57,81.00 L8.57,84.00 L8.56,87.00 L8.55,90.00 L8.54,93.00 L8.53,96.00 L8.52,99.00 L8.51,102.00 L8.49,105.00 L8.48,108.00 L8.46,111.00 L8.44,114.00 L8.42,117.00 L8.40,120.00 L8.38,123.00 L8.36,126.00 L8.34,129.00 L8.32,132.00 L8.29,135.00 L8.27,138.00 L8.24,141.00 L8.22,144.00 L8.19,147.00 L8.16,150.00 L8.14,153.00 L8.11,156.00 L8.08,159.00 L8.05,162.00 L8.03,165.00 L8.00,168.00 L7.97,171.00 L7.94,174.00 L7.92,177.00 L7.89,180.00 L7.86,183.00 L7.84,186.00 L7.81,189.00 L7.78,192.00 L7.76,195.00 L7.73,198.00 L7.71,201.00 L7.68,204.00 L7.66,207.00 L7.63,210.00 L7.61,213.00 L7.59,216.00 L7.57,219.00 L7.55,222.00 L7.53,225.00 L7.51,228.00 L7.49,231.00 L7.47,234.00 L7.45,237.00 L7.44,240.00 L7.42,243.00 L7.41,246.00 L7.39,249.00 L7.38,252.00 L7.37,255.00 L7.36,258.00 L7.35,261.00 L7.34,264.00 L7.33,267.00 L7.32,270.00 L7.31,273.00 L7.31,276.00 L7.30,279.00 L7.30,282.00 L7.29,285.00 L7.29,288.00 L7.28,291.00 L7.28,294.00 L7.28,297.00 L7.28,300.00 L7.28,303.00 L7.28,306.00 L7.28,309.00 L7.28,312.00 L7.28,315.00 L7.28,318.00 L7.28,321.00 L7.29,324.00 L7.29,327.00 L7.29,330.00 L7.29,333.00 L7.30,336.00 L7.30,339.00 L7.30,342.00 L7.30,345.00 L7.31,348.00 L7.31,351.00 L7.31,354.00 L7.31,357.00 L7.31,360.00 L7.31,363.00 L7.31,366.00 L7.31,369.00 L7.31,372.00 L7.31,375.00 L7.31,378.00 L7.31,381.00 L7.31,384.00 L7.30,387.00 L7.30,390.00 L7.29,393.00 L7.29,396.00 L7.28,399.00 L7.27,402.00 L7.26,405.00 L7.26,408.00 L7.24,411.00 L7.23,414.00 L7.22,417.00 L7.21,420.00 L7.19,423.00 L7.18,426.00 L7.16,429.00 L7.14,432.00 L7.12,435.00 L7.10,438.00 L7.08,441.00 L7.06,444.00 L7.03,447.00 L7.01,450.00 L6.98,453.00 L6.95,456.00 L6.92,459.00 L6.89,462.00 L6.86,465.00 L6.83,468.00 L6.79,471.00 L6.76,474.00 L6.72,477.00 L6.69,480.00 L6.65,483.00 L6.61,486.00 L6.57,489.00 L6.53,492.00 L6.49,495.00 L6.45,498.00 L6.40,501.00 L6.36,504.00 L6.31,507.00 L6.27,510.00 L6.22,513.00 L6.18,516.00 L6.13,519.00 L6.08,522.00 L6.03,525.00 L5.98,528.00 L5.94,531.00 L5.89,534.00 L5.84,537.00 L5.79,540.00 L5.74,543.00 L5.69,546.00 L5.64,549.00 L5.59,552.00 L5.54,555.00 L5.49,558.00 L5.44,561.00 L5.40,564.00 L5.35,567.00 L5.30,570.00 L5.26,573.00 L5.21,576.00 L5.17,579.00 L5.12,582.00 L5.08,585.00 L5.04,588.00 L4.99,591.00 L4.95,594.00 L4.92,597.00 L4.88,600.00 L4.84,603.00 L4.81,606.00 L4.77,609.00 L4.74,612.00 L4.71,615.00 L4.68,618.00 L4.65,621.00 L4.62,624.00 L4.60,627.00 L4.58,630.00 L4.55,633.00 L4.53,636.00 L4.52,639.00 L4.50,642.00 L4.49,645.00 L4.48,648.00 L4.46,651.00 L4.46,654.00 L4.45,657.00 L4.45,660.00 L4.44,663.00 L4.44,666.00 L4.45,669.00 L4.45,672.00 L4.46,675.00 L4.46,678.00 L4.47,681.00 L4.49,684.00 L4.50,687.00 L4.52,690.00 L4.53,693.00 L4.55,696.00 L4.58,699.00 L4.60,702.00 L4.63,705.00 L4.65,708.00 L4.68,711.00 L4.72,714.00 L4.75,717.00 L4.78,720.00 L4.82,723.00 L4.86,726.00 L4.90,729.00 L4.94,732.00 L4.98,735.00 L5.03,738.00 L5.07,741.00 L5.12,744.00 L5.17,747.00 L5.22,750.00 L5.27,753.00 L5.32,756.00 L5.38,759.00 L5.43,762.00 L5.49,765.00 L5.54,768.00 L5.60,771.00 L5.66,774.00 L5.72,777.00 L5.78,780.00 L5.84,783.00 L5.90,786.00 L5.96,789.00 L6.02,792.00 L6.08,795.00 L6.14,798.00 L6.20,801.00 L6.26,804.00 L6.32,807.00 L6.38,810.00 L6.35,813.00 L6.32,816.00 L6.29,819.00 L6.25,822.00 L6.21,825.00 L6.18,828.00 L6.14,831.00 L6.10,834.00 L6.05,837.00 L6.01,840.00 L5.97,843.00 L5.92,846.00 L5.88,849.00 L5.84,852.00 L5.79,855.00 L5.75,858.00 L5.70,861.00 L5.66,864.00 L5.62,867.00 L5.58,870.00 L5.54,873.00 L5.50,876.00 L5.47,879.00 L5.43,882.00 L5.41,885.00 L5.38,888.00 L5.36,891.00 L5.34,894.00 L5.34,897.00 L5.34,900.00 L5.34,900.00 L5.29,897.00 L5.22,894.00 L5.14,891.00 L5.05,888.00 L4.96,885.00 L4.87,882.00 L4.77,879.00 L4.67,876.00 L4.57,873.00 L4.47,870.00 L4.36,867.00 L4.25,864.00 L4.15,861.00 L4.04,858.00 L3.93,855.00 L3.82,852.00 L3.71,849.00 L3.60,846.00 L3.49,843.00 L3.38,840.00 L3.28,837.00 L3.17,834.00 L3.07,831.00 L2.97,828.00 L2.87,825.00 L2.77,822.00 L2.67,819.00 L2.57,816.00 L2.48,813.00 L2.39,810.00 L2.39,807.00 L2.39,804.00 L2.40,801.00 L2.40,798.00 L2.40,795.00 L2.41,792.00 L2.41,789.00 L2.42,786.00 L2.42,783.00 L2.43,780.00 L2.43,777.00 L2.44,774.00 L2.44,771.00 L2.45,768.00 L2.45,765.00 L2.46,762.00 L2.47,759.00 L2.47,756.00 L2.48,753.00 L2.48,750.00 L2.49,747.00 L2.49,744.00 L2.50,741.00 L2.50,738.00 L2.51,735.00 L2.51,732.00 L2.51,729.00 L2.51,726.00 L2.52,723.00 L2.52,720.00 L2.52,717.00 L2.52,714.00 L2.52,711.00 L2.52,708.00 L2.51,705.00 L2.51,702.00 L2.51,699.00 L2.50,696.00 L2.50,693.00 L2.49,690.00 L2.49,687.00 L2.48,684.00 L2.47,681.00 L2.46,678.00 L2.45,675.00 L2.44,672.00 L2.43,669.00 L2.42,666.00 L2.41,663.00 L2.40,660.00 L2.38,657.00 L2.37,654.00 L2.35,651.00 L2.34,648.00 L2.32,645.00 L2.30,642.00 L2.28,639.00 L2.27,636.00 L2.25,633.00 L2.23,630.00 L2.21,627.00 L2.19,624.00 L2.17,621.00 L2.15,618.00 L2.13,615.00 L2.10,612.00 L2.08,609.00 L2.06,606.00 L2.04,603.00 L2.02,600.00 L2.00,597.00 L1.98,594.00 L1.95,591.00 L1.93,588.00 L1.91,585.00 L1.89,582.00 L1.87,579.00 L1.85,576.00 L1.83,573.00 L1.82,570.00 L1.80,567.00 L1.78,564.00 L1.76,561.00 L1.75,558.00 L1.73,555.00 L1.72,552.00 L1.70,549.00 L1.69,546.00 L1.68,543.00 L1.67,540.00 L1.66,537.00 L1.65,534.00 L1.65,531.00 L1.64,528.00 L1.63,525.00 L1.63,522.00 L1.63,519.00 L1.63,516.00 L1.63,513.00 L1.63,510.00 L1.64,507.00 L1.64,504.00 L1.65,501.00 L1.66,498.00 L1.67,495.00 L1.68,492.00 L1.69,489.00 L1.71,486.00 L1.73,483.00 L1.75,480.00 L1.77,477.00 L1.79,474.00 L1.81,471.00 L1.84,468.00 L1.86,465.00 L1.89,462.00 L1.92,459.00 L1.95,456.00 L1.99,453.00 L2.02,450.00 L2.06,447.00 L2.10,444.00 L2.14,441.00 L2.18,438.00 L2.22,435.00 L2.27,432.00 L2.31,429.00 L2.36,426.00 L2.41,423.00 L2.46,420.00 L2.51,417.00 L2.56,414.00 L2.61,411.00 L2.67,408.00 L2.72,405.00 L2.78,402.00 L2.84,399.00 L2.90,396.00 L2.96,393.00 L3.01,390.00 L3.08,387.00 L3.14,384.00 L3.20,381.00 L3.26,378.00 L3.32,375.00 L3.39,372.00 L3.45,369.00 L3.51,366.00 L3.57,363.00 L3.64,360.00 L3.70,357.00 L3.76,354.00 L3.83,351.00 L3.89,348.00 L3.95,345.00 L4.01,342.00 L4.08,339.00 L4.14,336.00 L4.20,333.00 L4.26,330.00 L4.32,327.00 L4.37,324.00 L4.43,321.00 L4.49,318.00 L4.54,315.00 L4.60,312.00 L4.65,309.00 L4.70,306.00 L4.75,303.00 L4.80,300.00 L4.85,297.00 L4.90,294.00 L4.94,291.00 L4.98,288.00 L5.03,285.00 L5.07,282.00 L5.10,279.00 L5.14,276.00 L5.18,273.00 L5.21,270.00 L5.24,267.00 L5.27,264.00 L5.30,261.00 L5.32,258.00 L5.35,255.00 L5.37,252.00 L5.39,249.00 L5.41,246.00 L5.42,243.00 L5.44,240.00 L5.45,237.00 L5.46,234.00 L5.47,231.00 L5.47,228.00 L5.48,225.00 L5.48,222.00 L5.48,219.00 L5.47,216.00 L5.47,213.00 L5.46,210.00 L5.46,207.00 L5.45,204.00 L5.44,201.00 L5.42,198.00 L5.41,195.00 L5.39,192.00 L5.37,189.00 L5.35,186.00 L5.33,183.00 L5.31,180.00 L5.28,177.00 L5.26,174.00 L5.23,171.00 L5.20,168.00 L5.17,165.00 L5.14,162.00 L5.10,159.00 L5.07,156.00 L5.03,153.00 L5.00,150.00 L4.96,147.00 L4.92,144.00 L4.88,141.00 L4.84,138.00 L4.80,135.00 L4.76,132.00 L4.72,129.00 L4.68,126.00 L4.64,123.00 L4.59,120.00 L4.55,117.00 L4.51,114.00 L4.46,111.00 L4.42,108.00 L4.38,105.00 L4.33,102.00 L4.29,99.00 L4.24,96.00 L4.20,93.00 L4.16,90.00 L4.11,87.00 L4.07,84.00 L4.03,81.00 L3.99,78.00 L3.94,75.00 L3.90,72.00 L3.86,69.00 L3.82,66.00 L3.78,63.00 L3.75,60.00 L3.71,57.00 L3.67,54.00 L3.64,51.00 L3.60,48.00 L3.57,45.00 L3.53,42.00 L3.50,39.00 L3.47,36.00 L3.44,33.00 L3.41,30.00 L3.38,27.00 L3.51,24.00 L3.65,21.00 L3.80,18.00 L3.97,15.00 L4.15,12.00 L4.36,9.00 L4.60,6.00 L4.92,3.00 L5.62,0.00 Z"/></svg></div>
+      <div class="num">2026·08·01</div>
+    </div>
 
-      <div class="subject">
-        <div class="inkan" aria-hidden="true">
-          <span class="ring"></span><span class="ring2"></span>
-          <span class="g"><i>株</i><i>締</i><span class="split"></span></span>
-        </div>
-        <div>
-          <h1 class="name">HARGREAVES,<br>Simon J</h1>
-          <div class="role">Shareholder · Director</div>
-        </div>
+    <!-- ═══ SPINE ═══ -->
+    <aside class="spine">
+      <div class="marker">
+        <div class="row"><span class="k">人</span><span class="t">Subject</span></div>
+        <svg class="rule-brush" viewBox="0 0 600 9" preserveAspectRatio="none"><path d="M0.00,5.47 L3.00,6.45 L6.00,6.92 L9.00,7.28 L12.00,7.59 L15.00,7.86 L18.00,8.10 L21.00,8.32 L24.00,8.52 L27.00,8.70 L30.00,8.87 L33.00,8.86 L36.00,8.84 L39.00,8.82 L42.00,8.81 L45.00,8.78 L48.00,8.76 L51.00,8.74 L54.00,8.71 L57.00,8.68 L60.00,8.65 L63.00,8.62 L66.00,8.59 L69.00,8.56 L72.00,8.52 L75.00,8.49 L78.00,8.45 L81.00,8.41 L84.00,8.38 L87.00,8.34 L90.00,8.30 L93.00,8.26 L96.00,8.22 L99.00,8.17 L102.00,8.13 L105.00,8.09 L108.00,8.05 L111.00,8.01 L114.00,7.97 L117.00,7.92 L120.00,7.88 L123.00,7.84 L126.00,7.80 L129.00,7.76 L132.00,7.72 L135.00,7.68 L138.00,7.64 L141.00,7.61 L144.00,7.57 L147.00,7.53 L150.00,7.50 L153.00,7.46 L156.00,7.43 L159.00,7.40 L162.00,7.36 L165.00,7.33 L168.00,7.30 L171.00,7.28 L174.00,7.25 L177.00,7.22 L180.00,7.20 L183.00,7.17 L186.00,7.15 L189.00,7.13 L192.00,7.11 L195.00,7.09 L198.00,7.08 L201.00,7.06 L204.00,7.05 L207.00,7.03 L210.00,7.02 L213.00,7.01 L216.00,7.00 L219.00,6.99 L222.00,6.98 L225.00,6.98 L228.00,6.97 L231.00,6.97 L234.00,6.97 L237.00,6.96 L240.00,6.96 L243.00,6.96 L246.00,6.96 L249.00,6.96 L252.00,6.97 L255.00,6.97 L258.00,6.97 L261.00,6.98 L264.00,6.98 L267.00,6.98 L270.00,6.99 L273.00,6.96 L276.00,6.94 L279.00,6.91 L282.00,6.89 L285.00,6.86 L288.00,6.83 L291.00,6.80 L294.00,6.77 L297.00,6.74 L300.00,6.71 L303.00,6.67 L306.00,6.64 L309.00,6.60 L312.00,6.56 L315.00,6.52 L318.00,6.48 L321.00,6.44 L324.00,6.40 L327.00,6.35 L330.00,6.31 L333.00,6.26 L336.00,6.21 L339.00,6.16 L342.00,6.11 L345.00,6.06 L348.00,6.01 L351.00,5.95 L354.00,5.90 L357.00,5.84 L360.00,5.79 L363.00,5.73 L366.00,5.67 L369.00,5.61 L372.00,5.55 L375.00,5.49 L378.00,5.43 L381.00,5.37 L384.00,5.31 L387.00,5.25 L390.00,5.19 L393.00,5.13 L396.00,5.07 L399.00,5.01 L402.00,4.95 L405.00,4.89 L408.00,4.83 L411.00,4.77 L414.00,4.71 L417.00,4.65 L420.00,4.59 L423.00,4.53 L426.00,4.48 L429.00,4.42 L432.00,4.37 L435.00,4.32 L438.00,4.26 L441.00,4.21 L444.00,4.16 L447.00,4.12 L450.00,4.07 L453.00,4.02 L456.00,3.98 L459.00,3.94 L462.00,3.90 L465.00,3.86 L468.00,3.82 L471.00,3.79 L474.00,3.76 L477.00,3.72 L480.00,3.70 L483.00,3.67 L486.00,3.64 L489.00,3.62 L492.00,3.60 L495.00,3.58 L498.00,3.56 L501.00,3.54 L504.00,3.53 L507.00,3.52 L510.00,3.51 L513.00,3.50 L516.00,3.49 L519.00,3.49 L522.00,3.49 L525.00,3.48 L528.00,3.49 L531.00,3.49 L534.00,3.49 L537.00,3.50 L540.00,3.51 L543.00,3.52 L546.00,3.53 L549.00,3.54 L552.00,3.55 L555.00,3.57 L558.00,3.58 L561.00,3.60 L564.00,3.62 L567.00,3.64 L570.00,3.66 L573.00,3.69 L576.00,3.71 L579.00,3.73 L582.00,3.76 L585.00,3.79 L588.00,3.82 L591.00,3.84 L594.00,3.87 L597.00,3.91 L600.00,3.94 L600.00,3.94 L597.00,3.90 L594.00,3.86 L591.00,3.82 L588.00,3.78 L585.00,3.74 L582.00,3.70 L579.00,3.66 L576.00,3.62 L573.00,3.58 L570.00,3.54 L567.00,3.50 L564.00,3.46 L561.00,3.42 L558.00,3.38 L555.00,3.34 L552.00,3.30 L549.00,3.26 L546.00,3.22 L543.00,3.18 L540.00,3.14 L537.00,3.10 L534.00,3.06 L531.00,3.02 L528.00,2.98 L525.00,2.94 L522.00,2.90 L519.00,2.86 L516.00,2.82 L513.00,2.78 L510.00,2.74 L507.00,2.70 L504.00,2.66 L501.00,2.62 L498.00,2.58 L495.00,2.54 L492.00,2.50 L489.00,2.46 L486.00,2.42 L483.00,2.38 L480.00,2.34 L477.00,2.30 L474.00,2.26 L471.00,2.22 L468.00,2.18 L465.00,2.14 L462.00,2.10 L459.00,2.06 L456.00,2.02 L453.00,1.99 L450.00,1.95 L447.00,1.91 L444.00,1.88 L441.00,1.84 L438.00,1.81 L435.00,1.77 L432.00,1.74 L429.00,1.71 L426.00,1.68 L423.00,1.64 L420.00,1.61 L417.00,1.59 L414.00,1.56 L411.00,1.53 L408.00,1.51 L405.00,1.48 L402.00,1.46 L399.00,1.44 L396.00,1.42 L393.00,1.41 L390.00,1.39 L387.00,1.38 L384.00,1.36 L381.00,1.35 L378.00,1.34 L375.00,1.34 L372.00,1.33 L369.00,1.33 L366.00,1.33 L363.00,1.33 L360.00,1.33 L357.00,1.34 L354.00,1.34 L351.00,1.35 L348.00,1.36 L345.00,1.38 L342.00,1.39 L339.00,1.41 L336.00,1.43 L333.00,1.45 L330.00,1.47 L327.00,1.50 L324.00,1.53 L321.00,1.56 L318.00,1.59 L315.00,1.62 L312.00,1.66 L309.00,1.70 L306.00,1.74 L303.00,1.78 L300.00,1.82 L297.00,1.86 L294.00,1.91 L291.00,1.96 L288.00,2.01 L285.00,2.05 L282.00,2.11 L279.00,2.16 L276.00,2.21 L273.00,2.26 L270.00,2.32 L267.00,2.40 L264.00,2.48 L261.00,2.56 L258.00,2.64 L255.00,2.72 L252.00,2.80 L249.00,2.88 L246.00,2.95 L243.00,3.03 L240.00,3.10 L237.00,3.17 L234.00,3.24 L231.00,3.31 L228.00,3.37 L225.00,3.44 L222.00,3.50 L219.00,3.56 L216.00,3.62 L213.00,3.67 L210.00,3.73 L207.00,3.78 L204.00,3.83 L201.00,3.87 L198.00,3.91 L195.00,3.95 L192.00,3.99 L189.00,4.03 L186.00,4.06 L183.00,4.09 L180.00,4.12 L177.00,4.14 L174.00,4.16 L171.00,4.18 L168.00,4.20 L165.00,4.21 L162.00,4.22 L159.00,4.23 L156.00,4.23 L153.00,4.23 L150.00,4.23 L147.00,4.23 L144.00,4.22 L141.00,4.21 L138.00,4.20 L135.00,4.18 L132.00,4.17 L129.00,4.15 L126.00,4.13 L123.00,4.10 L120.00,4.07 L117.00,4.04 L114.00,4.01 L111.00,3.98 L108.00,3.94 L105.00,3.91 L102.00,3.87 L99.00,3.83 L96.00,3.78 L93.00,3.74 L90.00,3.69 L87.00,3.64 L84.00,3.59 L81.00,3.54 L78.00,3.49 L75.00,3.44 L72.00,3.39 L69.00,3.33 L66.00,3.28 L63.00,3.22 L60.00,3.16 L57.00,3.11 L54.00,3.05 L51.00,2.99 L48.00,2.93 L45.00,2.88 L42.00,2.82 L39.00,2.76 L36.00,2.70 L33.00,2.64 L30.00,2.59 L27.00,2.71 L24.00,2.85 L21.00,3.00 L18.00,3.17 L15.00,3.36 L12.00,3.57 L9.00,3.83 L6.00,4.13 L3.00,4.54 L0.00,5.47 Z"/></svg>
       </div>
 
-      <div class="bio">
-        <dl>
-          <dt>Born</dt><dd>January 1976</dd>
-          <dt>Occupation</dt><dd>Real Estate Agent</dd>
-          <dt>Aliases</dt><dd>S. J. Hargreaves</dd>
-        </dl>
+      <div class="subjwrap">
+        <svg class="enso" viewBox="0 0 540 540" aria-hidden="true"><path d="M210.17,30.02 L215.14,26.93 L220.44,25.06 L225.83,23.48 L231.28,22.09 L236.77,20.86 L242.30,19.75 L247.87,18.77 L253.46,17.91 L259.08,17.16 L264.72,16.53 L270.39,16.01 L276.08,15.61 L281.79,15.32 L287.51,15.15 L293.25,15.10 L299.00,15.17 L304.76,15.37 L310.52,15.70 L316.29,16.16 L322.05,16.76 L327.81,17.50 L333.56,18.38 L339.30,19.40 L345.01,20.58 L350.70,21.90 L356.37,23.38 L361.99,25.01 L367.58,26.80 L373.11,28.75 L378.60,30.85 L384.03,33.11 L389.29,35.72 L394.46,38.52 L399.55,41.45 L404.56,44.52 L409.48,47.72 L414.31,51.05 L419.05,54.50 L423.69,58.08 L428.23,61.78 L432.66,65.59 L437.00,69.51 L441.23,73.53 L445.35,77.66 L449.36,81.88 L453.27,86.19 L457.07,90.58 L460.76,95.05 L464.35,99.60 L467.84,104.22 L471.22,108.91 L474.50,113.65 L477.68,118.45 L480.76,123.31 L483.75,128.21 L486.64,133.17 L489.44,138.17 L492.16,143.20 L494.78,148.28 L497.33,153.40 L499.78,158.56 L502.16,163.75 L504.45,168.97 L506.67,174.23 L509.02,179.44 L511.46,184.64 L513.82,189.89 L516.10,195.19 L518.30,200.55 L520.42,205.95 L522.45,211.41 L524.38,216.93 L526.22,222.49 L527.96,228.11 L529.59,233.78 L531.11,239.50 L532.51,245.27 L533.79,251.09 L534.94,256.95 L535.95,262.86 L536.82,268.80 L537.54,274.78 L538.11,280.79 L538.51,286.82 L538.76,292.88 L538.83,298.95 L538.73,305.03 L538.44,311.11 L537.98,317.20 L537.33,323.27 L536.49,329.32 L535.46,335.35 L534.24,341.35 L532.83,347.32 L531.22,353.23 L529.42,359.09 L527.44,364.89 L525.26,370.63 L522.90,376.29 L520.36,381.87 L517.64,387.37 L514.75,392.77 L511.69,398.07 L508.47,403.28 L505.09,408.38 L501.57,413.36 L497.90,418.24 L494.09,423.00 L490.16,427.64 L486.11,432.17 L481.94,436.57 L477.66,440.85 L473.28,445.01 L468.81,449.06 L464.25,452.98 L459.61,456.78 L454.90,460.47 L450.12,464.04 L445.28,467.50 L440.38,470.85 L435.43,474.09 L430.43,477.22 L425.38,480.25 L420.29,483.17 L415.17,486.00 L410.01,488.73 L404.81,491.36 L399.58,493.89 L394.33,496.33 L389.04,498.68 L383.73,500.93 L378.39,503.09 L373.02,505.16 L367.63,507.14 L362.21,509.02 L356.77,510.81 L351.30,512.50 L345.81,514.09 L340.29,515.58 L334.76,516.97 L329.20,518.26 L323.61,519.43 L318.01,520.50 L312.39,521.46 L306.75,522.30 L301.10,523.02 L295.44,523.62 L289.76,524.10 L284.07,524.45 L278.38,524.67 L272.69,524.77 L266.99,524.73 L261.29,524.86 L255.57,524.96 L249.85,524.92 L244.12,524.75 L238.40,524.43 L232.67,523.98 L226.95,523.38 L221.24,522.64 L215.55,521.77 L209.87,520.75 L204.21,519.60 L198.58,518.31 L192.98,516.88 L187.40,515.32 L181.86,513.63 L176.36,511.81 L170.89,509.86 L165.46,507.79 L160.08,505.60 L154.74,503.29 L149.44,500.87 L144.20,498.33 L139.00,495.68 L133.85,492.91 L128.75,490.05 L123.71,487.07 L118.72,484.00 L113.78,480.82 L108.91,477.54 L104.09,474.16 L99.51,470.46 L95.00,466.68 L90.57,462.80 L86.22,458.83 L81.95,454.77 L77.77,450.62 L73.66,446.38 L69.65,442.05 L65.72,437.64 L61.89,433.14 L58.15,428.55 L54.51,423.88 L50.97,419.13 L47.55,414.29 L44.23,409.38 L41.03,404.38 L37.94,399.30 L34.99,394.15 L32.16,388.92 L29.46,383.62 L26.90,378.25 L24.49,372.82 L22.22,367.32 L20.10,361.76 L18.13,356.14 L16.32,350.47 L14.68,344.75 L13.20,338.99 L11.88,333.20 L10.74,327.37 L9.76,321.51 L8.96,315.63 L8.33,309.74 L7.87,303.83 L7.58,297.92 L7.47,292.01 L7.52,286.11 L7.74,280.22 L8.13,274.34 L8.67,268.49 L9.38,262.67 L10.24,256.88 L11.25,251.12 L12.41,245.41 L13.71,239.74 L15.14,234.11 L16.71,228.54 L18.40,223.02 L20.21,217.55 L22.14,212.14 L24.17,206.79 L26.31,201.50 L28.55,196.27 L30.88,191.10 L33.30,185.98 L35.81,180.93 L38.40,175.94 L41.07,171.01 L43.76,166.11 L46.53,161.27 L49.38,156.48 L52.30,151.76 L55.30,147.10 L58.36,142.49 L61.50,137.94 L64.71,133.45 L67.99,129.01 L71.34,124.64 L74.75,120.33 L78.24,116.07 L81.79,111.88 L85.41,107.75 L89.11,103.68 L92.87,99.68 L96.70,95.75 L100.61,91.88 L104.58,88.08 L108.61,84.35 L108.61,84.35 L104.62,88.13 L100.72,92.00 L96.90,95.95 L93.16,99.96 L89.50,104.05 L85.92,108.19 L82.40,112.39 L78.96,116.65 L75.59,120.97 L72.29,125.34 L69.06,129.76 L65.89,134.23 L62.79,138.76 L59.76,143.33 L56.80,147.96 L53.91,152.64 L51.09,157.37 L48.35,162.15 L45.68,166.99 L43.09,171.88 L40.65,176.85 L38.30,181.88 L36.05,186.96 L33.91,192.10 L31.87,197.28 L29.95,202.52 L28.15,207.82 L26.47,213.16 L24.93,218.54 L23.52,223.97 L22.25,229.45 L21.13,234.95 L20.16,240.50 L19.34,246.07 L18.69,251.66 L18.20,257.28 L17.88,262.91 L17.73,268.54 L17.76,274.18 L17.96,279.82 L18.33,285.44 L18.89,291.05 L19.62,296.64 L20.53,302.20 L21.62,307.72 L22.88,313.20 L24.31,318.63 L25.90,324.01 L27.67,329.33 L29.59,334.59 L31.66,339.78 L33.89,344.90 L36.26,349.94 L38.76,354.90 L41.40,359.78 L44.16,364.58 L47.04,369.29 L50.02,373.91 L53.12,378.44 L56.30,382.89 L59.58,387.25 L62.94,391.52 L66.38,395.70 L69.88,399.80 L73.46,403.82 L77.09,407.76 L80.77,411.62 L84.51,415.40 L88.30,419.11 L92.12,422.75 L95.99,426.32 L99.90,429.82 L103.84,433.26 L107.81,436.64 L111.82,439.97 L115.87,443.23 L119.95,446.43 L124.06,449.58 L128.04,452.89 L132.07,456.15 L136.15,459.34 L140.28,462.48 L144.47,465.57 L148.71,468.58 L153.01,471.53 L157.37,474.41 L161.79,477.22 L166.27,479.95 L170.81,482.59 L175.42,485.15 L180.08,487.61 L184.81,489.98 L189.60,492.24 L194.45,494.40 L199.36,496.44 L204.32,498.36 L209.34,500.16 L214.41,501.83 L219.53,503.37 L224.69,504.78 L229.90,506.04 L235.14,507.17 L240.42,508.15 L245.72,508.98 L251.06,509.67 L256.41,510.21 L261.78,510.60 L267.16,510.73 L272.53,510.41 L277.90,509.95 L283.24,509.34 L288.55,508.60 L293.84,507.71 L299.09,506.69 L304.31,505.54 L309.49,504.27 L314.63,502.88 L319.73,501.37 L324.78,499.75 L329.79,498.03 L334.75,496.20 L339.66,494.28 L344.52,492.27 L349.33,490.17 L354.10,487.99 L358.81,485.72 L363.48,483.39 L368.11,480.98 L372.68,478.51 L377.22,475.96 L381.71,473.35 L386.15,470.68 L390.56,467.95 L394.92,465.16 L399.24,462.31 L403.53,459.39 L407.77,456.42 L411.97,453.38 L416.13,450.28 L420.25,447.12 L424.32,443.89 L428.35,440.59 L432.33,437.22 L436.26,433.78 L440.14,430.27 L443.97,426.68 L447.73,423.02 L451.43,419.28 L455.07,415.45 L458.63,411.55 L462.11,407.56 L465.52,403.49 L468.83,399.33 L472.06,395.09 L475.19,390.77 L478.21,386.37 L481.13,381.88 L483.94,377.31 L486.63,372.67 L489.21,367.95 L491.65,363.16 L493.97,358.29 L496.15,353.36 L498.20,348.37 L500.11,343.32 L501.88,338.21 L503.51,333.06 L505.00,327.85 L506.34,322.61 L507.53,317.33 L508.58,312.02 L509.49,306.68 L510.25,301.32 L510.87,295.94 L511.35,290.54 L511.70,285.14 L511.90,279.73 L511.97,274.32 L511.92,268.91 L511.73,263.51 L511.42,258.11 L510.98,252.73 L510.43,247.35 L509.76,242.00 L508.98,236.66 L508.09,231.34 L507.09,226.04 L505.99,220.77 L504.78,215.51 L503.47,210.29 L502.06,205.09 L500.55,199.92 L498.95,194.78 L497.25,189.66 L495.45,184.58 L493.40,179.60 L491.04,174.75 L488.59,169.96 L486.05,165.22 L483.43,160.53 L480.71,155.90 L477.91,151.33 L475.03,146.83 L472.05,142.38 L468.98,138.01 L465.83,133.70 L462.59,129.46 L459.26,125.30 L455.83,121.22 L452.32,117.22 L448.72,113.31 L445.04,109.48 L441.26,105.75 L437.40,102.11 L433.45,98.57 L429.42,95.13 L425.31,91.80 L421.12,88.58 L416.85,85.46 L412.50,82.47 L408.09,79.58 L403.61,76.82 L399.07,74.17 L394.46,71.65 L389.81,69.24 L385.09,66.95 L380.34,64.79 L375.53,62.74 L370.72,60.76 L365.95,58.70 L361.15,56.73 L356.32,54.86 L351.45,53.08 L346.56,51.39 L341.63,49.80 L336.68,48.29 L331.71,46.86 L326.71,45.51 L321.69,44.24 L316.65,43.05 L311.59,41.92 L306.51,40.87 L301.41,39.88 L296.29,38.95 L291.15,38.09 L285.99,37.29 L280.81,36.54 L275.60,35.86 L270.36,35.23 L265.10,34.65 L259.81,34.13 L254.49,33.66 L249.14,33.25 L243.76,32.88 L238.34,32.56 L232.87,32.29 L227.36,32.03 L221.80,31.77 L216.15,31.41 L210.17,30.02 Z"/></svg>
+        <div class="subject">
+          <div class="inkan" aria-hidden="true">
+            <span class="ring"></span><span class="ring2"></span>
+            <span class="g"><i>株</i><i>締</i><span class="split"></span></span>
+          </div>
+          <div>
+            <h1 class="name">HARGREAVES,<br>Simon J</h1>
+            <div class="role">Shareholder · Director</div>
+          </div>
+        </div>
+        <div class="bio">
+          <dl>
+            <dt>Born</dt><dd>January 1976</dd>
+            <dt>Occupation</dt><dd>Real Estate Agent</dd>
+            <dt>Aliases</dt><dd>S. J. Hargreaves</dd>
+          </dl>
+        </div>
       </div>
 
       <div class="block">
-        <div class="marker"><span class="k">印</span><span class="t">Verification</span><span class="r"></span></div>
+        <div class="marker">
+          <div class="row"><span class="k">印</span><span class="t">Verification</span></div>
+          <svg class="rule-brush" viewBox="0 0 600 9" preserveAspectRatio="none"><path d="M0.00,5.47 L3.00,6.45 L6.00,6.92 L9.00,7.28 L12.00,7.59 L15.00,7.86 L18.00,8.10 L21.00,8.32 L24.00,8.52 L27.00,8.70 L30.00,8.87 L33.00,8.86 L36.00,8.84 L39.00,8.82 L42.00,8.81 L45.00,8.78 L48.00,8.76 L51.00,8.74 L54.00,8.71 L57.00,8.68 L60.00,8.65 L63.00,8.62 L66.00,8.59 L69.00,8.56 L72.00,8.52 L75.00,8.49 L78.00,8.45 L81.00,8.41 L84.00,8.38 L87.00,8.34 L90.00,8.30 L93.00,8.26 L96.00,8.22 L99.00,8.17 L102.00,8.13 L105.00,8.09 L108.00,8.05 L111.00,8.01 L114.00,7.97 L117.00,7.92 L120.00,7.88 L123.00,7.84 L126.00,7.80 L129.00,7.76 L132.00,7.72 L135.00,7.68 L138.00,7.64 L141.00,7.61 L144.00,7.57 L147.00,7.53 L150.00,7.50 L153.00,7.46 L156.00,7.43 L159.00,7.40 L162.00,7.36 L165.00,7.33 L168.00,7.30 L171.00,7.28 L174.00,7.25 L177.00,7.22 L180.00,7.20 L183.00,7.17 L186.00,7.15 L189.00,7.13 L192.00,7.11 L195.00,7.09 L198.00,7.08 L201.00,7.06 L204.00,7.05 L207.00,7.03 L210.00,7.02 L213.00,7.01 L216.00,7.00 L219.00,6.99 L222.00,6.98 L225.00,6.98 L228.00,6.97 L231.00,6.97 L234.00,6.97 L237.00,6.96 L240.00,6.96 L243.00,6.96 L246.00,6.96 L249.00,6.96 L252.00,6.97 L255.00,6.97 L258.00,6.97 L261.00,6.98 L264.00,6.98 L267.00,6.98 L270.00,6.99 L273.00,6.96 L276.00,6.94 L279.00,6.91 L282.00,6.89 L285.00,6.86 L288.00,6.83 L291.00,6.80 L294.00,6.77 L297.00,6.74 L300.00,6.71 L303.00,6.67 L306.00,6.64 L309.00,6.60 L312.00,6.56 L315.00,6.52 L318.00,6.48 L321.00,6.44 L324.00,6.40 L327.00,6.35 L330.00,6.31 L333.00,6.26 L336.00,6.21 L339.00,6.16 L342.00,6.11 L345.00,6.06 L348.00,6.01 L351.00,5.95 L354.00,5.90 L357.00,5.84 L360.00,5.79 L363.00,5.73 L366.00,5.67 L369.00,5.61 L372.00,5.55 L375.00,5.49 L378.00,5.43 L381.00,5.37 L384.00,5.31 L387.00,5.25 L390.00,5.19 L393.00,5.13 L396.00,5.07 L399.00,5.01 L402.00,4.95 L405.00,4.89 L408.00,4.83 L411.00,4.77 L414.00,4.71 L417.00,4.65 L420.00,4.59 L423.00,4.53 L426.00,4.48 L429.00,4.42 L432.00,4.37 L435.00,4.32 L438.00,4.26 L441.00,4.21 L444.00,4.16 L447.00,4.12 L450.00,4.07 L453.00,4.02 L456.00,3.98 L459.00,3.94 L462.00,3.90 L465.00,3.86 L468.00,3.82 L471.00,3.79 L474.00,3.76 L477.00,3.72 L480.00,3.70 L483.00,3.67 L486.00,3.64 L489.00,3.62 L492.00,3.60 L495.00,3.58 L498.00,3.56 L501.00,3.54 L504.00,3.53 L507.00,3.52 L510.00,3.51 L513.00,3.50 L516.00,3.49 L519.00,3.49 L522.00,3.49 L525.00,3.48 L528.00,3.49 L531.00,3.49 L534.00,3.49 L537.00,3.50 L540.00,3.51 L543.00,3.52 L546.00,3.53 L549.00,3.54 L552.00,3.55 L555.00,3.57 L558.00,3.58 L561.00,3.60 L564.00,3.62 L567.00,3.64 L570.00,3.66 L573.00,3.69 L576.00,3.71 L579.00,3.73 L582.00,3.76 L585.00,3.79 L588.00,3.82 L591.00,3.84 L594.00,3.87 L597.00,3.91 L600.00,3.94 L600.00,3.94 L597.00,3.90 L594.00,3.86 L591.00,3.82 L588.00,3.78 L585.00,3.74 L582.00,3.70 L579.00,3.66 L576.00,3.62 L573.00,3.58 L570.00,3.54 L567.00,3.50 L564.00,3.46 L561.00,3.42 L558.00,3.38 L555.00,3.34 L552.00,3.30 L549.00,3.26 L546.00,3.22 L543.00,3.18 L540.00,3.14 L537.00,3.10 L534.00,3.06 L531.00,3.02 L528.00,2.98 L525.00,2.94 L522.00,2.90 L519.00,2.86 L516.00,2.82 L513.00,2.78 L510.00,2.74 L507.00,2.70 L504.00,2.66 L501.00,2.62 L498.00,2.58 L495.00,2.54 L492.00,2.50 L489.00,2.46 L486.00,2.42 L483.00,2.38 L480.00,2.34 L477.00,2.30 L474.00,2.26 L471.00,2.22 L468.00,2.18 L465.00,2.14 L462.00,2.10 L459.00,2.06 L456.00,2.02 L453.00,1.99 L450.00,1.95 L447.00,1.91 L444.00,1.88 L441.00,1.84 L438.00,1.81 L435.00,1.77 L432.00,1.74 L429.00,1.71 L426.00,1.68 L423.00,1.64 L420.00,1.61 L417.00,1.59 L414.00,1.56 L411.00,1.53 L408.00,1.51 L405.00,1.48 L402.00,1.46 L399.00,1.44 L396.00,1.42 L393.00,1.41 L390.00,1.39 L387.00,1.38 L384.00,1.36 L381.00,1.35 L378.00,1.34 L375.00,1.34 L372.00,1.33 L369.00,1.33 L366.00,1.33 L363.00,1.33 L360.00,1.33 L357.00,1.34 L354.00,1.34 L351.00,1.35 L348.00,1.36 L345.00,1.38 L342.00,1.39 L339.00,1.41 L336.00,1.43 L333.00,1.45 L330.00,1.47 L327.00,1.50 L324.00,1.53 L321.00,1.56 L318.00,1.59 L315.00,1.62 L312.00,1.66 L309.00,1.70 L306.00,1.74 L303.00,1.78 L300.00,1.82 L297.00,1.86 L294.00,1.91 L291.00,1.96 L288.00,2.01 L285.00,2.05 L282.00,2.11 L279.00,2.16 L276.00,2.21 L273.00,2.26 L270.00,2.32 L267.00,2.40 L264.00,2.48 L261.00,2.56 L258.00,2.64 L255.00,2.72 L252.00,2.80 L249.00,2.88 L246.00,2.95 L243.00,3.03 L240.00,3.10 L237.00,3.17 L234.00,3.24 L231.00,3.31 L228.00,3.37 L225.00,3.44 L222.00,3.50 L219.00,3.56 L216.00,3.62 L213.00,3.67 L210.00,3.73 L207.00,3.78 L204.00,3.83 L201.00,3.87 L198.00,3.91 L195.00,3.95 L192.00,3.99 L189.00,4.03 L186.00,4.06 L183.00,4.09 L180.00,4.12 L177.00,4.14 L174.00,4.16 L171.00,4.18 L168.00,4.20 L165.00,4.21 L162.00,4.22 L159.00,4.23 L156.00,4.23 L153.00,4.23 L150.00,4.23 L147.00,4.23 L144.00,4.22 L141.00,4.21 L138.00,4.20 L135.00,4.18 L132.00,4.17 L129.00,4.15 L126.00,4.13 L123.00,4.10 L120.00,4.07 L117.00,4.04 L114.00,4.01 L111.00,3.98 L108.00,3.94 L105.00,3.91 L102.00,3.87 L99.00,3.83 L96.00,3.78 L93.00,3.74 L90.00,3.69 L87.00,3.64 L84.00,3.59 L81.00,3.54 L78.00,3.49 L75.00,3.44 L72.00,3.39 L69.00,3.33 L66.00,3.28 L63.00,3.22 L60.00,3.16 L57.00,3.11 L54.00,3.05 L51.00,2.99 L48.00,2.93 L45.00,2.88 L42.00,2.82 L39.00,2.76 L36.00,2.70 L33.00,2.64 L30.00,2.59 L27.00,2.71 L24.00,2.85 L21.00,3.00 L18.00,3.17 L15.00,3.36 L12.00,3.57 L9.00,3.83 L6.00,4.13 L3.00,4.54 L0.00,5.47 Z"/></svg>
+        </div>
 
         <div class="verdict"><span class="sq amber" aria-hidden="true">琥</span><span style="color:var(--amber)">4 different addresses</span></div>
         <div class="addr">
@@ -239,7 +314,7 @@ tbody tr:hover td{ background:var(--paper2) }
         </div>
         <div class="other-addr">9H/205 Hobson Street, Auckland — 12<br>Level 4, 22 Fanshawe Street — 9<br>PO Box 33-1042, Takapuna — 5</div>
 
-        <div style="margin-top:18px">
+        <div style="margin-top:20px">
           <div class="sig">
             <svg viewBox="0 0 240 52" role="img" aria-label="Signature sample from a consent form">
               <path d="M8 38 C 22 12, 34 10, 38 24 C 42 38, 32 44, 30 34 C 28 22, 46 14, 58 30 C 66 41, 74 40, 80 28
@@ -257,15 +332,19 @@ tbody tr:hover td{ background:var(--paper2) }
 
     <!-- ═══ FINDINGS ═══ -->
     <main class="findings">
-      <div class="marker"><span class="k">険</span><span class="t">Register checks</span><span class="r"></span></div>
+      <div class="vrule" aria-hidden="true"><svg viewBox="0 0 10 900" preserveAspectRatio="none"><path d="M5.62,0.00 L6.39,3.00 L6.76,6.00 L7.07,9.00 L7.33,12.00 L7.57,15.00 L7.79,18.00 L8.00,21.00 L8.20,24.00 L8.38,27.00 L8.41,30.00 L8.43,33.00 L8.45,36.00 L8.47,39.00 L8.49,42.00 L8.51,45.00 L8.52,48.00 L8.54,51.00 L8.55,54.00 L8.56,57.00 L8.56,60.00 L8.57,63.00 L8.58,66.00 L8.58,69.00 L8.58,72.00 L8.58,75.00 L8.58,78.00 L8.57,81.00 L8.57,84.00 L8.56,87.00 L8.55,90.00 L8.54,93.00 L8.53,96.00 L8.52,99.00 L8.51,102.00 L8.49,105.00 L8.48,108.00 L8.46,111.00 L8.44,114.00 L8.42,117.00 L8.40,120.00 L8.38,123.00 L8.36,126.00 L8.34,129.00 L8.32,132.00 L8.29,135.00 L8.27,138.00 L8.24,141.00 L8.22,144.00 L8.19,147.00 L8.16,150.00 L8.14,153.00 L8.11,156.00 L8.08,159.00 L8.05,162.00 L8.03,165.00 L8.00,168.00 L7.97,171.00 L7.94,174.00 L7.92,177.00 L7.89,180.00 L7.86,183.00 L7.84,186.00 L7.81,189.00 L7.78,192.00 L7.76,195.00 L7.73,198.00 L7.71,201.00 L7.68,204.00 L7.66,207.00 L7.63,210.00 L7.61,213.00 L7.59,216.00 L7.57,219.00 L7.55,222.00 L7.53,225.00 L7.51,228.00 L7.49,231.00 L7.47,234.00 L7.45,237.00 L7.44,240.00 L7.42,243.00 L7.41,246.00 L7.39,249.00 L7.38,252.00 L7.37,255.00 L7.36,258.00 L7.35,261.00 L7.34,264.00 L7.33,267.00 L7.32,270.00 L7.31,273.00 L7.31,276.00 L7.30,279.00 L7.30,282.00 L7.29,285.00 L7.29,288.00 L7.28,291.00 L7.28,294.00 L7.28,297.00 L7.28,300.00 L7.28,303.00 L7.28,306.00 L7.28,309.00 L7.28,312.00 L7.28,315.00 L7.28,318.00 L7.28,321.00 L7.29,324.00 L7.29,327.00 L7.29,330.00 L7.29,333.00 L7.30,336.00 L7.30,339.00 L7.30,342.00 L7.30,345.00 L7.31,348.00 L7.31,351.00 L7.31,354.00 L7.31,357.00 L7.31,360.00 L7.31,363.00 L7.31,366.00 L7.31,369.00 L7.31,372.00 L7.31,375.00 L7.31,378.00 L7.31,381.00 L7.31,384.00 L7.30,387.00 L7.30,390.00 L7.29,393.00 L7.29,396.00 L7.28,399.00 L7.27,402.00 L7.26,405.00 L7.26,408.00 L7.24,411.00 L7.23,414.00 L7.22,417.00 L7.21,420.00 L7.19,423.00 L7.18,426.00 L7.16,429.00 L7.14,432.00 L7.12,435.00 L7.10,438.00 L7.08,441.00 L7.06,444.00 L7.03,447.00 L7.01,450.00 L6.98,453.00 L6.95,456.00 L6.92,459.00 L6.89,462.00 L6.86,465.00 L6.83,468.00 L6.79,471.00 L6.76,474.00 L6.72,477.00 L6.69,480.00 L6.65,483.00 L6.61,486.00 L6.57,489.00 L6.53,492.00 L6.49,495.00 L6.45,498.00 L6.40,501.00 L6.36,504.00 L6.31,507.00 L6.27,510.00 L6.22,513.00 L6.18,516.00 L6.13,519.00 L6.08,522.00 L6.03,525.00 L5.98,528.00 L5.94,531.00 L5.89,534.00 L5.84,537.00 L5.79,540.00 L5.74,543.00 L5.69,546.00 L5.64,549.00 L5.59,552.00 L5.54,555.00 L5.49,558.00 L5.44,561.00 L5.40,564.00 L5.35,567.00 L5.30,570.00 L5.26,573.00 L5.21,576.00 L5.17,579.00 L5.12,582.00 L5.08,585.00 L5.04,588.00 L4.99,591.00 L4.95,594.00 L4.92,597.00 L4.88,600.00 L4.84,603.00 L4.81,606.00 L4.77,609.00 L4.74,612.00 L4.71,615.00 L4.68,618.00 L4.65,621.00 L4.62,624.00 L4.60,627.00 L4.58,630.00 L4.55,633.00 L4.53,636.00 L4.52,639.00 L4.50,642.00 L4.49,645.00 L4.48,648.00 L4.46,651.00 L4.46,654.00 L4.45,657.00 L4.45,660.00 L4.44,663.00 L4.44,666.00 L4.45,669.00 L4.45,672.00 L4.46,675.00 L4.46,678.00 L4.47,681.00 L4.49,684.00 L4.50,687.00 L4.52,690.00 L4.53,693.00 L4.55,696.00 L4.58,699.00 L4.60,702.00 L4.63,705.00 L4.65,708.00 L4.68,711.00 L4.72,714.00 L4.75,717.00 L4.78,720.00 L4.82,723.00 L4.86,726.00 L4.90,729.00 L4.94,732.00 L4.98,735.00 L5.03,738.00 L5.07,741.00 L5.12,744.00 L5.17,747.00 L5.22,750.00 L5.27,753.00 L5.32,756.00 L5.38,759.00 L5.43,762.00 L5.49,765.00 L5.54,768.00 L5.60,771.00 L5.66,774.00 L5.72,777.00 L5.78,780.00 L5.84,783.00 L5.90,786.00 L5.96,789.00 L6.02,792.00 L6.08,795.00 L6.14,798.00 L6.20,801.00 L6.26,804.00 L6.32,807.00 L6.38,810.00 L6.35,813.00 L6.32,816.00 L6.29,819.00 L6.25,822.00 L6.21,825.00 L6.18,828.00 L6.14,831.00 L6.10,834.00 L6.05,837.00 L6.01,840.00 L5.97,843.00 L5.92,846.00 L5.88,849.00 L5.84,852.00 L5.79,855.00 L5.75,858.00 L5.70,861.00 L5.66,864.00 L5.62,867.00 L5.58,870.00 L5.54,873.00 L5.50,876.00 L5.47,879.00 L5.43,882.00 L5.41,885.00 L5.38,888.00 L5.36,891.00 L5.34,894.00 L5.34,897.00 L5.34,900.00 L5.34,900.00 L5.29,897.00 L5.22,894.00 L5.14,891.00 L5.05,888.00 L4.96,885.00 L4.87,882.00 L4.77,879.00 L4.67,876.00 L4.57,873.00 L4.47,870.00 L4.36,867.00 L4.25,864.00 L4.15,861.00 L4.04,858.00 L3.93,855.00 L3.82,852.00 L3.71,849.00 L3.60,846.00 L3.49,843.00 L3.38,840.00 L3.28,837.00 L3.17,834.00 L3.07,831.00 L2.97,828.00 L2.87,825.00 L2.77,822.00 L2.67,819.00 L2.57,816.00 L2.48,813.00 L2.39,810.00 L2.39,807.00 L2.39,804.00 L2.40,801.00 L2.40,798.00 L2.40,795.00 L2.41,792.00 L2.41,789.00 L2.42,786.00 L2.42,783.00 L2.43,780.00 L2.43,777.00 L2.44,774.00 L2.44,771.00 L2.45,768.00 L2.45,765.00 L2.46,762.00 L2.47,759.00 L2.47,756.00 L2.48,753.00 L2.48,750.00 L2.49,747.00 L2.49,744.00 L2.50,741.00 L2.50,738.00 L2.51,735.00 L2.51,732.00 L2.51,729.00 L2.51,726.00 L2.52,723.00 L2.52,720.00 L2.52,717.00 L2.52,714.00 L2.52,711.00 L2.52,708.00 L2.51,705.00 L2.51,702.00 L2.51,699.00 L2.50,696.00 L2.50,693.00 L2.49,690.00 L2.49,687.00 L2.48,684.00 L2.47,681.00 L2.46,678.00 L2.45,675.00 L2.44,672.00 L2.43,669.00 L2.42,666.00 L2.41,663.00 L2.40,660.00 L2.38,657.00 L2.37,654.00 L2.35,651.00 L2.34,648.00 L2.32,645.00 L2.30,642.00 L2.28,639.00 L2.27,636.00 L2.25,633.00 L2.23,630.00 L2.21,627.00 L2.19,624.00 L2.17,621.00 L2.15,618.00 L2.13,615.00 L2.10,612.00 L2.08,609.00 L2.06,606.00 L2.04,603.00 L2.02,600.00 L2.00,597.00 L1.98,594.00 L1.95,591.00 L1.93,588.00 L1.91,585.00 L1.89,582.00 L1.87,579.00 L1.85,576.00 L1.83,573.00 L1.82,570.00 L1.80,567.00 L1.78,564.00 L1.76,561.00 L1.75,558.00 L1.73,555.00 L1.72,552.00 L1.70,549.00 L1.69,546.00 L1.68,543.00 L1.67,540.00 L1.66,537.00 L1.65,534.00 L1.65,531.00 L1.64,528.00 L1.63,525.00 L1.63,522.00 L1.63,519.00 L1.63,516.00 L1.63,513.00 L1.63,510.00 L1.64,507.00 L1.64,504.00 L1.65,501.00 L1.66,498.00 L1.67,495.00 L1.68,492.00 L1.69,489.00 L1.71,486.00 L1.73,483.00 L1.75,480.00 L1.77,477.00 L1.79,474.00 L1.81,471.00 L1.84,468.00 L1.86,465.00 L1.89,462.00 L1.92,459.00 L1.95,456.00 L1.99,453.00 L2.02,450.00 L2.06,447.00 L2.10,444.00 L2.14,441.00 L2.18,438.00 L2.22,435.00 L2.27,432.00 L2.31,429.00 L2.36,426.00 L2.41,423.00 L2.46,420.00 L2.51,417.00 L2.56,414.00 L2.61,411.00 L2.67,408.00 L2.72,405.00 L2.78,402.00 L2.84,399.00 L2.90,396.00 L2.96,393.00 L3.01,390.00 L3.08,387.00 L3.14,384.00 L3.20,381.00 L3.26,378.00 L3.32,375.00 L3.39,372.00 L3.45,369.00 L3.51,366.00 L3.57,363.00 L3.64,360.00 L3.70,357.00 L3.76,354.00 L3.83,351.00 L3.89,348.00 L3.95,345.00 L4.01,342.00 L4.08,339.00 L4.14,336.00 L4.20,333.00 L4.26,330.00 L4.32,327.00 L4.37,324.00 L4.43,321.00 L4.49,318.00 L4.54,315.00 L4.60,312.00 L4.65,309.00 L4.70,306.00 L4.75,303.00 L4.80,300.00 L4.85,297.00 L4.90,294.00 L4.94,291.00 L4.98,288.00 L5.03,285.00 L5.07,282.00 L5.10,279.00 L5.14,276.00 L5.18,273.00 L5.21,270.00 L5.24,267.00 L5.27,264.00 L5.30,261.00 L5.32,258.00 L5.35,255.00 L5.37,252.00 L5.39,249.00 L5.41,246.00 L5.42,243.00 L5.44,240.00 L5.45,237.00 L5.46,234.00 L5.47,231.00 L5.47,228.00 L5.48,225.00 L5.48,222.00 L5.48,219.00 L5.47,216.00 L5.47,213.00 L5.46,210.00 L5.46,207.00 L5.45,204.00 L5.44,201.00 L5.42,198.00 L5.41,195.00 L5.39,192.00 L5.37,189.00 L5.35,186.00 L5.33,183.00 L5.31,180.00 L5.28,177.00 L5.26,174.00 L5.23,171.00 L5.20,168.00 L5.17,165.00 L5.14,162.00 L5.10,159.00 L5.07,156.00 L5.03,153.00 L5.00,150.00 L4.96,147.00 L4.92,144.00 L4.88,141.00 L4.84,138.00 L4.80,135.00 L4.76,132.00 L4.72,129.00 L4.68,126.00 L4.64,123.00 L4.59,120.00 L4.55,117.00 L4.51,114.00 L4.46,111.00 L4.42,108.00 L4.38,105.00 L4.33,102.00 L4.29,99.00 L4.24,96.00 L4.20,93.00 L4.16,90.00 L4.11,87.00 L4.07,84.00 L4.03,81.00 L3.99,78.00 L3.94,75.00 L3.90,72.00 L3.86,69.00 L3.82,66.00 L3.78,63.00 L3.75,60.00 L3.71,57.00 L3.67,54.00 L3.64,51.00 L3.60,48.00 L3.57,45.00 L3.53,42.00 L3.50,39.00 L3.47,36.00 L3.44,33.00 L3.41,30.00 L3.38,27.00 L3.51,24.00 L3.65,21.00 L3.80,18.00 L3.97,15.00 L4.15,12.00 L4.36,9.00 L4.60,6.00 L4.92,3.00 L5.62,0.00 Z"/></svg></div>
+
+      <div class="marker">
+        <div class="row"><span class="k">険</span><span class="t">Register checks</span></div>
+        <svg class="rule-brush" viewBox="0 0 600 9" preserveAspectRatio="none"><path d="M0.00,5.47 L3.00,6.45 L6.00,6.92 L9.00,7.28 L12.00,7.59 L15.00,7.86 L18.00,8.10 L21.00,8.32 L24.00,8.52 L27.00,8.70 L30.00,8.87 L33.00,8.86 L36.00,8.84 L39.00,8.82 L42.00,8.81 L45.00,8.78 L48.00,8.76 L51.00,8.74 L54.00,8.71 L57.00,8.68 L60.00,8.65 L63.00,8.62 L66.00,8.59 L69.00,8.56 L72.00,8.52 L75.00,8.49 L78.00,8.45 L81.00,8.41 L84.00,8.38 L87.00,8.34 L90.00,8.30 L93.00,8.26 L96.00,8.22 L99.00,8.17 L102.00,8.13 L105.00,8.09 L108.00,8.05 L111.00,8.01 L114.00,7.97 L117.00,7.92 L120.00,7.88 L123.00,7.84 L126.00,7.80 L129.00,7.76 L132.00,7.72 L135.00,7.68 L138.00,7.64 L141.00,7.61 L144.00,7.57 L147.00,7.53 L150.00,7.50 L153.00,7.46 L156.00,7.43 L159.00,7.40 L162.00,7.36 L165.00,7.33 L168.00,7.30 L171.00,7.28 L174.00,7.25 L177.00,7.22 L180.00,7.20 L183.00,7.17 L186.00,7.15 L189.00,7.13 L192.00,7.11 L195.00,7.09 L198.00,7.08 L201.00,7.06 L204.00,7.05 L207.00,7.03 L210.00,7.02 L213.00,7.01 L216.00,7.00 L219.00,6.99 L222.00,6.98 L225.00,6.98 L228.00,6.97 L231.00,6.97 L234.00,6.97 L237.00,6.96 L240.00,6.96 L243.00,6.96 L246.00,6.96 L249.00,6.96 L252.00,6.97 L255.00,6.97 L258.00,6.97 L261.00,6.98 L264.00,6.98 L267.00,6.98 L270.00,6.99 L273.00,6.96 L276.00,6.94 L279.00,6.91 L282.00,6.89 L285.00,6.86 L288.00,6.83 L291.00,6.80 L294.00,6.77 L297.00,6.74 L300.00,6.71 L303.00,6.67 L306.00,6.64 L309.00,6.60 L312.00,6.56 L315.00,6.52 L318.00,6.48 L321.00,6.44 L324.00,6.40 L327.00,6.35 L330.00,6.31 L333.00,6.26 L336.00,6.21 L339.00,6.16 L342.00,6.11 L345.00,6.06 L348.00,6.01 L351.00,5.95 L354.00,5.90 L357.00,5.84 L360.00,5.79 L363.00,5.73 L366.00,5.67 L369.00,5.61 L372.00,5.55 L375.00,5.49 L378.00,5.43 L381.00,5.37 L384.00,5.31 L387.00,5.25 L390.00,5.19 L393.00,5.13 L396.00,5.07 L399.00,5.01 L402.00,4.95 L405.00,4.89 L408.00,4.83 L411.00,4.77 L414.00,4.71 L417.00,4.65 L420.00,4.59 L423.00,4.53 L426.00,4.48 L429.00,4.42 L432.00,4.37 L435.00,4.32 L438.00,4.26 L441.00,4.21 L444.00,4.16 L447.00,4.12 L450.00,4.07 L453.00,4.02 L456.00,3.98 L459.00,3.94 L462.00,3.90 L465.00,3.86 L468.00,3.82 L471.00,3.79 L474.00,3.76 L477.00,3.72 L480.00,3.70 L483.00,3.67 L486.00,3.64 L489.00,3.62 L492.00,3.60 L495.00,3.58 L498.00,3.56 L501.00,3.54 L504.00,3.53 L507.00,3.52 L510.00,3.51 L513.00,3.50 L516.00,3.49 L519.00,3.49 L522.00,3.49 L525.00,3.48 L528.00,3.49 L531.00,3.49 L534.00,3.49 L537.00,3.50 L540.00,3.51 L543.00,3.52 L546.00,3.53 L549.00,3.54 L552.00,3.55 L555.00,3.57 L558.00,3.58 L561.00,3.60 L564.00,3.62 L567.00,3.64 L570.00,3.66 L573.00,3.69 L576.00,3.71 L579.00,3.73 L582.00,3.76 L585.00,3.79 L588.00,3.82 L591.00,3.84 L594.00,3.87 L597.00,3.91 L600.00,3.94 L600.00,3.94 L597.00,3.90 L594.00,3.86 L591.00,3.82 L588.00,3.78 L585.00,3.74 L582.00,3.70 L579.00,3.66 L576.00,3.62 L573.00,3.58 L570.00,3.54 L567.00,3.50 L564.00,3.46 L561.00,3.42 L558.00,3.38 L555.00,3.34 L552.00,3.30 L549.00,3.26 L546.00,3.22 L543.00,3.18 L540.00,3.14 L537.00,3.10 L534.00,3.06 L531.00,3.02 L528.00,2.98 L525.00,2.94 L522.00,2.90 L519.00,2.86 L516.00,2.82 L513.00,2.78 L510.00,2.74 L507.00,2.70 L504.00,2.66 L501.00,2.62 L498.00,2.58 L495.00,2.54 L492.00,2.50 L489.00,2.46 L486.00,2.42 L483.00,2.38 L480.00,2.34 L477.00,2.30 L474.00,2.26 L471.00,2.22 L468.00,2.18 L465.00,2.14 L462.00,2.10 L459.00,2.06 L456.00,2.02 L453.00,1.99 L450.00,1.95 L447.00,1.91 L444.00,1.88 L441.00,1.84 L438.00,1.81 L435.00,1.77 L432.00,1.74 L429.00,1.71 L426.00,1.68 L423.00,1.64 L420.00,1.61 L417.00,1.59 L414.00,1.56 L411.00,1.53 L408.00,1.51 L405.00,1.48 L402.00,1.46 L399.00,1.44 L396.00,1.42 L393.00,1.41 L390.00,1.39 L387.00,1.38 L384.00,1.36 L381.00,1.35 L378.00,1.34 L375.00,1.34 L372.00,1.33 L369.00,1.33 L366.00,1.33 L363.00,1.33 L360.00,1.33 L357.00,1.34 L354.00,1.34 L351.00,1.35 L348.00,1.36 L345.00,1.38 L342.00,1.39 L339.00,1.41 L336.00,1.43 L333.00,1.45 L330.00,1.47 L327.00,1.50 L324.00,1.53 L321.00,1.56 L318.00,1.59 L315.00,1.62 L312.00,1.66 L309.00,1.70 L306.00,1.74 L303.00,1.78 L300.00,1.82 L297.00,1.86 L294.00,1.91 L291.00,1.96 L288.00,2.01 L285.00,2.05 L282.00,2.11 L279.00,2.16 L276.00,2.21 L273.00,2.26 L270.00,2.32 L267.00,2.40 L264.00,2.48 L261.00,2.56 L258.00,2.64 L255.00,2.72 L252.00,2.80 L249.00,2.88 L246.00,2.95 L243.00,3.03 L240.00,3.10 L237.00,3.17 L234.00,3.24 L231.00,3.31 L228.00,3.37 L225.00,3.44 L222.00,3.50 L219.00,3.56 L216.00,3.62 L213.00,3.67 L210.00,3.73 L207.00,3.78 L204.00,3.83 L201.00,3.87 L198.00,3.91 L195.00,3.95 L192.00,3.99 L189.00,4.03 L186.00,4.06 L183.00,4.09 L180.00,4.12 L177.00,4.14 L174.00,4.16 L171.00,4.18 L168.00,4.20 L165.00,4.21 L162.00,4.22 L159.00,4.23 L156.00,4.23 L153.00,4.23 L150.00,4.23 L147.00,4.23 L144.00,4.22 L141.00,4.21 L138.00,4.20 L135.00,4.18 L132.00,4.17 L129.00,4.15 L126.00,4.13 L123.00,4.10 L120.00,4.07 L117.00,4.04 L114.00,4.01 L111.00,3.98 L108.00,3.94 L105.00,3.91 L102.00,3.87 L99.00,3.83 L96.00,3.78 L93.00,3.74 L90.00,3.69 L87.00,3.64 L84.00,3.59 L81.00,3.54 L78.00,3.49 L75.00,3.44 L72.00,3.39 L69.00,3.33 L66.00,3.28 L63.00,3.22 L60.00,3.16 L57.00,3.11 L54.00,3.05 L51.00,2.99 L48.00,2.93 L45.00,2.88 L42.00,2.82 L39.00,2.76 L36.00,2.70 L33.00,2.64 L30.00,2.59 L27.00,2.71 L24.00,2.85 L21.00,3.00 L18.00,3.17 L15.00,3.36 L12.00,3.57 L9.00,3.83 L6.00,4.13 L3.00,4.54 L0.00,5.47 Z"/></svg>
+      </div>
 
       <div class="strips">
         <details class="strip">
           <summary class="strip-head">
             <span class="sq34 green" aria-hidden="true">青</span>
             <span class="strip-title"><b>Disqualified directors</b> <span class="n">· no records</span></span>
-            <span class="pill-state">Clear</span>
-            <span class="caret" aria-hidden="true">▸</span>
+            <span class="pill-state">Clear</span><span class="caret" aria-hidden="true">▸</span>
           </summary>
           <div class="strip-body" style="font-size:12px;color:var(--ink-mid)">
             No records for “Simon J Hargreaves” on the Disqualified Directors register.
@@ -279,24 +358,38 @@ tbody tr:hover td{ background:var(--paper2) }
               <b>Insolvency</b> <span class="n">· 2 records</span>
               <div class="flag-mult">Multiple insolvencies on record</div>
             </span>
-            <span class="pill-state">No current</span>
-            <span class="caret" aria-hidden="true">▸</span>
+            <span class="pill-state">No current</span><span class="caret" aria-hidden="true">▸</span>
           </summary>
           <div class="strip-body">
 
             <div class="tl">
-              <svg viewBox="0 0 900 64" preserveAspectRatio="none" role="img"
+              <svg viewBox="0 0 900 70" preserveAspectRatio="none" role="img"
                    aria-label="Directorships held, against two bankruptcy periods">
-                <text x="0" y="8" fill="var(--ink-pale)" font-family="var(--mono)" font-size="9">directorships held</text>
-                <rect x="29"  y="12" width="348" height="9" fill="var(--accent)" opacity=".25"/>
-                <rect x="421" y="12" width="450" height="9" fill="var(--accent)" opacity=".25"/>
-                <text x="0" y="34" fill="var(--crit)" font-family="var(--mono)" font-size="9">bankrupt</text>
-                <rect x="174" y="38" width="87" height="9" fill="var(--crit)" opacity=".85"/>
-                <text x="174" y="58" fill="var(--crit)" font-family="var(--mono)" font-size="9.5">2002 — 2005</text>
-                <rect x="436" y="38" width="87" height="9" fill="var(--crit)" opacity=".85"/>
-                <text x="436" y="58" fill="var(--crit)" font-family="var(--mono)" font-size="9.5">2011 — 2014</text>
-                <line x1="0" y1="62" x2="900" y2="62" stroke="var(--rule)" stroke-width="1"/>
+                <defs>
+                  <filter id="wash" x="-12%" y="-40%" width="124%" height="180%">
+                    <feTurbulence type="fractalNoise" baseFrequency=".012 .38" numOctaves="3" seed="7" result="t"/>
+                    <feDisplacementMap in="SourceGraphic" in2="t" scale="7" xChannelSelector="R" yChannelSelector="G"/>
+                    <feGaussianBlur stdDeviation=".7"/>
+                  </filter>
+                  <filter id="dry" x="-6%" y="-40%" width="112%" height="180%">
+                    <feTurbulence type="fractalNoise" baseFrequency=".9 .16" numOctaves="2" seed="3" result="t"/>
+                    <feDisplacementMap in="SourceGraphic" in2="t" scale="3.4" xChannelSelector="R" yChannelSelector="G"/>
+                  </filter>
+                </defs>
+                <text x="0" y="9" fill="var(--ink-pale)" font-family="var(--mono)" font-size="9">directorships held</text>
+                <g filter="url(#wash)" fill="var(--accent)" opacity=".26">
+                  <rect x="29" y="14" width="348" height="10"/>
+                  <rect x="421" y="14" width="450" height="10"/>
+                </g>
+                <text x="0" y="38" fill="var(--crit)" font-family="var(--mono)" font-size="9">bankrupt</text>
+                <g filter="url(#dry)" fill="var(--crit)" opacity=".88">
+                  <rect x="174" y="42" width="87" height="10"/>
+                  <rect x="436" y="42" width="87" height="10"/>
+                </g>
+                <text x="174" y="64" fill="var(--crit)" font-family="var(--mono)" font-size="9.5">2002 — 2005</text>
+                <text x="436" y="64" fill="var(--crit)" font-family="var(--mono)" font-size="9.5">2011 — 2014</text>
               </svg>
+              <svg class="rule-brush" viewBox="0 0 600 9" preserveAspectRatio="none" aria-hidden="true"><path d="M0.00,5.47 L3.00,6.45 L6.00,6.92 L9.00,7.28 L12.00,7.59 L15.00,7.86 L18.00,8.10 L21.00,8.32 L24.00,8.52 L27.00,8.70 L30.00,8.87 L33.00,8.86 L36.00,8.84 L39.00,8.82 L42.00,8.81 L45.00,8.78 L48.00,8.76 L51.00,8.74 L54.00,8.71 L57.00,8.68 L60.00,8.65 L63.00,8.62 L66.00,8.59 L69.00,8.56 L72.00,8.52 L75.00,8.49 L78.00,8.45 L81.00,8.41 L84.00,8.38 L87.00,8.34 L90.00,8.30 L93.00,8.26 L96.00,8.22 L99.00,8.17 L102.00,8.13 L105.00,8.09 L108.00,8.05 L111.00,8.01 L114.00,7.97 L117.00,7.92 L120.00,7.88 L123.00,7.84 L126.00,7.80 L129.00,7.76 L132.00,7.72 L135.00,7.68 L138.00,7.64 L141.00,7.61 L144.00,7.57 L147.00,7.53 L150.00,7.50 L153.00,7.46 L156.00,7.43 L159.00,7.40 L162.00,7.36 L165.00,7.33 L168.00,7.30 L171.00,7.28 L174.00,7.25 L177.00,7.22 L180.00,7.20 L183.00,7.17 L186.00,7.15 L189.00,7.13 L192.00,7.11 L195.00,7.09 L198.00,7.08 L201.00,7.06 L204.00,7.05 L207.00,7.03 L210.00,7.02 L213.00,7.01 L216.00,7.00 L219.00,6.99 L222.00,6.98 L225.00,6.98 L228.00,6.97 L231.00,6.97 L234.00,6.97 L237.00,6.96 L240.00,6.96 L243.00,6.96 L246.00,6.96 L249.00,6.96 L252.00,6.97 L255.00,6.97 L258.00,6.97 L261.00,6.98 L264.00,6.98 L267.00,6.98 L270.00,6.99 L273.00,6.96 L276.00,6.94 L279.00,6.91 L282.00,6.89 L285.00,6.86 L288.00,6.83 L291.00,6.80 L294.00,6.77 L297.00,6.74 L300.00,6.71 L303.00,6.67 L306.00,6.64 L309.00,6.60 L312.00,6.56 L315.00,6.52 L318.00,6.48 L321.00,6.44 L324.00,6.40 L327.00,6.35 L330.00,6.31 L333.00,6.26 L336.00,6.21 L339.00,6.16 L342.00,6.11 L345.00,6.06 L348.00,6.01 L351.00,5.95 L354.00,5.90 L357.00,5.84 L360.00,5.79 L363.00,5.73 L366.00,5.67 L369.00,5.61 L372.00,5.55 L375.00,5.49 L378.00,5.43 L381.00,5.37 L384.00,5.31 L387.00,5.25 L390.00,5.19 L393.00,5.13 L396.00,5.07 L399.00,5.01 L402.00,4.95 L405.00,4.89 L408.00,4.83 L411.00,4.77 L414.00,4.71 L417.00,4.65 L420.00,4.59 L423.00,4.53 L426.00,4.48 L429.00,4.42 L432.00,4.37 L435.00,4.32 L438.00,4.26 L441.00,4.21 L444.00,4.16 L447.00,4.12 L450.00,4.07 L453.00,4.02 L456.00,3.98 L459.00,3.94 L462.00,3.90 L465.00,3.86 L468.00,3.82 L471.00,3.79 L474.00,3.76 L477.00,3.72 L480.00,3.70 L483.00,3.67 L486.00,3.64 L489.00,3.62 L492.00,3.60 L495.00,3.58 L498.00,3.56 L501.00,3.54 L504.00,3.53 L507.00,3.52 L510.00,3.51 L513.00,3.50 L516.00,3.49 L519.00,3.49 L522.00,3.49 L525.00,3.48 L528.00,3.49 L531.00,3.49 L534.00,3.49 L537.00,3.50 L540.00,3.51 L543.00,3.52 L546.00,3.53 L549.00,3.54 L552.00,3.55 L555.00,3.57 L558.00,3.58 L561.00,3.60 L564.00,3.62 L567.00,3.64 L570.00,3.66 L573.00,3.69 L576.00,3.71 L579.00,3.73 L582.00,3.76 L585.00,3.79 L588.00,3.82 L591.00,3.84 L594.00,3.87 L597.00,3.91 L600.00,3.94 L600.00,3.94 L597.00,3.90 L594.00,3.86 L591.00,3.82 L588.00,3.78 L585.00,3.74 L582.00,3.70 L579.00,3.66 L576.00,3.62 L573.00,3.58 L570.00,3.54 L567.00,3.50 L564.00,3.46 L561.00,3.42 L558.00,3.38 L555.00,3.34 L552.00,3.30 L549.00,3.26 L546.00,3.22 L543.00,3.18 L540.00,3.14 L537.00,3.10 L534.00,3.06 L531.00,3.02 L528.00,2.98 L525.00,2.94 L522.00,2.90 L519.00,2.86 L516.00,2.82 L513.00,2.78 L510.00,2.74 L507.00,2.70 L504.00,2.66 L501.00,2.62 L498.00,2.58 L495.00,2.54 L492.00,2.50 L489.00,2.46 L486.00,2.42 L483.00,2.38 L480.00,2.34 L477.00,2.30 L474.00,2.26 L471.00,2.22 L468.00,2.18 L465.00,2.14 L462.00,2.10 L459.00,2.06 L456.00,2.02 L453.00,1.99 L450.00,1.95 L447.00,1.91 L444.00,1.88 L441.00,1.84 L438.00,1.81 L435.00,1.77 L432.00,1.74 L429.00,1.71 L426.00,1.68 L423.00,1.64 L420.00,1.61 L417.00,1.59 L414.00,1.56 L411.00,1.53 L408.00,1.51 L405.00,1.48 L402.00,1.46 L399.00,1.44 L396.00,1.42 L393.00,1.41 L390.00,1.39 L387.00,1.38 L384.00,1.36 L381.00,1.35 L378.00,1.34 L375.00,1.34 L372.00,1.33 L369.00,1.33 L366.00,1.33 L363.00,1.33 L360.00,1.33 L357.00,1.34 L354.00,1.34 L351.00,1.35 L348.00,1.36 L345.00,1.38 L342.00,1.39 L339.00,1.41 L336.00,1.43 L333.00,1.45 L330.00,1.47 L327.00,1.50 L324.00,1.53 L321.00,1.56 L318.00,1.59 L315.00,1.62 L312.00,1.66 L309.00,1.70 L306.00,1.74 L303.00,1.78 L300.00,1.82 L297.00,1.86 L294.00,1.91 L291.00,1.96 L288.00,2.01 L285.00,2.05 L282.00,2.11 L279.00,2.16 L276.00,2.21 L273.00,2.26 L270.00,2.32 L267.00,2.40 L264.00,2.48 L261.00,2.56 L258.00,2.64 L255.00,2.72 L252.00,2.80 L249.00,2.88 L246.00,2.95 L243.00,3.03 L240.00,3.10 L237.00,3.17 L234.00,3.24 L231.00,3.31 L228.00,3.37 L225.00,3.44 L222.00,3.50 L219.00,3.56 L216.00,3.62 L213.00,3.67 L210.00,3.73 L207.00,3.78 L204.00,3.83 L201.00,3.87 L198.00,3.91 L195.00,3.95 L192.00,3.99 L189.00,4.03 L186.00,4.06 L183.00,4.09 L180.00,4.12 L177.00,4.14 L174.00,4.16 L171.00,4.18 L168.00,4.20 L165.00,4.21 L162.00,4.22 L159.00,4.23 L156.00,4.23 L153.00,4.23 L150.00,4.23 L147.00,4.23 L144.00,4.22 L141.00,4.21 L138.00,4.20 L135.00,4.18 L132.00,4.17 L129.00,4.15 L126.00,4.13 L123.00,4.10 L120.00,4.07 L117.00,4.04 L114.00,4.01 L111.00,3.98 L108.00,3.94 L105.00,3.91 L102.00,3.87 L99.00,3.83 L96.00,3.78 L93.00,3.74 L90.00,3.69 L87.00,3.64 L84.00,3.59 L81.00,3.54 L78.00,3.49 L75.00,3.44 L72.00,3.39 L69.00,3.33 L66.00,3.28 L63.00,3.22 L60.00,3.16 L57.00,3.11 L54.00,3.05 L51.00,2.99 L48.00,2.93 L45.00,2.88 L42.00,2.82 L39.00,2.76 L36.00,2.70 L33.00,2.64 L30.00,2.59 L27.00,2.71 L24.00,2.85 L21.00,3.00 L18.00,3.17 L15.00,3.36 L12.00,3.57 L9.00,3.83 L6.00,4.13 L3.00,4.54 L0.00,5.47 Z"/></svg>
               <div class="axis"><span>1996</span><span>2027</span></div>
               <p class="say"><b>6 directorships overlapped a bankruptcy period</b> — derived mechanically from
                 dates on file; not a finding that anything was breached.
@@ -304,125 +397,88 @@ tbody tr:hover td{ background:var(--paper2) }
             </div>
 
             <div class="rec">
-              <h4>HARGREAVES, Simon J <span class="st">Discharged</span></h4>
-              <div class="ident">Born January 1976 · Driver/Sales Representative · Auckland High Court</div>
-              <dl>
-                <dt>Type</dt><dd>Creditor Application</dd>
-                <dt>Adjudication</dt><dd>16 January 2002</dd>
-                <dt>Discharge</dt><dd>14 March 2005</dd>
-              </dl>
+              <span class="seal settled" aria-hidden="true">済</span>
+              <div class="body">
+                <h4>HARGREAVES, Simon J <span class="st">Discharged</span></h4>
+                <div class="ident">Born January 1976 · Driver/Sales Representative · Auckland High Court</div>
+                <dl><dt>Type</dt><dd>Creditor Application</dd>
+                    <dt>Adjudication</dt><dd>16 January 2002</dd>
+                    <dt>Discharge</dt><dd>14 March 2005</dd></dl>
+              </div>
             </div>
 
             <div class="rec">
-              <h4>HARGREAVES, Simon J <span class="st">Automatically Discharged</span></h4>
-              <div class="ident">Born January 1976 · Real Estate Agent · Auckland High Court</div>
-              <dl>
-                <dt>Type</dt><dd>Creditor Application</dd>
-                <dt>Adjudication</dt><dd>18 August 2011</dd>
-                <dt>Discharge</dt><dd>29 September 2014</dd>
-              </dl>
+              <span class="seal settled" aria-hidden="true">済</span>
+              <div class="body">
+                <h4>HARGREAVES, Simon J <span class="st">Automatically Discharged</span></h4>
+                <div class="ident">Born January 1976 · Real Estate Agent · Auckland High Court</div>
+                <dl><dt>Type</dt><dd>Creditor Application</dd>
+                    <dt>Adjudication</dt><dd>18 August 2011</dd>
+                    <dt>Discharge</dt><dd>29 September 2014</dd></dl>
+              </div>
             </div>
           </div>
         </details>
       </div>
 
       <div class="block">
-        <div class="marker"><span class="k">社</span><span class="t">Companies · 45</span><span class="r"></span></div>
+        <div class="watermark" aria-hidden="true">社</div>
+        <div class="marker">
+          <div class="row"><span class="k">社</span><span class="t">Companies · 45</span></div>
+          <svg class="rule-brush" viewBox="0 0 600 9" preserveAspectRatio="none"><path d="M0.00,5.47 L3.00,6.45 L6.00,6.92 L9.00,7.28 L12.00,7.59 L15.00,7.86 L18.00,8.10 L21.00,8.32 L24.00,8.52 L27.00,8.70 L30.00,8.87 L33.00,8.86 L36.00,8.84 L39.00,8.82 L42.00,8.81 L45.00,8.78 L48.00,8.76 L51.00,8.74 L54.00,8.71 L57.00,8.68 L60.00,8.65 L63.00,8.62 L66.00,8.59 L69.00,8.56 L72.00,8.52 L75.00,8.49 L78.00,8.45 L81.00,8.41 L84.00,8.38 L87.00,8.34 L90.00,8.30 L93.00,8.26 L96.00,8.22 L99.00,8.17 L102.00,8.13 L105.00,8.09 L108.00,8.05 L111.00,8.01 L114.00,7.97 L117.00,7.92 L120.00,7.88 L123.00,7.84 L126.00,7.80 L129.00,7.76 L132.00,7.72 L135.00,7.68 L138.00,7.64 L141.00,7.61 L144.00,7.57 L147.00,7.53 L150.00,7.50 L153.00,7.46 L156.00,7.43 L159.00,7.40 L162.00,7.36 L165.00,7.33 L168.00,7.30 L171.00,7.28 L174.00,7.25 L177.00,7.22 L180.00,7.20 L183.00,7.17 L186.00,7.15 L189.00,7.13 L192.00,7.11 L195.00,7.09 L198.00,7.08 L201.00,7.06 L204.00,7.05 L207.00,7.03 L210.00,7.02 L213.00,7.01 L216.00,7.00 L219.00,6.99 L222.00,6.98 L225.00,6.98 L228.00,6.97 L231.00,6.97 L234.00,6.97 L237.00,6.96 L240.00,6.96 L243.00,6.96 L246.00,6.96 L249.00,6.96 L252.00,6.97 L255.00,6.97 L258.00,6.97 L261.00,6.98 L264.00,6.98 L267.00,6.98 L270.00,6.99 L273.00,6.96 L276.00,6.94 L279.00,6.91 L282.00,6.89 L285.00,6.86 L288.00,6.83 L291.00,6.80 L294.00,6.77 L297.00,6.74 L300.00,6.71 L303.00,6.67 L306.00,6.64 L309.00,6.60 L312.00,6.56 L315.00,6.52 L318.00,6.48 L321.00,6.44 L324.00,6.40 L327.00,6.35 L330.00,6.31 L333.00,6.26 L336.00,6.21 L339.00,6.16 L342.00,6.11 L345.00,6.06 L348.00,6.01 L351.00,5.95 L354.00,5.90 L357.00,5.84 L360.00,5.79 L363.00,5.73 L366.00,5.67 L369.00,5.61 L372.00,5.55 L375.00,5.49 L378.00,5.43 L381.00,5.37 L384.00,5.31 L387.00,5.25 L390.00,5.19 L393.00,5.13 L396.00,5.07 L399.00,5.01 L402.00,4.95 L405.00,4.89 L408.00,4.83 L411.00,4.77 L414.00,4.71 L417.00,4.65 L420.00,4.59 L423.00,4.53 L426.00,4.48 L429.00,4.42 L432.00,4.37 L435.00,4.32 L438.00,4.26 L441.00,4.21 L444.00,4.16 L447.00,4.12 L450.00,4.07 L453.00,4.02 L456.00,3.98 L459.00,3.94 L462.00,3.90 L465.00,3.86 L468.00,3.82 L471.00,3.79 L474.00,3.76 L477.00,3.72 L480.00,3.70 L483.00,3.67 L486.00,3.64 L489.00,3.62 L492.00,3.60 L495.00,3.58 L498.00,3.56 L501.00,3.54 L504.00,3.53 L507.00,3.52 L510.00,3.51 L513.00,3.50 L516.00,3.49 L519.00,3.49 L522.00,3.49 L525.00,3.48 L528.00,3.49 L531.00,3.49 L534.00,3.49 L537.00,3.50 L540.00,3.51 L543.00,3.52 L546.00,3.53 L549.00,3.54 L552.00,3.55 L555.00,3.57 L558.00,3.58 L561.00,3.60 L564.00,3.62 L567.00,3.64 L570.00,3.66 L573.00,3.69 L576.00,3.71 L579.00,3.73 L582.00,3.76 L585.00,3.79 L588.00,3.82 L591.00,3.84 L594.00,3.87 L597.00,3.91 L600.00,3.94 L600.00,3.94 L597.00,3.90 L594.00,3.86 L591.00,3.82 L588.00,3.78 L585.00,3.74 L582.00,3.70 L579.00,3.66 L576.00,3.62 L573.00,3.58 L570.00,3.54 L567.00,3.50 L564.00,3.46 L561.00,3.42 L558.00,3.38 L555.00,3.34 L552.00,3.30 L549.00,3.26 L546.00,3.22 L543.00,3.18 L540.00,3.14 L537.00,3.10 L534.00,3.06 L531.00,3.02 L528.00,2.98 L525.00,2.94 L522.00,2.90 L519.00,2.86 L516.00,2.82 L513.00,2.78 L510.00,2.74 L507.00,2.70 L504.00,2.66 L501.00,2.62 L498.00,2.58 L495.00,2.54 L492.00,2.50 L489.00,2.46 L486.00,2.42 L483.00,2.38 L480.00,2.34 L477.00,2.30 L474.00,2.26 L471.00,2.22 L468.00,2.18 L465.00,2.14 L462.00,2.10 L459.00,2.06 L456.00,2.02 L453.00,1.99 L450.00,1.95 L447.00,1.91 L444.00,1.88 L441.00,1.84 L438.00,1.81 L435.00,1.77 L432.00,1.74 L429.00,1.71 L426.00,1.68 L423.00,1.64 L420.00,1.61 L417.00,1.59 L414.00,1.56 L411.00,1.53 L408.00,1.51 L405.00,1.48 L402.00,1.46 L399.00,1.44 L396.00,1.42 L393.00,1.41 L390.00,1.39 L387.00,1.38 L384.00,1.36 L381.00,1.35 L378.00,1.34 L375.00,1.34 L372.00,1.33 L369.00,1.33 L366.00,1.33 L363.00,1.33 L360.00,1.33 L357.00,1.34 L354.00,1.34 L351.00,1.35 L348.00,1.36 L345.00,1.38 L342.00,1.39 L339.00,1.41 L336.00,1.43 L333.00,1.45 L330.00,1.47 L327.00,1.50 L324.00,1.53 L321.00,1.56 L318.00,1.59 L315.00,1.62 L312.00,1.66 L309.00,1.70 L306.00,1.74 L303.00,1.78 L300.00,1.82 L297.00,1.86 L294.00,1.91 L291.00,1.96 L288.00,2.01 L285.00,2.05 L282.00,2.11 L279.00,2.16 L276.00,2.21 L273.00,2.26 L270.00,2.32 L267.00,2.40 L264.00,2.48 L261.00,2.56 L258.00,2.64 L255.00,2.72 L252.00,2.80 L249.00,2.88 L246.00,2.95 L243.00,3.03 L240.00,3.10 L237.00,3.17 L234.00,3.24 L231.00,3.31 L228.00,3.37 L225.00,3.44 L222.00,3.50 L219.00,3.56 L216.00,3.62 L213.00,3.67 L210.00,3.73 L207.00,3.78 L204.00,3.83 L201.00,3.87 L198.00,3.91 L195.00,3.95 L192.00,3.99 L189.00,4.03 L186.00,4.06 L183.00,4.09 L180.00,4.12 L177.00,4.14 L174.00,4.16 L171.00,4.18 L168.00,4.20 L165.00,4.21 L162.00,4.22 L159.00,4.23 L156.00,4.23 L153.00,4.23 L150.00,4.23 L147.00,4.23 L144.00,4.22 L141.00,4.21 L138.00,4.20 L135.00,4.18 L132.00,4.17 L129.00,4.15 L126.00,4.13 L123.00,4.10 L120.00,4.07 L117.00,4.04 L114.00,4.01 L111.00,3.98 L108.00,3.94 L105.00,3.91 L102.00,3.87 L99.00,3.83 L96.00,3.78 L93.00,3.74 L90.00,3.69 L87.00,3.64 L84.00,3.59 L81.00,3.54 L78.00,3.49 L75.00,3.44 L72.00,3.39 L69.00,3.33 L66.00,3.28 L63.00,3.22 L60.00,3.16 L57.00,3.11 L54.00,3.05 L51.00,2.99 L48.00,2.93 L45.00,2.88 L42.00,2.82 L39.00,2.76 L36.00,2.70 L33.00,2.64 L30.00,2.59 L27.00,2.71 L24.00,2.85 L21.00,3.00 L18.00,3.17 L15.00,3.36 L12.00,3.57 L9.00,3.83 L6.00,4.13 L3.00,4.54 L0.00,5.47 Z"/></svg>
+        </div>
 
         <div class="controls">
           <span class="lbl">Filter</span>
           <div class="seg">
-            <button aria-pressed="true">All 45</button>
-            <button aria-pressed="false">Active 8</button>
-            <button aria-pressed="false">Directorships 43</button>
-            <button aria-pressed="false">Shareholdings 31</button>
+            <button aria-pressed="true">All 45</button><button aria-pressed="false">Active 8</button>
+            <button aria-pressed="false">Directorships 43</button><button aria-pressed="false">Shareholdings 31</button>
           </div>
           <span class="lbl">Sort</span>
           <div class="seg">
-            <button aria-pressed="true">Flagged first</button>
-            <button aria-pressed="false">Holding %</button>
-            <button aria-pressed="false">A–Z</button>
+            <button aria-pressed="true">Flagged first</button><button aria-pressed="false">Holding %</button><button aria-pressed="false">A–Z</button>
           </div>
         </div>
 
-        <div style="overflow-x:auto">
+        <div class="tablewrap">
         <table>
-          <thead>
-            <tr>
-              <th style="width:38%">Company</th>
-              <th>Role</th>
-              <th>Held</th>
-              <th>Status</th>
-            </tr>
-          </thead>
+          <thead><tr><th style="width:38%">Company</th><th>Role</th><th>Held</th><th>Status</th></tr></thead>
           <tbody>
-            <tr>
-              <td><div class="co dead">ACQUIRE PROPERTY LIMITED</div><div class="nzbn">9429033351704</div>
-                  <div class="flagrow"><span class="sq crit" aria-hidden="true">紅</span><span style="color:var(--crit)">Prev: Liquidation</span></div></td>
-              <td class="rolecell">Director &amp; Shareholder · 100%</td>
-              <td class="dates">2003 — 2012</td>
-              <td class="st-cell st-rem">Removed</td>
-            </tr>
-            <tr>
-              <td><div class="co">NORTHCROFT HOLDINGS LIMITED</div><div class="nzbn">9429041182204</div></td>
-              <td class="rolecell">Director &amp; Shareholder · 60%</td>
-              <td class="dates">2016 — current</td>
-              <td class="st-cell st-reg">Registered</td>
-            </tr>
-            <tr>
-              <td><div class="co">HARGREAVES FAMILY TRUSTEE LTD</div><div class="nzbn">9429045518902</div></td>
-              <td class="rolecell">Director</td>
-              <td class="dates">2018 — current</td>
-              <td class="st-cell st-reg">Registered</td>
-            </tr>
-            <tr>
-              <td><div class="co">TAKAPUNA VENTURES LIMITED</div><div class="nzbn">9429039920118</div>
-                  <div class="flagrow"><span class="sq amber" aria-hidden="true">琥</span><span style="color:var(--amber)">In liquidation</span></div></td>
-              <td class="rolecell">Shareholder · 33.3%</td>
-              <td class="dates">2013 — current</td>
-              <td class="st-cell st-amb">In liquidation</td>
-            </tr>
-            <tr>
-              <td><div class="co dead">EMERGENT GROUP LIMITED</div><div class="nzbn">9429033350028</div></td>
-              <td class="rolecell">Director · resigned 2011</td>
-              <td class="dates">2004 — 2011</td>
-              <td class="st-cell st-rem">Removed</td>
-            </tr>
-            <tr>
-              <td><div class="co dead">IN REALTY LIMITED</div><div class="nzbn">9429034526828</div></td>
-              <td class="rolecell">Director &amp; Shareholder · 50%</td>
-              <td class="dates">2008 — 2015</td>
-              <td class="st-cell st-rem">Removed</td>
-            </tr>
-            <tr>
-              <td><div class="co dead">QUEENSTOWN LAKEFRONT LIMITED</div><div class="nzbn">9429033456645</div></td>
-              <td class="rolecell">Shareholder · 25%</td>
-              <td class="dates">2005 — 2014</td>
-              <td class="st-cell st-rem">Removed</td>
-            </tr>
-            <tr>
-              <td><div class="co">OREWA COASTAL DEVELOPMENTS LTD</div><div class="nzbn">9429047713107</div></td>
-              <td class="rolecell">Director</td>
-              <td class="dates">2021 — current</td>
-              <td class="st-cell st-reg">Registered</td>
-            </tr>
+            <tr><td><div class="co dead">ACQUIRE PROPERTY LIMITED</div><div class="nzbn">9429033351704</div>
+                    <div class="flagrow"><span class="sq crit" aria-hidden="true">紅</span><span style="color:var(--crit)">Prev: Liquidation</span></div></td>
+                <td class="rolecell">Director &amp; Shareholder · 100%</td><td class="dates">2003 — 2012</td><td class="st-cell st-rem">Removed</td></tr>
+            <tr><td><div class="co">NORTHCROFT HOLDINGS LIMITED</div><div class="nzbn">9429041182204</div></td>
+                <td class="rolecell">Director &amp; Shareholder · 60%</td><td class="dates">2016 — current</td><td class="st-cell st-reg">Registered</td></tr>
+            <tr><td><div class="co">HARGREAVES FAMILY TRUSTEE LTD</div><div class="nzbn">9429045518902</div></td>
+                <td class="rolecell">Director</td><td class="dates">2018 — current</td><td class="st-cell st-reg">Registered</td></tr>
+            <tr><td><div class="co">TAKAPUNA VENTURES LIMITED</div><div class="nzbn">9429039920118</div>
+                    <div class="flagrow"><span class="sq amber" aria-hidden="true">琥</span><span style="color:var(--amber)">In liquidation</span></div></td>
+                <td class="rolecell">Shareholder · 33.3%</td><td class="dates">2013 — current</td><td class="st-cell st-amb">In liquidation</td></tr>
+            <tr><td><div class="co dead">EMERGENT GROUP LIMITED</div><div class="nzbn">9429033350028</div></td>
+                <td class="rolecell">Director · resigned 2011</td><td class="dates">2004 — 2011</td><td class="st-cell st-rem">Removed</td></tr>
+            <tr><td><div class="co dead">IN REALTY LIMITED</div><div class="nzbn">9429034526828</div></td>
+                <td class="rolecell">Director &amp; Shareholder · 50%</td><td class="dates">2008 — 2015</td><td class="st-cell st-rem">Removed</td></tr>
+            <tr><td><div class="co dead">QUEENSTOWN LAKEFRONT LIMITED</div><div class="nzbn">9429033456645</div></td>
+                <td class="rolecell">Shareholder · 25%</td><td class="dates">2005 — 2014</td><td class="st-cell st-rem">Removed</td></tr>
+            <tr><td><div class="co">OREWA COASTAL DEVELOPMENTS LTD</div><div class="nzbn">9429047713107</div></td>
+                <td class="rolecell">Director</td><td class="dates">2021 — current</td><td class="st-cell st-reg">Registered</td></tr>
           </tbody>
         </table>
         </div>
 
-        <p class="note">
-          37 further companies — the live page paginates at 50. Rows carry the same severity marks the
-          chart uses, so a flagged company reads at a glance without opening it.
-        </p>
+        <p class="note">37 further companies — the live page paginates at 50.</p>
       </div>
 
-      <p class="note">
-        <b style="color:var(--ink-mid)">Direction note.</b> The spine holds identity and stays put while the
-        findings scroll: address and signature are the KYD summary pulled to the front, since address
-        comparison is derived from data already loaded and costs nothing. The roster becomes a ruled
-        list rather than a card grid — at 45 companies the cards were the density problem. Kanji
-        markers name the register each section draws on (人 subject · 険 risk · 社 companies ·
-        印 verification) rather than decorating it. Subject shown is fictional.
+      <svg class="rule-brush" viewBox="0 0 600 9" preserveAspectRatio="none" aria-hidden="true" style="margin-top:34px"><path d="M0.00,5.47 L3.00,6.45 L6.00,6.92 L9.00,7.28 L12.00,7.59 L15.00,7.86 L18.00,8.10 L21.00,8.32 L24.00,8.52 L27.00,8.70 L30.00,8.87 L33.00,8.86 L36.00,8.84 L39.00,8.82 L42.00,8.81 L45.00,8.78 L48.00,8.76 L51.00,8.74 L54.00,8.71 L57.00,8.68 L60.00,8.65 L63.00,8.62 L66.00,8.59 L69.00,8.56 L72.00,8.52 L75.00,8.49 L78.00,8.45 L81.00,8.41 L84.00,8.38 L87.00,8.34 L90.00,8.30 L93.00,8.26 L96.00,8.22 L99.00,8.17 L102.00,8.13 L105.00,8.09 L108.00,8.05 L111.00,8.01 L114.00,7.97 L117.00,7.92 L120.00,7.88 L123.00,7.84 L126.00,7.80 L129.00,7.76 L132.00,7.72 L135.00,7.68 L138.00,7.64 L141.00,7.61 L144.00,7.57 L147.00,7.53 L150.00,7.50 L153.00,7.46 L156.00,7.43 L159.00,7.40 L162.00,7.36 L165.00,7.33 L168.00,7.30 L171.00,7.28 L174.00,7.25 L177.00,7.22 L180.00,7.20 L183.00,7.17 L186.00,7.15 L189.00,7.13 L192.00,7.11 L195.00,7.09 L198.00,7.08 L201.00,7.06 L204.00,7.05 L207.00,7.03 L210.00,7.02 L213.00,7.01 L216.00,7.00 L219.00,6.99 L222.00,6.98 L225.00,6.98 L228.00,6.97 L231.00,6.97 L234.00,6.97 L237.00,6.96 L240.00,6.96 L243.00,6.96 L246.00,6.96 L249.00,6.96 L252.00,6.97 L255.00,6.97 L258.00,6.97 L261.00,6.98 L264.00,6.98 L267.00,6.98 L270.00,6.99 L273.00,6.96 L276.00,6.94 L279.00,6.91 L282.00,6.89 L285.00,6.86 L288.00,6.83 L291.00,6.80 L294.00,6.77 L297.00,6.74 L300.00,6.71 L303.00,6.67 L306.00,6.64 L309.00,6.60 L312.00,6.56 L315.00,6.52 L318.00,6.48 L321.00,6.44 L324.00,6.40 L327.00,6.35 L330.00,6.31 L333.00,6.26 L336.00,6.21 L339.00,6.16 L342.00,6.11 L345.00,6.06 L348.00,6.01 L351.00,5.95 L354.00,5.90 L357.00,5.84 L360.00,5.79 L363.00,5.73 L366.00,5.67 L369.00,5.61 L372.00,5.55 L375.00,5.49 L378.00,5.43 L381.00,5.37 L384.00,5.31 L387.00,5.25 L390.00,5.19 L393.00,5.13 L396.00,5.07 L399.00,5.01 L402.00,4.95 L405.00,4.89 L408.00,4.83 L411.00,4.77 L414.00,4.71 L417.00,4.65 L420.00,4.59 L423.00,4.53 L426.00,4.48 L429.00,4.42 L432.00,4.37 L435.00,4.32 L438.00,4.26 L441.00,4.21 L444.00,4.16 L447.00,4.12 L450.00,4.07 L453.00,4.02 L456.00,3.98 L459.00,3.94 L462.00,3.90 L465.00,3.86 L468.00,3.82 L471.00,3.79 L474.00,3.76 L477.00,3.72 L480.00,3.70 L483.00,3.67 L486.00,3.64 L489.00,3.62 L492.00,3.60 L495.00,3.58 L498.00,3.56 L501.00,3.54 L504.00,3.53 L507.00,3.52 L510.00,3.51 L513.00,3.50 L516.00,3.49 L519.00,3.49 L522.00,3.49 L525.00,3.48 L528.00,3.49 L531.00,3.49 L534.00,3.49 L537.00,3.50 L540.00,3.51 L543.00,3.52 L546.00,3.53 L549.00,3.54 L552.00,3.55 L555.00,3.57 L558.00,3.58 L561.00,3.60 L564.00,3.62 L567.00,3.64 L570.00,3.66 L573.00,3.69 L576.00,3.71 L579.00,3.73 L582.00,3.76 L585.00,3.79 L588.00,3.82 L591.00,3.84 L594.00,3.87 L597.00,3.91 L600.00,3.94 L600.00,3.94 L597.00,3.90 L594.00,3.86 L591.00,3.82 L588.00,3.78 L585.00,3.74 L582.00,3.70 L579.00,3.66 L576.00,3.62 L573.00,3.58 L570.00,3.54 L567.00,3.50 L564.00,3.46 L561.00,3.42 L558.00,3.38 L555.00,3.34 L552.00,3.30 L549.00,3.26 L546.00,3.22 L543.00,3.18 L540.00,3.14 L537.00,3.10 L534.00,3.06 L531.00,3.02 L528.00,2.98 L525.00,2.94 L522.00,2.90 L519.00,2.86 L516.00,2.82 L513.00,2.78 L510.00,2.74 L507.00,2.70 L504.00,2.66 L501.00,2.62 L498.00,2.58 L495.00,2.54 L492.00,2.50 L489.00,2.46 L486.00,2.42 L483.00,2.38 L480.00,2.34 L477.00,2.30 L474.00,2.26 L471.00,2.22 L468.00,2.18 L465.00,2.14 L462.00,2.10 L459.00,2.06 L456.00,2.02 L453.00,1.99 L450.00,1.95 L447.00,1.91 L444.00,1.88 L441.00,1.84 L438.00,1.81 L435.00,1.77 L432.00,1.74 L429.00,1.71 L426.00,1.68 L423.00,1.64 L420.00,1.61 L417.00,1.59 L414.00,1.56 L411.00,1.53 L408.00,1.51 L405.00,1.48 L402.00,1.46 L399.00,1.44 L396.00,1.42 L393.00,1.41 L390.00,1.39 L387.00,1.38 L384.00,1.36 L381.00,1.35 L378.00,1.34 L375.00,1.34 L372.00,1.33 L369.00,1.33 L366.00,1.33 L363.00,1.33 L360.00,1.33 L357.00,1.34 L354.00,1.34 L351.00,1.35 L348.00,1.36 L345.00,1.38 L342.00,1.39 L339.00,1.41 L336.00,1.43 L333.00,1.45 L330.00,1.47 L327.00,1.50 L324.00,1.53 L321.00,1.56 L318.00,1.59 L315.00,1.62 L312.00,1.66 L309.00,1.70 L306.00,1.74 L303.00,1.78 L300.00,1.82 L297.00,1.86 L294.00,1.91 L291.00,1.96 L288.00,2.01 L285.00,2.05 L282.00,2.11 L279.00,2.16 L276.00,2.21 L273.00,2.26 L270.00,2.32 L267.00,2.40 L264.00,2.48 L261.00,2.56 L258.00,2.64 L255.00,2.72 L252.00,2.80 L249.00,2.88 L246.00,2.95 L243.00,3.03 L240.00,3.10 L237.00,3.17 L234.00,3.24 L231.00,3.31 L228.00,3.37 L225.00,3.44 L222.00,3.50 L219.00,3.56 L216.00,3.62 L213.00,3.67 L210.00,3.73 L207.00,3.78 L204.00,3.83 L201.00,3.87 L198.00,3.91 L195.00,3.95 L192.00,3.99 L189.00,4.03 L186.00,4.06 L183.00,4.09 L180.00,4.12 L177.00,4.14 L174.00,4.16 L171.00,4.18 L168.00,4.20 L165.00,4.21 L162.00,4.22 L159.00,4.23 L156.00,4.23 L153.00,4.23 L150.00,4.23 L147.00,4.23 L144.00,4.22 L141.00,4.21 L138.00,4.20 L135.00,4.18 L132.00,4.17 L129.00,4.15 L126.00,4.13 L123.00,4.10 L120.00,4.07 L117.00,4.04 L114.00,4.01 L111.00,3.98 L108.00,3.94 L105.00,3.91 L102.00,3.87 L99.00,3.83 L96.00,3.78 L93.00,3.74 L90.00,3.69 L87.00,3.64 L84.00,3.59 L81.00,3.54 L78.00,3.49 L75.00,3.44 L72.00,3.39 L69.00,3.33 L66.00,3.28 L63.00,3.22 L60.00,3.16 L57.00,3.11 L54.00,3.05 L51.00,2.99 L48.00,2.93 L45.00,2.88 L42.00,2.82 L39.00,2.76 L36.00,2.70 L33.00,2.64 L30.00,2.59 L27.00,2.71 L24.00,2.85 L21.00,3.00 L18.00,3.17 L15.00,3.36 L12.00,3.57 L9.00,3.83 L6.00,4.13 L3.00,4.54 L0.00,5.47 Z"/></svg>
+      <p class="note" style="margin-top:10px">
+        <b>Direction note.</b> Every painterly element is chrome, never data: the ensō, brush rules,
+        tategaki label and 社 watermark sit at 3–12% opacity behind content, while names, NZBNs and
+        dates stay in crisp gothic and tabular mono. Brush geometry is generated — real ribbon
+        outlines with pressure taper and wobble, not stroked circles. The bankruptcy bars carry a
+        dry-brush (かすれ) displacement and the directorship bands an ink wash, both via SVG filters
+        rather than CSS gradients, which the sumi spec forbids. Seals follow the spec's one hard
+        colour rule: 紅 red marks danger only, so a discharged record is stamped 済 in ink, not red.
+        Subject shown is fictional.
       </p>
     </main>
   </div>
