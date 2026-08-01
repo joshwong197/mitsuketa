@@ -17,6 +17,7 @@ import {
     ChevronLeft,
 } from 'lucide-react';
 import { PersonCompanyResult } from '../types';
+import { summariseAddresses } from '../utils/addressSummary';
 import { useConsentForms } from '../hooks/useConsentForms';
 import { useSignatureExtractor } from '../hooks/useSignatureExtractor';
 
@@ -216,28 +217,9 @@ function AddressComparison({ results }: { results: PersonCompanyResult[] }) {
 
     if (entries.length < 2) return null;
 
-    // Group by unique address
-    const addrMap = new Map<string, { address: string; fullAddress: string; companies: string[]; isActive: boolean }>();
-    for (const r of entries) {
-        const addr = r.physicalAddress!.addressLines.join(', ');
-        const full = addr + (r.physicalAddress!.postCode ? `, ${r.physicalAddress!.postCode}` : '');
-        const key = addr.toLowerCase().replace(/\s+/g, ' ');
-
-        if (addrMap.has(key)) {
-            const existing = addrMap.get(key)!;
-            existing.companies.push(r.companyName);
-            if ((r.entityStatusCode || 0) < 80 && !r.isInactive) existing.isActive = true;
-        } else {
-            addrMap.set(key, {
-                address: addr,
-                fullAddress: full,
-                companies: [r.companyName],
-                isActive: (r.entityStatusCode || 0) < 80 && !r.isInactive,
-            });
-        }
-    }
-
-    const unique = Array.from(addrMap.values());
+    // Shared with the individual page's identity spine so the two can never
+    // disagree about which address is the most used.
+    const unique = summariseAddresses(results);
     const allMatch = unique.length === 1;
 
     return (

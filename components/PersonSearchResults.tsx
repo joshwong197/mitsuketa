@@ -4,6 +4,7 @@ import { PersonCompanyResult } from '../types';
 import { KydVerificationPanel } from './KydVerificationPanel';
 import { DisqualifiedDirector } from '../src/api/disqualifiedDirectorsApi';
 import { InsolvencyRecord, isInsolvencyRecordCurrent } from '../src/api/insolvencyApi';
+import { summariseAddresses } from '../utils/addressSummary';
 
 // Nicely formats an API date string (drops timezone offset, e.g. "+1200").
 const formatDate = (dateString: string): string => {
@@ -202,145 +203,212 @@ const CheckSquare: React.FC<{ tone: 'crit' | 'green'; glyph: string }> = ({ tone
 );
 
 // 19px severity kanji square for company-card flags
-const FlagSquare: React.FC<{ tone: 'crit' | 'amber'; glyph: string }> = ({ tone, glyph }) => (
+const FlagSquare: React.FC<{ tone: 'crit' | 'amber' | 'green'; glyph: string }> = ({ tone, glyph }) => (
     <span
         aria-hidden="true"
-        className={`shrink-0 flex items-center justify-center ${tone === 'crit' ? 'bg-crit' : 'bg-amber'}`}
+        className={`shrink-0 flex items-center justify-center ${tone === 'crit' ? 'bg-crit' : tone === 'amber' ? 'bg-amber' : 'bg-green'}`}
         style={{ width: 19, height: 19, fontFamily: 'var(--serif)', fontSize: 11, color: 'var(--paper)' }}
     >
         {glyph}
     </span>
 );
 
-// Meishi-style company role card (reskin of the previous CompanyRoleCard usage; same data, same click)
-const MeishiRoleCard: React.FC<{ result: PersonCompanyResult; onClick: () => void }> = ({ result, onClick }) => {
+// Kanji section marker. The glyph names the register the section draws on, so it
+// carries meaning rather than decorating: 人 subject · 印 verification ·
+// 険 risk/registers · 社 companies.
+const Marker: React.FC<{ kanji: string; label: string }> = ({ kanji, label }) => (
+    <div className="flex items-baseline gap-2.5 mb-3.5">
+        <span aria-hidden="true" className="text-accent leading-none" style={{ fontFamily: 'var(--serif)', fontSize: 15 }}>{kanji}</span>
+        <span className="uppercase text-ink-pale" style={{ fontSize: '10.5px', letterSpacing: '.16em' }}>{label}</span>
+        <span className="flex-1 h-px bg-rule" />
+    </div>
+);
+
+/**
+ * Identity spine — who this person is, held still while the findings scroll.
+ *
+ * Everything here is already in memory: the address grouping is derived from the
+ * person search results, and DOB/occupation come from the insolvency detail
+ * record we already fetch. So pulling the KYD summary forward costs no extra API
+ * calls. Signature extraction is NOT auto-run — it downloads a PDF per company
+ * and pulls in pdf.js — so the panel stays one click away.
+ */
+const IdentitySpine: React.FC<{
+    personName: string;
+    results: PersonCompanyResult[];
+    insolvencyRecords?: InsolvencyRecord[];
+    onOpenKyd: () => void;
+}> = ({ personName, results, insolvencyRecords, onOpenKyd }) => {
+    const addresses = summariseAddresses(results);
+    const top = addresses[0];
+    const withAddress = addresses.reduce((n, a) => n + a.companies.length, 0);
+
+    // Registry identity details, taken from the most recent record that has them.
+    const detail = [...(insolvencyRecords ?? [])].reverse().find(r => r.yearOfBirth || r.occupationAtAdjudicationOrIndustryAtLiquidation);
+    const born = formatBirth(detail?.monthOfBirth, detail?.yearOfBirth);
+    const aliases = [...new Set((insolvencyRecords ?? []).flatMap(r => r.alternateNames ?? []))];
+
+    const isDirector = results.some(r => r.isDirector);
+    const isShareholder = results.some(r => r.shareholding > 0);
+    const roleLabel = isDirector && isShareholder ? 'Shareholder · Director'
+        : isDirector ? 'Director' : isShareholder ? 'Shareholder' : 'Individual';
+
+    return (
+        <aside className="lg:sticky lg:top-0 lg:self-start lg:max-h-screen lg:overflow-y-auto lg:border-r border-rule lg:pr-6 pb-8">
+            <Marker kanji="人" label="Subject" />
+
+            <div className="flex items-start gap-3">
+                {/* Inkan — the same split 株/締 seal the graph node uses */}
+                <span aria-hidden="true" className="relative shrink-0 grid place-items-center" style={{ width: 44, height: 44 }}>
+                    <span className="absolute inset-0 rounded-full" style={{ border: '1px solid var(--accent)' }} />
+                    <span className="absolute rounded-full" style={{ inset: 3, border: '1px solid oklch(from var(--accent) l c h / .35)' }} />
+                    <span className="relative grid place-items-center" style={{ width: 19, height: 20 }}>
+                        {isDirector && isShareholder ? (
+                            <>
+                                <span style={{ position: 'absolute', inset: 0, fontFamily: 'var(--serif)', fontSize: 17, lineHeight: '20px', color: 'var(--accent)', clipPath: 'inset(0 50% 0 0)' }}>株</span>
+                                <span style={{ position: 'absolute', inset: 0, fontFamily: 'var(--serif)', fontSize: 17, lineHeight: '20px', color: 'var(--accent)', clipPath: 'inset(0 0 0 50%)' }}>締</span>
+                                <span style={{ position: 'absolute', top: -1, bottom: -1, left: '50%', width: 1, background: 'var(--accent)', opacity: .7 }} />
+                            </>
+                        ) : (
+                            <span style={{ fontFamily: 'var(--serif)', fontSize: 17, color: 'var(--accent)' }}>{isDirector ? '締' : '株'}</span>
+                        )}
+                    </span>
+                </span>
+                <div className="min-w-0">
+                    <h2 className="text-ink" style={{ fontFamily: 'var(--serif)', fontWeight: 600, fontSize: 27, lineHeight: 1.12 }}>
+                        {personName}
+                    </h2>
+                    <p className="uppercase text-ink-pale mt-1.5" style={{ fontSize: '10.5px', letterSpacing: '.12em' }}>{roleLabel}</p>
+                </div>
+            </div>
+
+            {(born || detail?.occupationAtAdjudicationOrIndustryAtLiquidation || aliases.length > 0) && (
+                <dl className="mt-4 pt-3 border-t border-rule grid gap-y-1.5" style={{ gridTemplateColumns: 'auto 1fr', columnGap: 12, fontSize: '12.5px' }}>
+                    {born && (<><dt className="uppercase text-ink-pale pt-0.5" style={{ fontSize: '10px', letterSpacing: '.1em' }}>Born</dt><dd className="m-0 text-ink">{born}</dd></>)}
+                    {detail?.occupationAtAdjudicationOrIndustryAtLiquidation && (
+                        <><dt className="uppercase text-ink-pale pt-0.5" style={{ fontSize: '10px', letterSpacing: '.1em' }}>Occupation</dt>
+                          <dd className="m-0 text-ink">{detail.occupationAtAdjudicationOrIndustryAtLiquidation}</dd></>
+                    )}
+                    {aliases.length > 0 && (
+                        <><dt className="uppercase text-ink-pale pt-0.5" style={{ fontSize: '10px', letterSpacing: '.1em' }}>Aliases</dt>
+                          <dd className="m-0 text-ink">{aliases.join(', ')}</dd></>
+                    )}
+                </dl>
+            )}
+
+            <div className="mt-7">
+                <Marker kanji="印" label="Verification" />
+
+                {top ? (
+                    <>
+                        <div className="flex items-center gap-1.5 mb-2">
+                            <FlagSquare tone={addresses.length === 1 ? 'green' : 'amber'} glyph={addresses.length === 1 ? '青' : '琥'} />
+                            <span className={`uppercase ${addresses.length === 1 ? 'text-green' : 'text-amber'}`} style={{ fontSize: '10.5px', letterSpacing: '.06em' }}>
+                                {addresses.length === 1 ? 'All addresses match' : `${addresses.length} different addresses`}
+                            </span>
+                        </div>
+                        <div className="border border-rule bg-paper2 px-2.5 py-2">
+                            <p className="text-ink" style={{ fontSize: '12.5px', lineHeight: 1.45 }}>{top.fullAddress}</p>
+                            <p className="text-ink-pale mt-1" style={{ fontSize: '11px' }}>
+                                Most used · {top.companies.length} of {withAddress} {withAddress === 1 ? 'company' : 'companies'}
+                            </p>
+                        </div>
+                        {addresses.length > 1 && (
+                            <ul className="mt-2 pl-2.5 border-l border-rule text-ink-mid" style={{ fontSize: '11.5px', lineHeight: 1.7 }}>
+                                {addresses.slice(1, 5).map((a, i) => (
+                                    <li key={i} className="truncate" title={a.fullAddress}>{a.address} — {a.companies.length}</li>
+                                ))}
+                                {addresses.length > 5 && <li className="text-ink-pale">+{addresses.length - 5} more</li>}
+                            </ul>
+                        )}
+                    </>
+                ) : (
+                    <p className="text-ink-pale" style={{ fontSize: '11.5px' }}>No residential address filed against these roles.</p>
+                )}
+
+                <button
+                    onClick={onOpenKyd}
+                    className="mt-3 w-full border border-rule px-2.5 py-1.5 text-left text-ink-mid hover:border-ink-mid hover:text-ink transition-colors"
+                    style={{ fontSize: '11.5px' }}
+                >
+                    <span aria-hidden="true" className="text-accent mr-1.5" style={{ fontFamily: 'var(--serif)' }}>印</span>
+                    Open KYD verification · signatures →
+                </button>
+            </div>
+        </aside>
+    );
+};
+
+// One roster row. Same data and same click target as the old card, laid out as a
+// ruled line — at 45 companies the card grid was the density problem.
+const RosterRow: React.FC<{ result: PersonCompanyResult; onClick: () => void }> = ({ result, onClick }) => {
     const {
-        companyName,
-        nzbn,
-        isDirector,
-        shareholding,
-        status,
-        entityStatusCode,
-        isInExternalAdmin,
-        externalAdminType,
-        removalCommenced,
-        hasHistoricInsolvency,
-        historicInsolvencyType,
-        entityStatusDescription
+        companyName, nzbn, isDirector, shareholding, status, entityStatusCode,
+        isInExternalAdmin, externalAdminType, removalCommenced,
+        hasHistoricInsolvency, historicInsolvencyType, entityStatusDescription,
     } = result;
 
     const isCompanyRemoved = entityStatusDescription
         ? entityStatusDescription.toLowerCase().includes('removed') || entityStatusDescription.toLowerCase() === 'inactive'
         : (entityStatusCode || 0) >= 80;
-
-    const formatResignationDate = (dateStr?: string): string | null => {
-        if (!dateStr) return null;
-        try {
-            const date = new Date(dateStr);
-            if (isNaN(date.getTime())) return null;
-            return date.toLocaleDateString();
-        } catch {
-            return null;
-        }
-    };
-
-    const resignationDateFormatted = formatResignationDate(result.resignationDate);
-    const appointmentDateFormatted = formatResignationDate(result.appointmentDate);
-
-    const getDisplayStatus = () => {
-        if (isInExternalAdmin && externalAdminType) {
-            return externalAdminType.toUpperCase();
-        }
-        if (entityStatusDescription) {
-            return entityStatusDescription.toUpperCase();
-        }
-        return status;
-    };
-
     const isRegistered = !isInExternalAdmin && !isCompanyRemoved && !removalCommenced && status === 'REGISTERED';
+    const displayStatus = (isInExternalAdmin && externalAdminType) ? externalAdminType.toUpperCase()
+        : entityStatusDescription ? entityStatusDescription.toUpperCase() : status;
 
-    const isShareholder = shareholding > 0;
+    const yearOf = (d?: string) => {
+        const t = parseApiDate(d);
+        return t === undefined ? null : String(new Date(t).getFullYear());
+    };
+    const from = yearOf(result.appointmentDate);
+    const to = result.isInactive ? (yearOf(result.resignationDate) ?? '—') : 'current';
 
-    // Roles rendered as separate lines so the % only ever describes the shareholding,
-    // never the directorship (a directorship has no %).
+    const roles = [
+        isDirector ? 'Director' : null,
+        shareholding > 0 ? `Shareholder · ${shareholding.toFixed(1)}%` : null,
+    ].filter(Boolean).join(' & ').replace('Director & Shareholder', 'Director & Shareholder');
 
     return (
-        <div
-            onClick={onClick}
-            className={`p-4 bg-paper border border-rule hover:border-ink transition-colors cursor-pointer group ${isCompanyRemoved && !isInExternalAdmin ? 'opacity-60 hover:opacity-80' : ''}`}
-        >
-            {/* Company header */}
-            <div className="min-w-0 mb-2">
-                <h3
-                    className={`font-bold text-ink truncate ${isCompanyRemoved && !isInExternalAdmin ? 'line-through opacity-70' : ''}`}
-                    style={{ fontSize: '12.5px' }}
-                >
+        <tr onClick={onClick} className="cursor-pointer group hover:bg-paper2 transition-colors">
+            <td className="align-top py-2 pr-3 border-b border-rule">
+                <div className={`font-bold text-ink ${isCompanyRemoved && !isInExternalAdmin ? 'line-through text-ink-mid' : ''}`} style={{ fontSize: '12.5px' }}>
                     {companyName}
-                </h3>
-                <p className="font-mono text-ink-mid" style={{ fontSize: '10.5px', fontVariantNumeric: 'tabular-nums' }}>
-                    NZBN {nzbn}
-                </p>
-            </div>
-
-            {/* Roles */}
-            {(isDirector || isShareholder) && (
-                <div className="mb-2 space-y-0.5">
-                    {isDirector && (
-                        <p className="text-accent" style={{ fontSize: '11px' }}>
-                            Director{appointmentDateFormatted ? ` · appointed ${appointmentDateFormatted}` : ''}
-                            {result.isInactive ? ` · resigned${resignationDateFormatted ? ` ${resignationDateFormatted}` : ''}` : ''}
-                        </p>
-                    )}
-                    {isShareholder && (
-                        <p className="text-accent" style={{ fontSize: '11px' }}>
-                            Shareholder · {shareholding.toFixed(1)}%
-                        </p>
-                    )}
                 </div>
-            )}
-
-            {/* Flags */}
-            <div className="space-y-1.5">
-                {removalCommenced && !isCompanyRemoved && (
-                    <div className="flex items-center gap-2">
-                        <FlagSquare tone="amber" glyph="琥" />
-                        <span className="text-amber uppercase" style={{ fontSize: '10px', letterSpacing: '.04em' }}>
-                            Removal in progress
-                        </span>
+                <div className="font-mono text-ink-pale" style={{ fontSize: '11px', fontVariantNumeric: 'tabular-nums' }}>{nzbn}</div>
+                {(isInExternalAdmin || (removalCommenced && !isCompanyRemoved) || (isCompanyRemoved && hasHistoricInsolvency)) && (
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1">
+                        {isInExternalAdmin && (
+                            <span className="flex items-center gap-1.5"><FlagSquare tone="crit" glyph="紅" />
+                                <span className="text-crit uppercase font-bold" style={{ fontSize: '9.5px', letterSpacing: '.05em' }}>{displayStatus}</span></span>
+                        )}
+                        {removalCommenced && !isCompanyRemoved && (
+                            <span className="flex items-center gap-1.5"><FlagSquare tone="amber" glyph="琥" />
+                                <span className="text-amber uppercase" style={{ fontSize: '9.5px', letterSpacing: '.05em' }}>Removal in progress</span></span>
+                        )}
+                        {isCompanyRemoved && hasHistoricInsolvency && (
+                            <span className="flex items-center gap-1.5"><FlagSquare tone="crit" glyph="紅" />
+                                <span className="text-crit uppercase" style={{ fontSize: '9.5px', letterSpacing: '.05em' }}>
+                                    Prev: {historicInsolvencyType ? historicInsolvencyType.replace(/^in\s+/i, '') : 'Insolvency'}</span></span>
+                        )}
                     </div>
                 )}
-                {isCompanyRemoved && hasHistoricInsolvency && (
-                    <div className="flex items-center gap-2">
-                        <FlagSquare tone="crit" glyph="紅" />
-                        <span className="text-crit uppercase" style={{ fontSize: '10px', letterSpacing: '.04em' }}>
-                            Prev: {historicInsolvencyType ? historicInsolvencyType.replace(/^in\s+/i, '') : 'Insolvency'}
-                        </span>
-                    </div>
-                )}
-            </div>
-
-            {/* Footer */}
-            <div className="flex items-center justify-between gap-2 pt-3 mt-3 border-t border-rule">
-                {isInExternalAdmin ? (
-                    <span className="flex items-center gap-2">
-                        <FlagSquare tone="crit" glyph="紅" />
-                        <span className="text-crit uppercase font-bold" style={{ fontSize: '10px', letterSpacing: '.04em' }}>
-                            {getDisplayStatus()}
-                        </span>
-                    </span>
-                ) : (
-                    <span
-                        className={`uppercase ${isRegistered ? 'text-green' : 'text-ink-pale'}`}
-                        style={{ fontSize: '10px', letterSpacing: '.04em' }}
-                    >
-                        {getDisplayStatus()}
-                    </span>
-                )}
-                <span className="text-ink-pale group-hover:text-accent transition-colors" style={{ fontSize: '10.5px' }}>
-                    View org chart →
+            </td>
+            <td className="align-top py-2 pr-3 border-b border-rule text-accent whitespace-nowrap" style={{ fontSize: '12px' }}>
+                {roles || '—'}
+                {result.isInactive && <span className="text-ink-pale"> · resigned</span>}
+            </td>
+            <td className="align-top py-2 pr-3 border-b border-rule text-ink-pale whitespace-nowrap tabular-nums" style={{ fontSize: '11px' }}>
+                {from ? `${from} — ${to}` : '—'}
+            </td>
+            <td className="align-top py-2 border-b border-rule whitespace-nowrap">
+                <span className={`uppercase ${isInExternalAdmin ? 'text-crit font-bold' : isRegistered ? 'text-green' : 'text-ink-pale'}`}
+                      style={{ fontSize: '10px', letterSpacing: '.05em' }}>
+                    {displayStatus}
                 </span>
-            </div>
-        </div>
+                <span className="block text-ink-pale group-hover:text-accent transition-colors" style={{ fontSize: '10px' }}>
+                    Chart →
+                </span>
+            </td>
+        </tr>
     );
 };
 
@@ -442,39 +510,37 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
 
     return (
         <div id="person-search-results" className="absolute inset-0 flex flex-col bg-paper overflow-hidden">
-            {/* Header - static masthead, in normal document flow */}
-            <div className="p-6 bg-paper border-b border-rule shrink-0">
+            {/* Slim return bar. The masthead used to live here and grew unbounded with
+                the register records; identity now sits in the spine instead, so nothing
+                above the fold can push the roster off screen. */}
+            <div className="px-6 py-2.5 bg-paper border-b border-rule shrink-0 flex items-center gap-4">
                 <button
                     onClick={onBack}
-                    className="mb-4 flex items-center gap-1.5 text-sm text-ink-mid hover:text-ink transition-colors"
+                    className="flex items-center gap-1.5 text-sm text-ink-mid hover:text-ink transition-colors"
                 >
                     <ChevronLeft size={16} strokeWidth={1.5} />
                     Back to search
                 </button>
+                <p className="ml-auto text-ink-pale" style={{ fontSize: '12px' }}>
+                    {results.length} {results.length === 1 ? 'company' : 'companies'}
+                    {' · '}{directorCount} directorship{directorCount === 1 ? '' : 's'}
+                    {' · '}{shareholderCount} shareholding{shareholderCount === 1 ? '' : 's'}
+                    {' · '}{activeCount} active
+                </p>
+            </div>
 
-                <div className="flex items-end justify-between gap-4 flex-wrap mb-2">
-                    <div className="min-w-0">
-                        <h2
-                            className="text-ink"
-                            style={{ fontFamily: 'var(--serif)', fontWeight: 600, fontSize: 38, lineHeight: 1.15 }}
-                        >
-                            {personName}
-                        </h2>
-                        <p className="text-ink-mid mt-1" style={{ fontSize: '12.5px' }}>
-                            {results.length} {results.length === 1 ? 'company' : 'companies'} found
-                            {' · '}{directorCount} directorship{directorCount === 1 ? '' : 's'}
-                            {' · '}{shareholderCount} shareholding{shareholderCount === 1 ? '' : 's'}
-                            {' · '}{activeCount} active
-                        </p>
-                    </div>
-                    <button
-                        onClick={() => setShowKyd(true)}
-                        className="flex items-center gap-2 px-4 py-2 border border-rule bg-paper text-ink hover:border-ink text-sm font-medium transition-colors"
-                    >
-                        <span aria-hidden="true" className="text-accent" style={{ fontFamily: 'var(--serif)', fontSize: 15 }}>印</span>
-                        KYD Verification
-                    </button>
-                </div>
+            {/* 調書 — identity spine beside scrolling findings (design/individual-page-direction.html) */}
+            <div className="flex-1 overflow-y-auto">
+              <div className="max-w-[1240px] mx-auto px-6 grid gap-x-7 lg:grid-cols-[300px_minmax(0,1fr)] pt-6">
+                <IdentitySpine
+                    personName={personName}
+                    results={results}
+                    insolvencyRecords={insolvencyRecords}
+                    onOpenKyd={() => setShowKyd(true)}
+                />
+
+                <main className="min-w-0 pb-10">
+                <Marker kanji="険" label="Register checks" />
 
                 {/* REGISTER CHECKS: one collapsed-by-default strip per register, not a
                     scrolling stack of full cards — a long record list used to push the
@@ -482,7 +548,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                     nested-scrollbar mess. A CURRENT record still opens automatically, so
                     the one fact that matters most is never hidden behind a click
                     (design/HANDOVER.md §3e/§4.3/§4.6). */}
-                <div className="mt-4 border border-rule">
+                <div className="border border-rule">
                     {registersClear && (
                         <div className="flex items-start gap-3 p-3 bg-paper2">
                             <CheckSquare tone="green" glyph="青" />
@@ -672,78 +738,92 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                         </div>
                     )}
                 </div>
-            </div>
 
-            {/* Controls */}
-            <div className="p-4 bg-paper2 border-b border-rule flex flex-wrap gap-x-6 gap-y-3 items-center">
-                {/* Sort */}
-                <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-ink-pale uppercase" style={{ fontSize: '10.5px', letterSpacing: '.08em' }}>Sort</span>
-                    <div className="flex flex-wrap gap-1 text-xs">
-                        {sortOptions.map(opt => (
-                            <button
-                                key={opt.value}
-                                onClick={() => {
-                                    setSortMode(opt.value);
-                                    setCurrentPage(1);
-                                }}
-                                className={controlBtn(sortMode === opt.value)}
-                                aria-pressed={sortMode === opt.value}
-                            >
-                                {opt.label}
-                            </button>
-                        ))}
+                {/* ── Roster ─────────────────────────────────────────── */}
+                <div className="mt-8">
+                <Marker kanji="社" label={`Companies · ${results.length}`} />
+
+                <div className="flex flex-wrap gap-x-6 gap-y-3 items-center mb-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-ink-pale uppercase" style={{ fontSize: '10.5px', letterSpacing: '.08em' }}>Sort</span>
+                        <div className="flex flex-wrap gap-1 text-xs">
+                            {sortOptions.map(opt => (
+                                <button
+                                    key={opt.value}
+                                    onClick={() => {
+                                        setSortMode(opt.value);
+                                        setCurrentPage(1);
+                                    }}
+                                    className={controlBtn(sortMode === opt.value)}
+                                    aria-pressed={sortMode === opt.value}
+                                >
+                                    {opt.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-ink-pale uppercase" style={{ fontSize: '10.5px', letterSpacing: '.08em' }}>Filter</span>
+                        <div className="flex flex-wrap gap-1 text-xs">
+                            {filterOptions.map(opt => (
+                                <button
+                                    key={opt.value}
+                                    onClick={() => {
+                                        setFilterMode(opt.value);
+                                        setCurrentPage(1);
+                                    }}
+                                    className={controlBtn(filterMode === opt.value)}
+                                    aria-pressed={filterMode === opt.value}
+                                >
+                                    {opt.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="ml-auto text-ink-pale" style={{ fontSize: '12px' }}>
+                        Showing {startIndex + 1}–{Math.min(endIndex, sortedResults.length)} of {sortedResults.length}
                     </div>
                 </div>
 
-                {/* Filter */}
-                <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-ink-pale uppercase" style={{ fontSize: '10.5px', letterSpacing: '.08em' }}>Filter</span>
-                    <div className="flex flex-wrap gap-1 text-xs">
-                        {filterOptions.map(opt => (
-                            <button
-                                key={opt.value}
-                                onClick={() => {
-                                    setFilterMode(opt.value);
-                                    setCurrentPage(1);
-                                }}
-                                className={controlBtn(filterMode === opt.value)}
-                                aria-pressed={filterMode === opt.value}
-                            >
-                                {opt.label}
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="ml-auto text-ink-pale" style={{ fontSize: '12px' }}>
-                    Showing {startIndex + 1}–{Math.min(endIndex, sortedResults.length)} of {sortedResults.length}
-                </div>
-            </div>
-
-            {/* Results Grid */}
-            <div className="flex-1 overflow-y-auto p-6">
                 {paginatedResults.length === 0 ? (
                     <div className="text-center py-12">
                         <Building2 className="mx-auto mb-4 text-ink-pale" size={48} strokeWidth={1.5} />
                         <p className="text-ink-mid">No companies found with selected filters</p>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                        {paginatedResults.map((result) => (
-                            <MeishiRoleCard
-                                key={result.nzbn}
-                                result={result}
-                                onClick={() => onCompanyClick(result)}
-                            />
-                        ))}
+                    <div className="overflow-x-auto">
+                        <table className="w-full border-collapse">
+                            <thead>
+                                <tr>
+                                    {['Company', 'Role', 'Held', 'Status'].map((h, i) => (
+                                        <th key={h}
+                                            className="text-left uppercase text-ink-pale font-medium pb-1.5 pr-3 border-b border-rule"
+                                            style={{ fontSize: '10px', letterSpacing: '.1em', width: i === 0 ? '42%' : undefined }}>
+                                            {h}
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {paginatedResults.map((result) => (
+                                    <RosterRow
+                                        key={result.nzbn}
+                                        result={result}
+                                        onClick={() => onCompanyClick(result)}
+                                    />
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
                 )}
-            </div>
+                </div>
 
-            {/* Pagination */}
+            {/* Pagination — scrolls with the roster now that the page is one column
+                of findings rather than a fixed frame with its own inner scroller. */}
             {totalPages > 1 && (
-                <div className="p-4 bg-paper2 border-t border-rule flex items-center justify-center gap-2">
+                <div className="mt-4 p-3 bg-paper2 border border-rule flex items-center justify-center gap-2">
                     <button
                         onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                         disabled={currentPage === 1}
@@ -793,6 +873,9 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                     </span>
                 </div>
             )}
+                </main>
+              </div>
+            </div>
 
             {/* KYD Verification Panel */}
             {showKyd && (
