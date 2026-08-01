@@ -160,6 +160,27 @@ suspended discharge counts as current regardless of what `insolvencyStatus` read
 function now gates both the person-node crit "current" label and the summary strip auto-expand
 (3e).
 
+**Second correction — the fields were declared but never populated.** Declaring them on
+`InsolvencyRecord` was not enough, and shipping that as "FIXED" was wrong. There are two
+response shapes in this API:
+
+| Endpoint | Schema | Discharge fields? |
+|---|---|---|
+| `GET /insolvencies?name=` (the name search) | `InsolvenciesSearchResults.searchResults[]` | **none at all** |
+| `GET /insolvencies/{estate-id}` | `InsolvenciesRecord` | yes — and only here |
+
+So every discharge field was permanently `undefined`, which is what made a discharged
+bankrupt render as never discharged (and fed the bogus timeline — see §7). Verified against
+the live register: estate 802402 discharged 16-Jan-2005, estate 851731 discharged 29-Sep-2014,
+while the API search returned neither. `searchInsolvency()` now follows each surviving hit with
+`fetchInsolvencyDetail()` (one call per record the user actually sees, after filtering).
+
+The detail record is also authoritative on `insolvencyStatus`: the search summary reported
+"(Conditional) Discharged" where the register itself says "Discharged" / "Automatically
+Discharged", so the merge corrects the status label too. It additionally carries
+`monthOfBirth`/`yearOfBirth`/`courtName`/occupation — the register's own answer to the
+same-name caveat this whole feature rests on, now shown on each record.
+
 ### 3e. The individual masthead blocks the page — FIXED
 
 `components/PersonSearchResults.tsx` replaced the `max-h-[240px] overflow-y-auto` card stack
@@ -202,8 +223,14 @@ nested scroll, and the one fact that matters isn't hidden behind a click.
    worse than no chart at all, so the panel now states only what the register actually gives:
    adjudication date, and the discharge date **or an explicit "not recorded on the register"**
    (never silently blank, which reads as "still bankrupt"). Per-company appointment/resignation
-   dates are shown on the company cards instead. Do not reinstate the derived count without a
-   real discharge date per record.
+   dates are shown on the company cards instead.
+
+   **Follow-up:** the missing discharge dates turned out to be our bug, not a gap in the
+   register — the name search simply doesn't return them, and nothing was fetching the detail
+   record (see §3d). Real discharge dates now flow through. That removes the original blocker,
+   so the timeline *could* be reconsidered — but it should be rebuilt from scratch with an
+   explicit "no discharge date on file" branch that refuses to draw rather than falling back to
+   today's date, and the overlap count should still be treated as the consequential claim it is.
 
 ### Corrections already absorbed
 - **Colour tiers.** `utils/statusRamp.ts` puts *current* liquidation/receivership in **amber 琥**

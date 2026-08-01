@@ -462,6 +462,17 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                                                     Also known as: {record.alternateNames.join(', ')}
                                                 </p>
                                             )}
+                                            {/* Identity corroboration — this feature can only ever match on
+                                                name, so show the register's own distinguishing details and
+                                                let the reader confirm it's the same individual. */}
+                                            {(record.yearOfBirth || record.occupationAtAdjudicationOrIndustryAtLiquidation) && (
+                                                <p className="text-ink-pale" style={{ fontSize: '11.5px' }}>
+                                                    {[
+                                                        record.yearOfBirth ? `Born ${[record.monthOfBirth, record.yearOfBirth].filter(Boolean).join(' ')}` : null,
+                                                        record.occupationAtAdjudicationOrIndustryAtLiquidation,
+                                                    ].filter(Boolean).join(' · ')}
+                                                </p>
+                                            )}
                                             <div className="mt-1.5 text-ink-mid" style={{ fontSize: '12px' }}>
                                                 <p>
                                                     <span className="text-crit">Type:</span> {record.insolvencyTypeDescription}
