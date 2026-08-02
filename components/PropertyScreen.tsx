@@ -13,7 +13,7 @@ import {
 /**
  * 地 — the LINZ Title Register feature. Four faces, in order:
  *
- *   1. locked        sign in with your name + the shared password
+ *   1. locked        sign in with your work email + your own password
  *   2. notice        the privacy/acceptable-use check, every session
  *   3. search        by property address or registered owner
  *   4. report        the memorial history of one title
@@ -156,14 +156,17 @@ const SignIn: React.FC = () => {
                 </p>
             </div>
 
-            <Field label="Your name" hint="Recorded against every search you run.">
+            <Field label="Work email" hint="Your account, and what every search is recorded against.">
                 <input
                     ref={firstField}
                     className={inputClass}
                     style={inputStyle}
+                    type="email"
+                    inputMode="email"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    autoComplete="off"
+                    autoComplete="username"
+                    spellCheck={false}
                 />
             </Field>
             <Field label="Password">

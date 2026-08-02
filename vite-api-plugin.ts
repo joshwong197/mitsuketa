@@ -22,6 +22,12 @@ const SERVER_ENV_KEYS = [
     'PROPERTY_PASS',
 ] as const;
 
+// Per-user property credentials are one variable each and their names are not
+// known up front (PROPERTY_PW_<slugged email>), so they are matched by prefix
+// rather than listed. Without this, dev sees no users, falls back to the shared
+// password, and per-user auth looks broken locally while working in production.
+const SERVER_ENV_PREFIXES = ['PROPERTY_PW_'] as const;
+
 const API_ROUTES: Record<string, string> = {
     '/api/proxy': '/api/proxy.ts',
     '/api/consent-forms': '/api/consent-forms.ts',
@@ -93,8 +99,11 @@ export default function apiPlugin(): Plugin {
         apply: 'serve',
         config(_config, { mode }) {
             const env = loadEnv(mode, '.', '');
-            for (const key of SERVER_ENV_KEYS) {
-                if (env[key] && !process.env[key]) {
+            const wanted = (key: string) =>
+                (SERVER_ENV_KEYS as readonly string[]).includes(key)
+                || SERVER_ENV_PREFIXES.some(p => key.startsWith(p));
+            for (const key of Object.keys(env)) {
+                if (wanted(key) && env[key] && !process.env[key]) {
                     process.env[key] = env[key];
                 }
             }

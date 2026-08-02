@@ -1,6 +1,6 @@
 // Property search — LINZ Title Register, gated to the team.
 //
-//   POST /api/property?mode=login                  { password, searcher? }
+//   POST /api/property?mode=login                  { searcher, password }
 //   GET  /api/property?mode=address&q=&ref=[&address_id=]
 //   GET  /api/property?mode=owner&q=&ref=
 //   GET  /api/property?mode=title&title_no=&ref=
@@ -11,17 +11,33 @@
 // owners, mortgagees and caveators — supplied under the LINZ Licence for
 // Personal Data. Three things follow, and none of them are optional:
 //
-//   1. It FAILS CLOSED. No PROPERTY_PASS configured means nobody gets in,
+//   1. It FAILS CLOSED. No credential configured means nobody gets in,
 //      rather than everybody.
 //   2. The LINZ key never leaves the server. The browser talks to this handler.
 //   3. Every search is logged with the reference the searcher supplied.
 //
-// The session secret is derived from the password itself, so changing
-// PROPERTY_PASS invalidates every existing session — otherwise rotating a leaked
-// credential buys nothing until the old cookies expire.
+// AUTH has two modes, and per-user wins whenever it is configured:
+//
+//   per-user  PROPERTY_PW_<SLUG> — one variable each (utils/propertyUsers.ts).
+//             Sign in with an email address and that person's own password.
+//   shared    PROPERTY_PASS — the original single credential, kept only so a
+//             deployment that has not been migrated still works. It is IGNORED
+//             the moment any PROPERTY_PW_* exists, because leaving both live
+//             would make the shared password a standing bypass around per-user
+//             revocation.
+//
+// The session secret is derived from the credential, so changing it invalidates
+// existing sessions — otherwise rotating a leaked password buys nothing until
+// the old cookies expire. In per-user mode that isolation is per-person:
+// resetting one password signs out that person alone.
+//
+// Identity is still a shared secret, not proof — nothing here verifies that the
+// person typing an address owns that mailbox. The audit log records
+// `verified: false` accordingly. See design/PROPERTY_ACCESS_PLAN.md §3.
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createHmac, createHash, timingSafeEqual } from 'node:crypto';
 import { add } from '../utils/audit.js';
+import { authenticate, hasUsers, storedHash, userSessionSecret } from '../utils/propertyUsers.js';
 import {
     LDSClient, searchAddress, searchOwner, titleReport,
 } from '../utils/lds.js';
@@ -43,12 +59,15 @@ const MAX_REFERENCE = 100;
 // Session
 // --------------------------------------------------------------------------- //
 
-function sessionKey(password: string): Buffer {
-    return createHmac('sha256', password).update('mitsuketa-property-session-v1').digest();
+// `secret` is the shared password in legacy mode, or the per-user session secret
+// derived from that user's stored hash — never a plaintext password in per-user
+// mode, and never anything the browser sees in either.
+function sessionKey(secret: string): Buffer {
+    return createHmac('sha256', secret).update('mitsuketa-property-session-v1').digest();
 }
 
-function sign(payload: string, password: string): string {
-    return createHmac('sha256', sessionKey(password)).update(payload).digest('base64url');
+function sign(payload: string, secret: string): string {
+    return createHmac('sha256', sessionKey(secret)).update(payload).digest('base64url');
 }
 
 /** Compare via digests so the buffers are always the same length. */
@@ -58,11 +77,11 @@ function sameSecret(a: string, b: string): boolean {
         createHash('sha256').update(b).digest());
 }
 
-function issueCookie(searcher: string, password: string, secure: boolean): string {
+function issueCookie(searcher: string, secret: string, secure: boolean): string {
     const exp = Date.now() + SESSION_HOURS * 3600_000;
     // The searcher name rides inside the signed payload so it cannot be edited.
     const payload = `${exp}.${Buffer.from(searcher).toString('base64url')}`;
-    const value = `${payload}.${sign(payload, password)}`;
+    const value = `${payload}.${sign(payload, secret)}`;
     // No Max-Age/Expires: a session cookie, so the browser drops it when the
     // browser session ends. The signed exp above is still enforced server-side —
     // the cookie lifetime is the browser's promise, the exp is ours.
@@ -73,21 +92,43 @@ function issueCookie(searcher: string, password: string, secure: boolean): strin
 
 interface Session { searcher: string }
 
-function readSession(req: VercelRequest, password: string): Session | null {
+/**
+ * Verifies the cookie against whichever secret issued it.
+ *
+ * In per-user mode the signing secret is derived from that user's stored hash,
+ * so it has to be looked up from the identity inside the payload — which is
+ * safe, because the signature is what proves the payload was not edited. A
+ * cookie naming a user who no longer exists simply fails to verify, which is
+ * how revocation takes effect immediately rather than at cookie expiry.
+ */
+function readSession(req: VercelRequest, sharedPassword: string): Session | null {
     const raw = req.cookies?.[COOKIE];
     if (!raw) return null;
     const parts = raw.split('.');
     if (parts.length !== 3) return null;
     const [exp, who, sig] = parts;
-    const payload = `${exp}.${who}`;
-    if (!sameSecret(sig, sign(payload, password))) return null;
-    const expiry = Number(exp);
-    if (!Number.isFinite(expiry) || Date.now() > expiry) return null;
+
+    let searcher: string;
     try {
-        return { searcher: Buffer.from(who, 'base64url').toString('utf8') };
+        searcher = Buffer.from(who, 'base64url').toString('utf8');
     } catch {
         return null;
     }
+
+    let secret: string;
+    if (hasUsers()) {
+        const stored = storedHash(searcher);
+        if (!stored) return null; // user removed, or a forged identity
+        secret = userSessionSecret(stored);
+    } else {
+        secret = sharedPassword;
+    }
+
+    const payload = `${exp}.${who}`;
+    if (!sameSecret(sig, sign(payload, secret))) return null;
+    const expiry = Number(exp);
+    if (!Number.isFinite(expiry) || Date.now() > expiry) return null;
+    return { searcher };
 }
 
 // --------------------------------------------------------------------------- //
@@ -107,8 +148,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // config state is not the public's business. Note that Vercel binds env
     // vars at BUILD time, so a deployment built before a variable was added
     // will land here until it is redeployed. Check `vercel logs <url>`.
+    const perUser = hasUsers();
     const missing = [
-        !password && 'PROPERTY_PASS',
+        !perUser && !password && 'PROPERTY_PASS (or any PROPERTY_PW_*)',
         !process.env.LINZ_API_KEY && 'LINZ_API_KEY',
     ].filter(Boolean);
     if (missing.length > 0) {
@@ -126,21 +168,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (req.method !== 'POST') return res.status(405).json({ error: 'POST required' });
         const body = (req.body ?? {}) as Record<string, unknown>;
         const supplied = str(body.password);
-        const searcher = str(body.searcher).slice(0, 80);
-        // A shared credential cannot prove who is searching, so the name is the
-        // only attribution the audit log gets. Required, even though unverified.
+        const searcher = str(body.searcher).slice(0, 120).toLowerCase();
         if (!searcher) {
             return res.status(400).json({
                 error: 'searcher_required',
-                message: 'Enter your name so searches can be attributed.',
+                message: perUser
+                    ? 'Enter your work email address.'
+                    : 'Enter your name so searches can be attributed.',
             });
         }
-        if (!supplied || !sameSecret(supplied, password)) {
-            await add({ action: 'sign-in-failed', searcher: searcher || undefined, ip });
+
+        // Per-user mode: the email selects the credential. Wrong password and
+        // unknown account are indistinguishable to the caller, by design — the
+        // response says neither which it was nor how long it took to decide.
+        const ok = perUser
+            ? authenticate(searcher, supplied)
+            : !!supplied && sameSecret(supplied, password);
+
+        if (!ok) {
+            await add({ action: 'sign-in-failed', searcher, ip });
             return res.status(401).json({ error: 'invalid_credentials' });
         }
-        await add({ action: 'sign-in', searcher: searcher || undefined, ip });
-        res.setHeader('Set-Cookie', issueCookie(searcher, password, secure));
+
+        const stored = perUser ? storedHash(searcher) : null;
+        const secret = stored ? userSessionSecret(stored) : password;
+        await add({ action: 'sign-in', searcher, ip });
+        res.setHeader('Set-Cookie', issueCookie(searcher, secret, secure));
         return res.status(200).json({ ok: true, searcher });
     }
 

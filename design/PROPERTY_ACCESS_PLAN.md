@@ -1,7 +1,41 @@
 # Property search — access control plan
 
-Status: **agreed in principle, nothing built.** Picked up from the session that
-ended 2026-08-01. Read this before touching `api/property.ts`.
+Status: **phase 1 built.** Phase 2 (OIDC) still open. Read this before touching
+`api/property.ts`.
+
+**Shape as shipped** — one environment variable per user, keyed by slugged
+email, holding a scrypt hash:
+
+```
+PROPERTY_PW_NITESHNI_SWAMI_FBU_COM = scrypt$<salt>$<key>
+```
+
+`npm run property:user -- someone@fbu.com` mints one. Sign in with the full
+address. Code: `utils/propertyUsers.ts` (slug, hash, verify, session secret),
+`utils/property.pw.ts` (CLI), `api/property.ts` (login + session).
+
+`PROPERTY_PASS` still works when **no** `PROPERTY_PW_*` exists, and is ignored
+entirely once one does — leaving both live would make the shared password a
+standing bypass around per-user revocation.
+
+Why one variable each rather than a `user:pass,user:pass` blob: resetting one
+password must not touch anyone else's. With a blob you rewrite the whole string
+— from memory, if it is marked Sensitive — and one slip locks out a colleague.
+
+The session cookie is signed with the user's **stored hash**, so a reset changes
+their signing secret and signs out that person alone. Deleting their variable
+revokes them immediately rather than at cookie expiry, because `readSession`
+looks the hash up on every request.
+
+Passwords are never stored, so the variable does not need the Sensitive flag to
+be safe from disclosure — a reader gets a scrypt hash, not a credential. Marking
+it Sensitive is still cheap defence in depth, at the cost of not being able to
+read the value back.
+
+Verified by direct test, not inspection: correct/wrong/cross-user passwords,
+unknown accounts, case and whitespace handling, salting, malformed stored
+values, and — the one that matters — that rotating one user changes only that
+user's session secret and leaves everyone else authenticating.
 
 ---
 

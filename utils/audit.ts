@@ -30,13 +30,21 @@ export interface AuditEvent {
     reference?: string;
     /** What was typed. Never what came back. */
     query?: string;
-    /** Self-declared, unverified — a shared credential can't prove identity. */
+    /** Who signed in. Under per-user credentials this is their email address. */
     searcher?: string;
+    /**
+     * Whether an identity provider asserted `searcher`, or the person simply
+     * typed it. Always false today — a password, per-user or shared, proves
+     * knowledge of a secret, not ownership of a mailbox. Recorded explicitly so
+     * that entries made before SSO stay distinguishable from ones made after,
+     * instead of being silently conflated. See design/PROPERTY_ACCESS_PLAN.md.
+     */
+    verified?: boolean;
     ip?: string;
 }
 
 export async function add(event: Omit<AuditEvent, 'at'>): Promise<void> {
-    const record: AuditEvent = { at: new Date().toISOString(), ...event };
+    const record: AuditEvent = { at: new Date().toISOString(), verified: false, ...event };
     // One line, prefixed so it can be grepped out of the platform log.
     console.log(`[property-audit] ${JSON.stringify(record)}`);
 }

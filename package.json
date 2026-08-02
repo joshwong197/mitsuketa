@@ -13,7 +13,8 @@
     "check:lds": "node utils/lds.check.ts",
     "check": "npm run check:memorials && npm run check:lds",
     "build:graph-bundle": "esbuild mcp/templates/graph-bundle.entry.ts --bundle --format=iife --minify --target=es2020 --outfile=mcp/templates/graph-bundle.js --log-level=info",
-    "build:export-viewer": "esbuild export-viewer.entry.tsx --bundle --format=iife --minify --target=es2020 --outfile=public/export-viewer.js --log-level=info && tailwindcss -i export-viewer.css -o public/export-viewer.css --minify"
+    "build:export-viewer": "esbuild export-viewer.entry.tsx --bundle --format=iife --minify --target=es2020 --outfile=public/export-viewer.js --log-level=info && tailwindcss -i export-viewer.css -o public/export-viewer.css --minify",
+    "property:user": "node utils/property.pw.ts"
   },
   "dependencies": {
     "@dagrejs/dagre": "^1.1.8",
