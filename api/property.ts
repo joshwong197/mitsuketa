@@ -56,6 +56,64 @@ const MAX_QUERY = 200;
 const MAX_REFERENCE = 100;
 
 // --------------------------------------------------------------------------- //
+// Login throttle
+// --------------------------------------------------------------------------- //
+//
+// scrypt makes one guess cost ~80ms, which is not on its own a defence: an
+// attacker running requests in parallel still gets hundreds of attempts a
+// second, and this endpoint is reachable by anyone holding the deployment URL.
+//
+// Counted per account AND per IP, with very different limits, because the two
+// are guarding different things and a shared limit gets one of them wrong:
+//
+//   account (10) — stops someone grinding away at one person's password from
+//                  anywhere. Tight, because ten failures is already a lot of
+//                  typos.
+//   IP     (100) — stops a broad scripted sweep. Deliberately loose, because a
+//                  whole office usually shares one public address: a tight IP
+//                  limit means one colleague fat-fingering their password locks
+//                  out everybody, which testing here duly demonstrated.
+//
+// ponytail: module-scope Map, so the window is per warm serverless instance
+// rather than global. Best-effort, not a guarantee — it stops scripted guessing
+// without needing a shared store, and a real limiter belongs with the Postgres
+// work in utils/audit.ts.
+const FAILURE_WINDOW_MS = 15 * 60_000;
+const ACCOUNT_LIMIT = 10;
+const IP_LIMIT = 100;
+
+interface Bucket { key: string; limit: number }
+const failures = new Map<string, { count: number; until: number }>();
+
+function throttled(buckets: Bucket[], now = Date.now()): boolean {
+    return buckets.some(({ key, limit }) => {
+        const hit = failures.get(key);
+        return !!hit && now < hit.until && hit.count >= limit;
+    });
+}
+
+function recordFailure(buckets: Bucket[], now = Date.now()): void {
+    // Opportunistic sweep — the map only ever holds keys seen recently.
+    if (failures.size > 500) {
+        for (const [k, v] of failures) if (now >= v.until) failures.delete(k);
+    }
+    for (const { key } of buckets) {
+        const hit = failures.get(key);
+        if (!hit || now >= hit.until) failures.set(key, { count: 1, until: now + FAILURE_WINDOW_MS });
+        else hit.count++;
+    }
+}
+
+/**
+ * Clears the ACCOUNT bucket only. The IP bucket is left to expire on its own so
+ * that holding one valid account cannot be used to keep resetting the address's
+ * budget while guessing at everyone else's.
+ */
+function clearAccountFailures(searcher: string): void {
+    failures.delete(`user:${searcher}`);
+}
+
+// --------------------------------------------------------------------------- //
 // Session
 // --------------------------------------------------------------------------- //
 
@@ -178,6 +236,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             });
         }
 
+        const throttleKeys: Bucket[] = [
+            { key: `user:${searcher}`, limit: ACCOUNT_LIMIT },
+            { key: `ip:${ip || 'unknown'}`, limit: IP_LIMIT },
+        ];
+        if (throttled(throttleKeys)) {
+            await add({ action: 'refused', query: 'login-throttled', searcher, ip });
+            return res.status(429).json({
+                error: 'too_many_attempts',
+                message: 'Too many failed sign-in attempts. Try again in 15 minutes.',
+            });
+        }
+
         // Per-user mode: the email selects the credential. Wrong password and
         // unknown account are indistinguishable to the caller, by design — the
         // response says neither which it was nor how long it took to decide.
@@ -186,9 +256,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             : !!supplied && sameSecret(supplied, password);
 
         if (!ok) {
+            recordFailure(throttleKeys);
             await add({ action: 'sign-in-failed', searcher, ip });
             return res.status(401).json({ error: 'invalid_credentials' });
         }
+        clearAccountFailures(searcher);
 
         const stored = perUser ? storedHash(searcher) : null;
         const secret = stored ? userSessionSecret(stored) : password;

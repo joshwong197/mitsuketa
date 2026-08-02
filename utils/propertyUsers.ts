@@ -49,16 +49,29 @@ export function storedHash(username: string, env: NodeJS.ProcessEnv = process.en
     return env[envKeyFor(username)] || null;
 }
 
-/** `scrypt$<salt-hex>$<key-hex>` for a plaintext password. */
+/**
+ * `scrypt.<salt-hex>.<key-hex>` for a plaintext password.
+ *
+ * Dot-separated, NOT the conventional `$` of PHC strings, and deliberately so:
+ * dotenv expands `$name` inside a .env value, so a `scrypt$<salt>$<key>` string
+ * loses its salt on the way in and every login fails with no hint as to why.
+ * Vercel is unaffected — it stores values literally — but local dev is not, and
+ * a credential format that breaks depending on how it was loaded is a trap.
+ * Hex and dots collide with nothing.
+ */
 export function hashPassword(password: string): string {
     const salt = randomBytes(16);
     const key = scryptSync(password, salt, SCRYPT_KEYLEN, { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P });
-    return `scrypt$${salt.toString('hex')}$${key.toString('hex')}`;
+    return `scrypt.${salt.toString('hex')}.${key.toString('hex')}`;
 }
 
-/** Constant-time verify. False on any malformed stored value rather than throwing. */
+/**
+ * Constant-time verify. False on any malformed stored value rather than throwing.
+ * Accepts `$` separators too, so hashes minted before the format changed still
+ * work — the label is fixed and both fields are hex, so neither is ambiguous.
+ */
 export function verifyPassword(password: string, stored: string): boolean {
-    const parts = (stored || '').split('$');
+    const parts = (stored || '').replace(/\$/g, '.').split('.');
     if (parts.length !== 3 || parts[0] !== 'scrypt') return false;
     try {
         const salt = Buffer.from(parts[1], 'hex');
