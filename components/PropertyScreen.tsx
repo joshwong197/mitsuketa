@@ -156,17 +156,21 @@ const SignIn: React.FC = () => {
                 </p>
             </div>
 
-            <Field label="Work email" hint="Your account, and what every search is recorded against.">
+            {/* Plain text, not type="email": most accounts ARE email addresses, but
+                the admin account is a bare username and browser validation would
+                reject it before the request was ever made. The server decides what
+                is valid, not the input type. */}
+            <Field label="Email or username" hint="Your account, and what every search is recorded against.">
                 <input
                     ref={firstField}
                     className={inputClass}
                     style={inputStyle}
-                    type="email"
-                    inputMode="email"
+                    type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     autoComplete="username"
                     spellCheck={false}
+                    autoCapitalize="none"
                 />
             </Field>
             <Field label="Password">
