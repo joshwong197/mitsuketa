@@ -7,7 +7,7 @@ import {
     type AddressResult, type OwnerResult, type TitleReport, type TitleSummary,
 } from '../services/propertyService.js';
 import {
-    acknowledge, getSession, setReference, signIn, subscribe,
+    acknowledge, getSession, signIn, subscribe,
 } from '../utils/propertySession.js';
 
 /**
@@ -233,9 +233,8 @@ const Notice: React.FC<{ searcher: string }> = ({ searcher }) => {
                     <>The data is a <strong className="text-ink">reference copy, not a title search</strong>.
                         It may lag the register and is not legal advice. Obtain a formal search from
                         LINZ before relying on it.</>,
-                    <><strong className="text-ink">Every search you run is logged</strong> — your name, the
-                        time, what you typed, and the reference you give it. The log is visible to
-                        the administrator.</>,
+                    <><strong className="text-ink">Every search you run is logged</strong> — your account,
+                        the time, and what you typed. The log is visible to the administrator.</>,
                 ].map((item, i) => (
                     <li key={i} style={{ display: 'flex', gap: 10, marginBottom: 9 }}>
                         <span className="text-accent" style={{ fontFamily: 'var(--serif)', flexShrink: 0 }}>—</span>
@@ -270,7 +269,7 @@ const Notice: React.FC<{ searcher: string }> = ({ searcher }) => {
 
 // ── 3. Search ────────────────────────────────────────────────────────────────
 
-type Mode = 'address' | 'owner';
+type Mode = 'address' | 'owner' | 'title';
 
 const ResultRow: React.FC<{
     left: string;
@@ -308,9 +307,8 @@ const ResultList: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 
 const Search: React.FC<{
     searcher: string;
-    reference: string;
     onOpenReport: (report: TitleReport, titleNo: string) => void;
-}> = ({ searcher, reference, onOpenReport }) => {
+}> = ({ searcher, onOpenReport }) => {
     const [mode, setMode] = useState<Mode>('address');
     const [query, setQuery] = useState('');
     const [busy, setBusy] = useState(false);
@@ -337,21 +335,24 @@ const Search: React.FC<{
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!query.trim() || !reference.trim() || busy) return;
+        if (!query.trim() || busy) return;
         clear();
         run(async () => {
-            if (mode === 'address') setAddress(await searchAddress(query.trim(), reference.trim()));
-            else setOwner(await searchOwner(query.trim(), reference.trim()));
+            // A title reference identifies exactly one record, so there is nothing
+            // to choose between — open the report rather than listing one result.
+            if (mode === 'title') { await openTitle(query.trim().toUpperCase()); return; }
+            if (mode === 'address') setAddress(await searchAddress(query.trim()));
+            else setOwner(await searchOwner(query.trim()));
         });
     };
 
     const pickCandidate = (addressId: number) => run(async () => {
-        setAddress(await searchAddress(query.trim(), reference.trim(), addressId));
+        setAddress(await searchAddress(query.trim(), addressId));
     });
 
-    const openTitle = (titleNo: string) => run(async () => {
-        onOpenReport(await fetchTitleReport(titleNo, reference.trim()), titleNo);
-    });
+    const openTitle = async (titleNo: string) => {
+        onOpenReport(await fetchTitleReport(titleNo), titleNo);
+    };
 
     const titleRow = (t: TitleSummary) => (
         <ResultRow
@@ -359,15 +360,18 @@ const Search: React.FC<{
             left={t.title_no}
             main={t.owners || [t.type, t.status].filter(Boolean).join(' · ')}
             meta={t.owners ? [t.type, t.status, t.land_district].filter(Boolean).join(' · ') : (t.land_district ?? undefined)}
-            onClick={() => openTitle(t.title_no)}
+            onClick={() => run(() => openTitle(t.title_no))}
         />
     );
 
-    // 住 address / 名 name — the find screen's mode-line idiom, one level down.
-    const modes: { id: Mode; kanji: string; label: string }[] = [
-        { id: 'address', kanji: '住', label: 'Address' },
-        { id: 'owner', kanji: '名', label: 'Owner' },
+    // 住 address / 名 name / 番 number — the find screen's mode-line idiom, one
+    // level down. Each kanji names what you type into the box.
+    const modes: { id: Mode; kanji: string; label: string; placeholder: string }[] = [
+        { id: 'address', kanji: '住', label: 'Address', placeholder: 'Property address' },
+        { id: 'owner', kanji: '名', label: 'Owner', placeholder: 'Registered owner' },
+        { id: 'title', kanji: '番', label: 'Title ref', placeholder: 'Record of title, e.g. NA123A/456' },
     ];
+    const placeholder = modes.find(m => m.id === mode)!.placeholder;
 
     return (
         <div className="text-left">
@@ -405,20 +409,22 @@ const Search: React.FC<{
                         style={{
                             border: 'none', padding: '14px 16px', fontSize: 15,
                             outline: 'none', minWidth: 0,
+                            // A title reference is a code, so it reads better set in mono.
+                            fontFamily: mode === 'title' ? 'var(--mono)' : undefined,
                         }}
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
-                        placeholder={mode === 'address' ? 'Property address' : 'Registered owner'}
-                        aria-label={mode === 'address' ? 'Property address' : 'Registered owner'}
+                        placeholder={placeholder}
+                        aria-label={placeholder}
                     />
                     <button
                         type="submit"
-                        disabled={!query.trim() || !reference.trim() || busy}
+                        disabled={!query.trim() || busy}
                         className="property-btn bg-ink text-paper inline-flex items-center gap-2 transition-colors duration-150 flex-shrink-0"
                         style={{
                             padding: '0 22px', fontSize: 14, letterSpacing: '.04em',
-                            opacity: !query.trim() || !reference.trim() || busy ? 0.45 : 1,
-                            cursor: !query.trim() || !reference.trim() || busy ? 'not-allowed' : 'pointer',
+                            opacity: !query.trim() || busy ? 0.45 : 1,
+                            cursor: !query.trim() || busy ? 'not-allowed' : 'pointer',
                         }}
                     >
                         {busy
@@ -428,8 +434,10 @@ const Search: React.FC<{
                     </button>
                 </div>
 
-                {/* Mode line + the file reference as an inline mono chip. It is a
-                    short mandatory token, not a paragraph-worthy field. */}
+                {/* Mode line. The file-reference chip that used to sit here is gone:
+                    with per-user sign-in the audit log records who ran a search, so
+                    the reference was no longer carrying the accountability it was
+                    added for — only friction on every query. */}
                 <div
                     className="flex items-center flex-wrap text-ink-mid"
                     style={{ marginTop: 12, gap: 2, fontSize: 12.5 }}
@@ -460,33 +468,7 @@ const Search: React.FC<{
                         </React.Fragment>
                     ))}
 
-                    <label
-                        className="inline-flex items-baseline text-ink-pale"
-                        style={{ marginLeft: 14, gap: 6, fontSize: 11.5 }}
-                        title="Required. Recorded with the search so it can be accounted for later."
-                    >
-                        Ref
-                        <input
-                            className="property-ref bg-transparent text-ink"
-                            style={{
-                                width: 118, border: 'none',
-                                borderBottom: `1px solid ${reference.trim() ? 'var(--accent)' : 'var(--rule)'}`,
-                                fontFamily: 'var(--mono)', fontSize: 11.5, padding: '1px 2px',
-                            }}
-                            value={reference}
-                            onChange={(e) => setReference(e.target.value)}
-                            placeholder="MATTER-1234"
-                            aria-label="File or matter reference"
-                        />
-                    </label>
                 </div>
-
-                {!reference.trim() && query.trim() && (
-                    <p className="text-ink-pale" style={{ fontSize: 11.5, marginTop: 8 }}>
-                        Add a file reference to search — it's recorded with the search so it can be
-                        accounted for later.
-                    </p>
-                )}
             </form>
 
             {error && <ErrorNote>{error}</ErrorNote>}
@@ -597,7 +579,6 @@ export const PropertyScreen: React.FC<PropertyScreenProps> = ({ onOpenReport }) 
             ? <Notice searcher={session.searcher} />
             : <Search
                 searcher={session.searcher}
-                reference={session.reference}
                 onOpenReport={onOpenReport}
               />;
 

@@ -8,9 +8,10 @@ import { signOut } from '../utils/propertySession.js';
  * only and never reaches the browser. The session is an httpOnly cookie, so it is
  * not readable here either — `credentials: 'same-origin'` is what carries it.
  *
- * Every search needs a `reference`. The server rejects a blank one, because with
- * a shared credential the reference is the only thing that says what a search was
- * for.
+ * Searches no longer carry a matter reference. It existed because a shared
+ * credential could not say WHO ran a search, so the reference had to say WHY;
+ * per-user sign-in records the account instead, and the field was left as
+ * friction on every query.
  */
 
 export class PropertyError extends Error {
@@ -148,9 +149,9 @@ export async function logout(): Promise<void> {
 }
 
 export function searchAddress(
-    query: string, reference: string, addressId?: number,
+    query: string, addressId?: number,
 ): Promise<AddressResult> {
-    const params: Record<string, string> = { mode: 'address', ref: reference };
+    const params: Record<string, string> = { mode: 'address' };
     if (addressId !== undefined) params.address_id = String(addressId);
     // Sent alongside address_id too, so the audit line records what was typed
     // rather than just the id that got picked from the candidate list.
@@ -158,10 +159,10 @@ export function searchAddress(
     return request<AddressResult>(params);
 }
 
-export function searchOwner(query: string, reference: string): Promise<OwnerResult> {
-    return request<OwnerResult>({ mode: 'owner', q: query, ref: reference });
+export function searchOwner(query: string): Promise<OwnerResult> {
+    return request<OwnerResult>({ mode: 'owner', q: query });
 }
 
-export function fetchTitleReport(titleNo: string, reference: string): Promise<TitleReport> {
-    return request<TitleReport>({ mode: 'title', title_no: titleNo, ref: reference });
+export function fetchTitleReport(titleNo: string): Promise<TitleReport> {
+    return request<TitleReport>({ mode: 'title', title_no: titleNo });
 }
