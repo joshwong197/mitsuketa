@@ -346,17 +346,14 @@ export const FindScreen: React.FC<FindScreenProps> = ({
             fontWeight: 600,
             fontSize: 'clamp(28px, 4vw, 40px)',
             letterSpacing: '.01em',
-            margin: '0 0 6px',
+            // Carries the gap to the search box itself — the gloss line that used
+            // to sit between them is gone, so its bottom margin moves up here.
+            margin: '0 0 34px',
           }}
         >
           <span style={{ letterSpacing: '.16em' }}>見つけた</span>
           <span style={{ color: 'var(--ink-mid)', marginLeft: 14 }}>(Mitsuketa)</span>
         </h2>
-        {/* The kanji now carries the name, so the gloss keeps only what the
-            masthead did not already say. */}
-        <p className="text-ink-mid" style={{ fontSize: 13, margin: '0 0 34px' }}>
-          &quot;found it&quot; — search the NZ registers and say it yourself
-        </p>
 
         {/* Big search */}
         {findFace && (

@@ -57,9 +57,11 @@ disqualified directors.
 Already done as a hedge: nothing user-facing calls this a "residential" address
 any more, so no wording has to change in a hurry on the day.
 
-To do: ask the helpdesk the flag question; register for the sandbox they are
-offering before go-live; revisit the match verdict once the answer is known.
-Note the API is offline 7pm–midnight on 17 Nov 2026.
+**Decision (Aug 2026): hold.** The notice above is all the information there is;
+MBIE said further technical specifications are coming. Nothing is being designed
+against guesses. When those specs land: answer the flag question, register for
+the sandbox offered before go-live, and revisit the match verdict. Note the API
+is offline 7pm–midnight on 17 Nov 2026.
 
 **Open question left hanging:** is fbu.com on Microsoft 365 / Entra ID or Google
 Workspace? It decides the phase-2 IdP and was never confirmed.
