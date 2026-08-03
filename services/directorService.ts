@@ -1,5 +1,5 @@
 // Director extraction using NZBN API /entities/{nzbn}/roles endpoint
-import { ApiConfig } from '../types';
+import { ApiConfig } from '../types.js';
 
 export interface Director {
     firstName?: string;
@@ -14,11 +14,11 @@ export interface Director {
 export async function fetchDirectorsFromRolesEndpoint(
     nzbn: string,
     apiKey: string,
-    baseUrl: string
+    baseUrl: string = '/api/proxy'
 ): Promise<Director[]> {
     try {
         const proxyPath = `/nzbn/v5/entities/${nzbn}/roles`;
-        const rolesUrl = `/api/proxy?path=${encodeURIComponent(proxyPath)}`;
+        const rolesUrl = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
 
         console.log(`Fetching directors from proxy for: ${nzbn}`);
 

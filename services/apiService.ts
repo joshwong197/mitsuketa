@@ -1,7 +1,18 @@
-import { ApiConfig, GraphEdge, GraphNode, NodeType, NZBNFullEntity, EntitySearchResultItem, EntitySearchResponse, CompaniesRoleSearchResult, DebugCallback, LoggerCallback } from '../types';
-import { BASE_API_URL, API_PATHS } from '../constants';
+import { ApiConfig, GraphEdge, GraphNode, NodeType, NZBNFullEntity, EntitySearchResultItem, EntitySearchResponse, CompaniesRoleSearchResult, DebugCallback, LoggerCallback } from '../types.js';
+import { BASE_API_URL, API_PATHS } from '../constants.js';
+import { personId } from '../utils/personId.js';
+import { computePersonRoleFlags } from '../utils/personRoles.js';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Combines a shareholder edge label and a director edge label for the same
+// person/company pair into one — e.g. "▼ Shareholder (30%)" + "▼ Director" →
+// "▼ Director & Shareholder (30%)". Order-independent; keeps whichever
+// percentage either label carried.
+function mergeRoleEdgeLabels(a: string, b: string): string {
+    const pct = a.match(/\((\d+)%\)/) || b.match(/\((\d+)%\)/);
+    return `▼ Director & Shareholder${pct ? ` (${pct[1]}%)` : ''}`;
+}
 
 // PERFORMANCE OPTIMIZATION FEATURE FLAG
 // Set to false to revert to legacy full endpoint fetching (slower but more data)
@@ -25,7 +36,7 @@ class OrgSpider {
     private logger?: LoggerCallback;
 
     // OPTIMIZATION: Entity cache to avoid duplicate fetches
-    private entityCache: Map<string, { name: string, status: string, sourceRegisterUniqueId?: string, timestamp: number }>;
+    private entityCache: Map<string, { name: string, status: string, sourceRegisterUniqueId?: string, roles?: NZBNFullEntity['roles'], timestamp: number }>;
 
     // OPTIMIZATION: Request timing for smart rate limiting
     private requestTimes: number[];
@@ -33,10 +44,10 @@ class OrgSpider {
     // OPTIMIZATION: Roles API response cache (prevents redundant ~11s calls)
     private rolesCache: Map<string, CompaniesRoleSearchResult>;
 
-    constructor(config: ApiConfig, logger?: LoggerCallback) {
+    constructor(config: ApiConfig, logger?: LoggerCallback, baseUrls?: { nzbn?: string; companies?: string }) {
         this.config = config;
-        this.nzbnBaseUrl = `/api/proxy`;
-        this.companiesBaseUrl = `/api/proxy`;
+        this.nzbnBaseUrl = baseUrls?.nzbn ?? `/api/proxy`;
+        this.companiesBaseUrl = baseUrls?.companies ?? `/api/proxy`;
         this.visited = new Set();
         this.nodes = new Map();
         this.edges = [];
@@ -67,7 +78,7 @@ class OrgSpider {
     }
 
     // OPTIMIZATION #3: Entity caching
-    private async getCachedOrFetch(nzbn: string, fetchFn: () => Promise<{ entityName: string, entityStatusDescription: string, sourceRegisterUniqueId?: string }>): Promise<{ entityName: string, entityStatusDescription: string, sourceRegisterUniqueId?: string }> {
+    private async getCachedOrFetch(nzbn: string, fetchFn: () => Promise<{ entityName: string, entityStatusDescription: string, sourceRegisterUniqueId?: string, roles?: NZBNFullEntity['roles'] }>): Promise<{ entityName: string, entityStatusDescription: string, sourceRegisterUniqueId?: string, roles?: NZBNFullEntity['roles'] }> {
         if (!ENABLE_ENTITY_CACHE) {
             // Fallback: Always fetch
             return await fetchFn();
@@ -80,7 +91,8 @@ class OrgSpider {
             return {
                 entityName: cached.name,
                 entityStatusDescription: cached.status,
-                sourceRegisterUniqueId: cached.sourceRegisterUniqueId
+                sourceRegisterUniqueId: cached.sourceRegisterUniqueId,
+                roles: cached.roles
             };
         }
 
@@ -90,6 +102,7 @@ class OrgSpider {
             name: result.entityName,
             status: result.entityStatusDescription,
             sourceRegisterUniqueId: result.sourceRegisterUniqueId,
+            roles: result.roles,
             timestamp: Date.now()
         });
 
@@ -200,7 +213,7 @@ class OrgSpider {
         console.log(`✅ Graph build complete in ${durationSeconds}s (${this.nodes.size} nodes, ${this.edges.length} edges)`);
 
         return {
-            nodes: Array.from(this.nodes.values()),
+            nodes: computePersonRoleFlags(Array.from(this.nodes.values()), this.edges),
             edges: this.edges,
         };
     }
@@ -256,7 +269,10 @@ class OrgSpider {
                     if (holder.individualShareholder) {
                         holderLabel = holder.individualShareholder.fullName ||
                             `${holder.individualShareholder.firstName} ${holder.individualShareholder.lastName}`;
-                        holderId = `IND-${holderLabel.replace(/\s+/g, '-')}-${Math.random().toString(36).substr(2, 5)}`;
+                        // Stable id (personId, not a random suffix) so the same person
+                        // holding shares in multiple subsidiaries collapses to one node —
+                        // see design/HANDOVER.md §3a.
+                        holderId = personId(holderLabel);
                         isPerson = true;
                     } else if (holder.otherShareholder) {
                         holderLabel = holder.otherShareholder.currentEntityName || 'Unknown Company';
@@ -292,9 +308,14 @@ class OrgSpider {
                         }
                     }
 
-                    if (!holderId || this.nodes.has(holderId)) continue;
+                    if (!holderId) continue;
 
-                    // Add Node
+                    // Add Node — addNode() itself no-ops if this id already exists, so a
+                    // person (or company) that recurs across multiple shareholdings still
+                    // gets exactly one node. Do NOT skip the edge below just because the
+                    // node already exists: that would drop this specific relationship
+                    // (see design/HANDOVER.md §3a — one node per person, but every
+                    // shareholding is still its own edge).
                     this.addNode({
                         id: holderId,
                         type: isPerson ? 'personNode' : 'companyNode',
@@ -312,7 +333,7 @@ class OrgSpider {
                     const edgeLabel = sharePercent > 0
                         ? `▼ Shareholder (${sharePercent}%)`
                         : '▼ Shareholder';
-                    this.addEdge(holderId, details.nzbn, edgeLabel, 'parent');
+                    this.addEdge(holderId, details.nzbn, edgeLabel, 'parent', false, isPerson ? 'shareholder' : undefined);
 
                     // Recursive Upstream for Corporate Parents
                     if (!isPerson && parentNzbn && !this.visited.has(parentNzbn)) {
@@ -332,10 +353,16 @@ class OrgSpider {
                 }
             }
         } else if (details.roles && details.roles.length > 0) {
-            // Processing non-company roles (e.g. General Partners of a Limited Partnership)
+            // Processing non-company roles (e.g. General Partners of a Limited Partnership).
+            // Director roles are skipped here — drawDirectorsFromRoles() below handles
+            // every director uniformly, whether or not this entity also has shareholdings.
             for (const role of details.roles) {
-                // Ignore resigned/inactive roles
-                if (role.roleStatus && role.roleStatus.toLowerCase() !== 'active') continue;
+                if ((role.roleType || '').toLowerCase() === 'director') continue;
+
+                // Ceased (resigned/inactive) roles are skipped by default, but kept
+                // as dashed ink-wash edges when includeInactive is on.
+                const roleCeased = !!role.roleStatus && role.roleStatus.toLowerCase() !== 'active';
+                if (roleCeased && !this.config.includeInactive) continue;
 
                 let holderId = '';
                 let holderLabel = '';
@@ -345,7 +372,7 @@ class OrgSpider {
 
                 if (role.rolePerson?.fullName || role.rolePerson?.firstName) {
                     holderLabel = role.rolePerson.fullName || `${role.rolePerson.firstName} ${role.rolePerson.lastName}`;
-                    holderId = `IND-${holderLabel.replace(/\s+/g, '-')}-${Math.random().toString(36).substr(2, 5)}`;
+                    holderId = personId(holderLabel);
                     isPerson = true;
                 } else if (role.roleEntity?.name || role.roleEntity?.nzbn) {
                     holderLabel = role.roleEntity.name || 'Unknown Entity';
@@ -383,7 +410,7 @@ class OrgSpider {
                     continue; // Skip if no person or entity details
                 }
 
-                if (!holderId || this.nodes.has(holderId)) continue;
+                if (!holderId) continue;
 
                 this.addNode({
                     id: holderId,
@@ -399,7 +426,7 @@ class OrgSpider {
                     position: { x: 0, y: 0 }
                 });
 
-                this.addEdge(holderId, details.nzbn, `▼ ${role.roleType}`, 'parent');
+                this.addEdge(holderId, details.nzbn, `▼ ${role.roleType}`, 'parent', roleCeased);
 
                 if (!isPerson && parentNzbn && !this.visited.has(parentNzbn)) {
                     this.visited.add(parentNzbn);
@@ -412,6 +439,49 @@ class OrgSpider {
                     }
                 }
             }
+        }
+
+        // Directors are drawn regardless of whether this entity also has
+        // shareholdings — `roles` is already returned by fetchEntityDetailsFull on
+        // every crawl, so this costs no additional API calls (design/HANDOVER.md §3b).
+        this.drawDirectorsFromRoles(details.roles, details.nzbn);
+    }
+
+    // --- Directors: drawn only, never crawled further upstream by default. ---
+    // A director's OTHER directorships/shareholdings are not followed automatically
+    // (that would cost an extra lookup per director and could blow up a complex
+    // chart); a user who wants that picture uses "Search as Individual" on the
+    // node, which runs a full person search on demand.
+    //
+    // Shared by crawlUpstream (root + upstream parents, via the full entity fetch)
+    // AND crawlDownstream (subsidiaries, via fetchEntitySummaryLight) — both hit the
+    // same NZBN entity endpoint, so `roles` is already in hand either way; this never
+    // triggers an extra API call on its own.
+    private drawDirectorsFromRoles(roles: NZBNFullEntity['roles'] | undefined, companyNzbn: string) {
+        for (const role of roles || []) {
+            if ((role.roleType || '').toLowerCase() !== 'director') continue;
+            if (!role.rolePerson?.fullName && !role.rolePerson?.firstName) continue;
+
+            // Ceased (resigned) directorships are skipped by default, kept as
+            // dashed ink-wash edges when includeInactive is on — same rule as
+            // every other role edge.
+            const roleCeased = !!role.roleStatus && role.roleStatus.toLowerCase() !== 'active';
+            if (roleCeased && !this.config.includeInactive) continue;
+
+            const holderLabel = role.rolePerson.fullName || `${role.rolePerson.firstName} ${role.rolePerson.lastName}`;
+            const holderId = personId(holderLabel);
+
+            this.addNode({
+                id: holderId,
+                type: 'personNode',
+                data: {
+                    label: holderLabel,
+                    type: NodeType.PERSON,
+                },
+                position: { x: 0, y: 0 }
+            });
+
+            this.addEdge(holderId, companyNzbn, '▼ Director', 'parent', roleCeased, 'director');
         }
     }
 
@@ -610,6 +680,11 @@ class OrgSpider {
                         position: { x: 0, y: (depth + 1) * 200 }
                     });
 
+                    // Directors for this subsidiary too — `childSummary` came from the
+                    // same entity fetch as the status/name above, so `roles` is already
+                    // in hand at no extra API cost (see drawDirectorsFromRoles).
+                    this.drawDirectorsFromRoles(childSummary.roles, childNzbn);
+
                     // Recurse downstream (skip for mega-node trustees to avoid 900+ API calls)
                     if (!isMegaNode) {
                         await this.crawlDownstream(childNzbn, childLabel, depth + 1, onDebug, maxDepth);
@@ -678,17 +753,43 @@ class OrgSpider {
         }
     }
 
-    private addEdge(source: string, target: string, label: string, type: 'parent' | 'subsidiary' | 'sibling' | 'common') {
+    private addEdge(source: string, target: string, label: string, type: 'parent' | 'subsidiary' | 'sibling' | 'common', isCeased: boolean = false, roleKind?: 'shareholder' | 'director') {
         const id = `e-${source}-${target}`;
-        if (this.edges.some(e => e.id === id)) return;
+        const existing = this.edges.find(e => e.id === id);
+        if (existing) {
+            // Same person, same company, already has an edge from an earlier call
+            // (e.g. shareholder AND director of the one company) — merge into a
+            // single 'both' edge rather than adding a second edge on the exact
+            // same node pair. Both nodes only ever have one handle per side, so a
+            // real layout draws two same-pair edges as coincident lines with
+            // overlapping, illegible labels — confirmed against a live chart.
+            const existingKind = existing.data?.roleKind;
+            if (roleKind && existingKind && existingKind !== roleKind) {
+                existing.data!.roleKind = 'both';
+                existing.data!.label = mergeRoleEdgeLabels(existing.data!.label, label);
+                if (!existing.data!.isCeased && !isCeased) {
+                    existing.style = { stroke: 'var(--ink-mid)', strokeWidth: 1.6, strokeDasharray: '5 4', opacity: 0.8 };
+                }
+            }
+            return;
+        }
 
+        // Status ramp edge dye: current roles solid ink-mid, ceased roles
+        // dashed ink-wash (App.tsx restyles by depth, but exports/snapshots
+        // keep these token-dyed defaults). Directors control rather than own,
+        // so a director edge is dashed even when active — distinct from a
+        // ceased edge, which is also dashed but faded to ink-wash.
         this.edges.push({
             id,
             source,
             target,
-            data: { percentage: 0, label, relationshipType: type },
+            data: { percentage: 0, label, relationshipType: type, isCeased, roleKind },
             animated: type === 'subsidiary',
-            style: { stroke: type === 'sibling' ? '#94a3b8' : '#2563eb' },
+            style: isCeased
+                ? { stroke: 'var(--ink-wash)', strokeWidth: 1.4, strokeDasharray: '6 5', opacity: 0.75 }
+                : roleKind === 'director'
+                    ? { stroke: 'var(--ink-mid)', strokeWidth: 1.6, strokeDasharray: '5 4', opacity: 0.8 }
+                    : { stroke: type === 'sibling' ? 'var(--ink-wash)' : 'var(--ink-mid)' },
             markerEnd: 'arrowclosed' as any // Fix: Use string instead of object
         });
     }
@@ -850,9 +951,11 @@ async function fetchEntityStatusOnly(nzbn: string, config: ApiConfig, baseUrl: s
 }
 
 
-// SELECTIVE OPTIMIZATION: Summary for subsidiaries (name + status only)
+// SELECTIVE OPTIMIZATION: Summary for subsidiaries (name + status — but same
+// endpoint/payload as the full fetch, so `roles` is included at no extra cost;
+// it's what lets crawlDownstream draw directors for subsidiaries for free).
 // Uses direct primary key lookup instead of slow full-text search
-async function fetchEntitySummaryLight(nzbn: string, config: ApiConfig, baseUrl: string, logger?: LoggerCallback): Promise<{ entityName: string, entityStatusDescription: string, sourceRegisterUniqueId?: string }> {
+async function fetchEntitySummaryLight(nzbn: string, config: ApiConfig, baseUrl: string, logger?: LoggerCallback): Promise<{ entityName: string, entityStatusDescription: string, sourceRegisterUniqueId?: string, roles?: NZBNFullEntity['roles'] }> {
     try {
         const proxyPath = `${API_PATHS.nzbn}/entities/${encodeURIComponent(nzbn)}`;
         const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
@@ -869,7 +972,8 @@ async function fetchEntitySummaryLight(nzbn: string, config: ApiConfig, baseUrl:
         return {
             entityName: data.entityName,
             entityStatusDescription: data.entityStatusDescription || 'Unknown',
-            sourceRegisterUniqueId: data.sourceRegisterUniqueId || data.sourceRegisterUniqueIdentifier
+            sourceRegisterUniqueId: data.sourceRegisterUniqueId || data.sourceRegisterUniqueIdentifier,
+            roles: data.roles
         };
     } catch (e) {
         console.warn(`Summary check failed for ${nzbn}`, e);
@@ -878,7 +982,7 @@ async function fetchEntitySummaryLight(nzbn: string, config: ApiConfig, baseUrl:
 }
 
 // Smart wrapper: Uses lightweight or full endpoint based on feature flag
-async function fetchEntityDetails(nzbn: string, config: ApiConfig, baseUrl: string, logger?: LoggerCallback): Promise<NZBNFullEntity> {
+export async function fetchEntityDetails(nzbn: string, config: ApiConfig, baseUrl: string = '/api/proxy', logger?: LoggerCallback): Promise<NZBNFullEntity> {
     if (USE_LIGHTWEIGHT_ENDPOINTS) {
         // Fetch lightweight summary
         const summary = await fetchEntitySummary(nzbn, config, baseUrl, logger);
@@ -905,7 +1009,7 @@ async function fetchEntityDetails(nzbn: string, config: ApiConfig, baseUrl: stri
     }
 }
 
-async function fetchRolesByEntityName(name: string, config: ApiConfig, baseUrl: string, logger?: LoggerCallback): Promise<CompaniesRoleSearchResult> {
+export async function fetchRolesByEntityName(name: string, config: ApiConfig, baseUrl: string = '/api/proxy', logger?: LoggerCallback): Promise<CompaniesRoleSearchResult> {
     try {
         // Enclose in double quotes to force exact match and prevent MBIE from doing slow fuzzy searching/OR matching.
         // Without this MBIE will `OR` query every common word across 700k records, taking 30 seconds.
@@ -971,10 +1075,13 @@ async function fetchDirectorsByEntityName(name: string, config: ApiConfig, baseU
     }
 }
 
-export const searchEntities = async (term: string, config: ApiConfig, logger?: LoggerCallback, page: number = 0): Promise<EntitySearchResponse> => {
-    const baseUrl = `/api/proxy`;
-    // Enclose in double quotes to force exact match
-    const encodedTerm = encodeURIComponent(`"${term}"`);
+export const searchEntities = async (term: string, config: ApiConfig, logger?: LoggerCallback, page: number = 0, baseUrl: string = '/api/proxy'): Promise<EntitySearchResponse> => {
+    // Quote name searches for exact-phrase matching, but send NZBN/company
+    // numbers unquoted — the API matches identifiers on raw digits only.
+    const cleaned = term.trim();
+    const digits = cleaned.replace(/[\s-]/g, '');
+    const isNumericId = /^\d{6,13}$/.test(digits);
+    const encodedTerm = encodeURIComponent(isNumericId ? digits : `"${cleaned}"`);
     const proxyPath = `${API_PATHS.nzbn}/entities?search-term=${encodedTerm}&page-size=10&page=${page}`;
     const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
 
@@ -995,8 +1102,8 @@ export const searchEntities = async (term: string, config: ApiConfig, logger?: L
     };
 };
 
-export const generateOrgChart = async (rootNzbn: string, config: ApiConfig, onDebug?: DebugCallback, onLog?: LoggerCallback) => {
-    const spider = new OrgSpider(config, onLog);
+export const generateOrgChart = async (rootNzbn: string, config: ApiConfig, onDebug?: DebugCallback, onLog?: LoggerCallback, baseUrls?: { nzbn?: string; companies?: string }) => {
+    const spider = new OrgSpider(config, onLog, baseUrls);
     return await spider.buildGraph(rootNzbn, onDebug);
 };
 
@@ -1007,10 +1114,14 @@ export const expandNodeDownstream = async (
     existingNodeIds: string[],
     config: ApiConfig,
     onLog?: LoggerCallback,
-    maxDepth: number = 2
+    maxDepth: number = 2,
+    baseUrls?: { nzbn?: string; companies?: string }
 ) => {
-    const spider = new OrgSpider(config, onLog);
+    const spider = new OrgSpider(config, onLog, baseUrls);
     return await spider.expandNode(targetNzbn, targetName, existingNodeIds, maxDepth);
 };
+
+// Expose the OrgSpider class for MCP tools that need direct access (e.g. upstream-only crawls).
+export { OrgSpider };
 
 export const getDirectors = fetchDirectorsByEntityName;

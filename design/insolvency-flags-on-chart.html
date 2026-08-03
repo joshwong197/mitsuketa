@@ -1,0 +1,389 @@
+<title>Mitsuketa — insolvency flags at chart scale</title>
+<style>
+:root{
+  color-scheme: light dark;
+  --acc-l: oklch(0.40 0.095 265); --acc-d: oklch(0.72 0.085 260);
+  --paper: light-dark(oklch(0.952 0.007 85), oklch(0.185 0.008 75));
+  --paper2: light-dark(oklch(0.930 0.008 85), oklch(0.225 0.009 75));
+  --ink: light-dark(oklch(0.235 0.014 65), oklch(0.905 0.012 85));
+  --ink-mid: light-dark(oklch(0.44 0.012 65), oklch(0.68 0.012 85));
+  --ink-pale: light-dark(oklch(0.62 0.010 70), oklch(0.50 0.010 80));
+  --ink-wash: light-dark(oklch(0.78 0.009 75), oklch(0.35 0.009 75));
+  --rule: light-dark(oklch(0.855 0.008 80), oklch(0.30 0.010 75));
+  --accent: light-dark(var(--acc-l), var(--acc-d));
+  --accent-ink: light-dark(oklch(0.965 0.006 85), oklch(0.185 0.008 75));
+  --crit: light-dark(oklch(0.55 0.17 30), oklch(0.66 0.17 30));
+  --amber: light-dark(oklch(0.60 0.10 78), oklch(0.72 0.10 78));
+  --green: light-dark(oklch(0.50 0.08 150), oklch(0.68 0.09 150));
+  --serif:"Shippori Mincho","Yu Mincho","Hiragino Mincho ProN","Noto Serif JP",serif;
+  --gothic:"Zen Kaku Gothic New","Yu Gothic UI","Hiragino Sans","Noto Sans JP","Segoe UI",system-ui,sans-serif;
+  --mono:"Cascadia Mono",Consolas,ui-monospace,monospace;
+  --grain-op:.16;
+}
+:root[data-theme="light"]{color-scheme:light;--grain-op:.16}
+:root[data-theme="dark"]{color-scheme:dark;--grain-op:.09}
+@media (prefers-color-scheme: dark){:root{--grain-op:.09}}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--gothic);font-size:14px;line-height:1.6}
+body::before{content:"";position:fixed;inset:0;z-index:9999;pointer-events:none;opacity:var(--grain-op);
+background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.45 0 0 0 0 0.42 0 0 0 0 0.38 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E")}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px 80px}
+.mast{border-bottom:1px solid var(--rule);padding:44px 0 24px;margin-bottom:8px}
+.eyebrow{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.14em;color:var(--ink-pale)}
+h1{font-family:var(--serif);font-weight:600;font-size:clamp(25px,3.4vw,33px);margin:9px 0 0;line-height:1.18;text-wrap:balance}
+.lede{color:var(--ink-mid);font-size:13.5px;max-width:72ch;margin:12px 0 0}
+h2{font-family:var(--serif);font-weight:600;font-size:19px;margin:42px 0 6px;
+   padding-bottom:7px;border-bottom:1px solid var(--ink);display:flex;align-items:baseline;gap:12px}
+h2 .k{font-size:15px;color:var(--accent);letter-spacing:.1em}
+p{margin:0 0 13px;max-width:74ch}
+code{font-family:var(--mono);font-size:.88em;background:var(--paper2);border:1px solid var(--rule);padding:1px 5px}
+.q{border-left:2px solid var(--accent);background:var(--paper2);padding:14px 17px;margin:18px 0;font-size:13px;max-width:78ch}
+.q.fix{border-left-color:var(--crit)}
+.q p:last-child{margin-bottom:0}
+
+/* ── canvas ───────────────────────────────────────────────────── */
+.frame{border:1px solid var(--rule);background:var(--paper);margin:18px 0 6px}
+.frame-cap{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--rule);
+  padding:8px 14px;font-family:var(--mono);font-size:9.5px;text-transform:uppercase;
+  letter-spacing:.1em;color:var(--ink-pale)}
+.scroll{overflow-x:auto}
+.canvas{position:relative;width:1120px;height:620px;background:var(--paper)}
+.canvas svg{position:absolute;inset:0;width:1120px;height:620px}
+
+/* company meishi */
+.gnode{position:absolute;background:var(--paper);padding:9px 12px;border-style:solid}
+.gnode h3{font-size:12.5px;font-weight:700;margin:0 0 3px;line-height:1.35}
+.gnode .id{font-family:var(--mono);font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--ink-pale);margin:0}
+.gnode .st{font-size:10px;text-transform:uppercase;font-weight:700;letter-spacing:.08em;margin-top:8px}
+.gnode .st.green{color:var(--green)} .gnode .st.pale{color:var(--ink-pale)}
+.d0{border-width:2px;border-color:var(--ink)}
+.d1{border-width:1px;border-color:var(--ink-mid)}
+.d2{border-width:1px;border-color:var(--ink-wash)}
+.d2 h3{color:var(--ink-mid)}
+.amberborder{border-color:var(--amber)}
+.critborder{border-color:var(--crit);border-width:2px}
+.stamp{position:absolute;top:-14px;right:-12px;width:32px;height:32px;display:grid;place-items:center;
+  background:var(--accent);color:var(--accent-ink);font-family:var(--serif);font-weight:700;font-size:17px;
+  transform:rotate(-6deg);box-shadow:inset 0 0 14px oklch(0 0 0 / .22)}
+.chiprow{display:flex;align-items:center;gap:5px;margin-top:8px}
+.k{display:grid;place-items:center;flex:none;width:15px;height:15px;font-family:var(--serif);
+  font-size:11px;line-height:1;color:var(--accent-ink)}
+.k.a{background:var(--amber)} .k.c{background:var(--crit)}
+.lbl{font-size:10px;text-transform:uppercase;font-weight:700;letter-spacing:.08em;white-space:nowrap}
+.lbl.a{color:var(--amber)} .lbl.c{color:var(--crit)}
+.plus{position:absolute;bottom:-10px;right:-9px;background:var(--ink);color:var(--paper);
+  font-size:10px;font-weight:700;padding:2px 7px;font-variant-numeric:tabular-nums}
+
+/* person inkan */
+.pnode{position:absolute;display:flex;align-items:center;gap:10px;background:var(--paper);
+  border-radius:999px;border:1px solid var(--ink-mid);padding:8px 18px 8px 9px;min-width:196px}
+.pnode .seal{position:relative;flex:none;width:30px;height:30px;border-radius:50%;
+  border:1px solid var(--accent);display:grid;place-items:center}
+.pnode .seal::after{content:"";position:absolute;inset:2px;border-radius:50%;
+  border:1px solid oklch(from var(--accent) l c h / .35)}
+.pnode .seal b{font-family:var(--serif);font-size:12px;font-weight:400;color:var(--accent)}
+.pnode .nm{font-size:12.5px;font-weight:700;margin:0}
+.pnode .role{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-pale);margin:0}
+.pnode.amber{border-color:var(--amber)}
+.pnode.amber .seal{border-color:var(--amber)}
+.pnode.amber .seal::after{border-color:oklch(from var(--amber) l c h / .35)}
+.pnode.amber .seal b{color:var(--amber)}
+.pnode.crit{border-color:var(--crit);border-width:2px;padding:7px 17px 7px 8px}
+.pnode.crit .seal{border-color:var(--crit)}
+.pnode.crit .seal::after{border-color:oklch(from var(--crit) l c h / .35)}
+.pnode.crit .seal b{color:var(--crit)}
+
+/* evidence popover, shown in situ */
+.pop{position:absolute;width:330px;background:var(--paper);border:1px solid var(--ink-mid);
+  box-shadow:none;z-index:5}
+.pop-h{display:flex;align-items:center;gap:9px;padding:9px 12px;border-bottom:1px solid var(--rule)}
+.pop-h b{font-size:12.5px}
+.pop-h .tag{margin-left:auto;font-family:var(--mono);font-size:9px;text-transform:uppercase;
+  letter-spacing:.07em;color:var(--amber)}
+.pop dl{display:grid;grid-template-columns:106px minmax(0,1fr);margin:0;padding:4px 12px 8px}
+.pop dt,.pop dd{margin:0;padding:4px 0;border-top:1px solid var(--rule);font-size:11.5px}
+.pop dt{color:var(--ink-pale);text-align:right;padding-right:12px;font-size:10.5px}
+.pop dt:first-of-type,.pop dt:first-of-type + dd{border-top:none}
+.pop .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.pop-f{border-top:1px solid var(--rule);padding:8px 12px;display:flex;gap:12px;flex-wrap:wrap;font-size:10.5px}
+.mt{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:9.5px;
+  text-transform:uppercase;letter-spacing:.05em;color:var(--ink-mid)}
+.dot{width:6px;height:6px;flex:none}
+.dot.g{background:var(--green)} .dot.p{background:var(--ink-wash)}
+.pop-f a{color:var(--accent);text-underline-offset:3px}
+
+/* case file rail */
+.rail{border:1px solid var(--rule);background:var(--paper);max-width:330px}
+.rail-h{font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.1em;
+  color:var(--ink-pale);padding:10px 13px;border-bottom:1px solid var(--rule);
+  display:flex;justify-content:space-between}
+.rail-r{display:flex;align-items:flex-start;gap:9px;padding:9px 13px;border-top:1px solid var(--rule);font-size:12.5px}
+.rail-r:first-of-type{border-top:none}
+.rail-r .g{flex:1;min-width:0}
+.rail-r .s{display:block;font-family:var(--mono);font-size:9.5px;color:var(--ink-pale);margin-top:1px}
+
+.legend{display:flex;flex-wrap:wrap;gap:8px 22px;margin:14px 0 0;font-size:12px;color:var(--ink-mid)}
+.legend span.i{display:inline-flex;align-items:center;gap:6px}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:0 32px}
+ul.dash{list-style:none;margin:0 0 14px;padding:0}
+ul.dash li{display:flex;gap:10px;margin-bottom:8px;color:var(--ink-mid);font-size:13.5px}
+ul.dash li::before{content:"—";color:var(--accent);flex:none;font-family:var(--serif)}
+ul.dash li b{color:var(--ink)}
+ol.dec{margin:0;padding-left:20px;max-width:74ch}
+ol.dec li{margin-bottom:12px;font-size:13.5px}
+.tbl{overflow-x:auto;border:1px solid var(--rule);margin:16px 0}
+table{border-collapse:collapse;width:100%;min-width:600px;font-size:12.5px}
+th,td{text-align:left;padding:9px 13px;border-top:1px solid var(--rule);vertical-align:top}
+thead th{border-top:0;font-family:var(--mono);font-size:9.5px;text-transform:uppercase;
+  letter-spacing:.09em;color:var(--ink-pale);font-weight:400;background:var(--paper2)}
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <div class="eyebrow">Design direction · flags in situ</div>
+  <h1>What the flags look like on an actual company search</h1>
+  <p class="lede">Norak Properties Limited, mid-sized structure: two parents, three subsidiaries,
+  five associated individuals. Faithful to how <code>CustomNodes</code> actually draws meishi cards,
+  inkan pills, depth tiers and status chips — so this is a fair test of whether the flags read at
+  chart scale or just add noise.</p>
+</header>
+
+<div class="q fix">
+  <p><strong>One correction to yesterday's tiers.</strong> I checked <code>statusRamp.ts</code> and
+  the app's existing convention is the opposite of what I proposed: <strong>current</strong>
+  liquidation or receivership is <strong>amber 琥</strong>, and <strong>crit red 紅</strong> is
+  reserved for <em>historic</em> insolvency and disqualification. My last table would have painted a
+  director in red while the liquidated company causing the flag sat in amber right next to him —
+  the person would have looked worse than the event. The tiers below follow the existing ramp
+  instead of fighting it.</p>
+</div>
+
+<h2><span class="k">図</span>The chart</h2>
+
+<div class="frame">
+  <div class="frame-cap"><span>Company · Norak Properties Limited</span><span>13 entities · 3 flagged individuals</span></div>
+  <div class="scroll">
+  <div class="canvas">
+    <svg viewBox="0 0 1120 620" aria-hidden="true">
+      <defs>
+        <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+          <path d="M0,0 L7,3 L0,6 z" fill="var(--ink)" opacity=".6"/>
+        </marker>
+      </defs>
+      <!-- ownership chain, depth 1-2 -->
+      <path d="M575,96 C575,110 575,110 575,126" stroke="var(--ink)" stroke-width="1.3" opacity=".45" fill="none" marker-end="url(#ar)"/>
+      <path d="M575,214 C575,226 575,226 575,240" stroke="var(--ink)" stroke-width="2" opacity=".85" fill="none" marker-end="url(#ar)"/>
+      <!-- target to subsidiaries -->
+      <path d="M545,352 C545,372 430,368 415,390" stroke="var(--ink)" stroke-width="2" opacity=".85" fill="none" marker-end="url(#ar)"/>
+      <path d="M600,352 C600,372 640,372 640,390" stroke="var(--ink)" stroke-width="2" opacity=".85" fill="none" marker-end="url(#ar)"/>
+      <path d="M640,352 C640,372 860,368 872,390" stroke="var(--ink)" stroke-width="2" opacity=".85" fill="none" marker-end="url(#ar)"/>
+      <!-- people to target, person edges 1.6 / .7 -->
+      <path d="M240,180 C330,180 380,250 452,272" stroke="var(--ink)" stroke-width="1.6" opacity=".7" fill="none"/>
+      <path d="M240,256 C330,256 380,278 452,285" stroke="var(--ink)" stroke-width="1.6" opacity=".7" fill="none"/>
+      <path d="M240,332 C330,332 380,306 452,298" stroke="var(--ink)" stroke-width="1.6" opacity=".7" fill="none"/>
+      <path d="M240,408 C330,408 380,330 452,311" stroke="var(--ink)" stroke-width="1.6" opacity=".7" fill="none"/>
+      <path d="M240,484 C340,484 390,350 452,324" stroke="var(--ink)" stroke-width="1.6" opacity=".7" fill="none"/>
+      <!-- Abercrombie also on the two insolvent subsidiaries — sibling wash -->
+      <path d="M150,208 C130,300 150,430 330,432" stroke="var(--ink-wash)" stroke-width="1.4" stroke-dasharray="6 5" opacity=".75" fill="none"/>
+      <path d="M170,208 C200,540 700,590 900,458" stroke="var(--ink-wash)" stroke-width="1.4" stroke-dasharray="6 5" opacity=".75" fill="none"/>
+    </svg>
+
+    <!-- ownership chain -->
+    <div class="gnode d2" style="left:470px;top:8px;width:210px">
+      <h3>ABERCROMBIE FAMILY TRUSTEE LIMITED</h3>
+      <p class="id">NZBN: 9429041188023</p>
+      <div class="st pale">REGISTERED</div>
+    </div>
+
+    <div class="gnode d1" style="left:470px;top:126px;width:210px">
+      <h3>NORAK HOLDINGS LIMITED</h3>
+      <p class="id">NZBN: 9429037761420</p>
+      <div class="st green">REGISTERED</div>
+    </div>
+
+    <div class="gnode d0" style="left:452px;top:240px;width:246px">
+      <div class="stamp">見</div>
+      <h3>NORAK PROPERTIES LIMITED</h3>
+      <p class="id">NZBN: 9429034523456</p>
+      <div class="st green">REGISTERED</div>
+    </div>
+
+    <!-- subsidiaries -->
+    <div class="gnode d1 amberborder" style="left:310px;top:390px;width:210px">
+      <h3>NORAK CONSTRUCTION LIMITED</h3>
+      <p class="id">NZBN: 9429030094117</p>
+      <div class="chiprow"><span class="k a">琥</span><span class="lbl a">IN LIQUIDATION</span></div>
+    </div>
+
+    <div class="gnode d1" style="left:545px;top:390px;width:190px">
+      <h3>NORAK LOGISTICS LIMITED</h3>
+      <p class="id">NZBN: 9429036612884</p>
+      <div class="st green">REGISTERED</div>
+      <div class="plus">+4</div>
+    </div>
+
+    <div class="gnode d1 critborder" style="left:765px;top:390px;width:215px">
+      <h3>PENROSE STORAGE LIMITED</h3>
+      <p class="id">NZBN: 9429029947712</p>
+      <div class="st pale">REMOVED</div>
+      <div class="chiprow"><span class="k c">紅</span><span class="lbl c">PREV: LIQUIDATION</span></div>
+    </div>
+
+    <!-- people -->
+    <div class="pnode amber" style="left:24px;top:152px">
+      <span class="seal"><b>印</b></span>
+      <div>
+        <p class="nm">John Abercrombie</p>
+        <div class="chiprow" style="margin-top:1px"><span class="k a">琥</span><span class="lbl a">2 INSOLVENT COS</span></div>
+      </div>
+    </div>
+
+    <div class="pnode crit" style="left:24px;top:228px">
+      <span class="seal"><b>印</b></span>
+      <div>
+        <p class="nm">Peter Rawiri</p>
+        <div class="chiprow" style="margin-top:1px"><span class="k c">紅</span><span class="lbl c">BANKRUPT · MATCHED</span></div>
+      </div>
+    </div>
+
+    <div class="pnode amber" style="left:24px;top:304px">
+      <span class="seal"><b>印</b></span>
+      <div>
+        <p class="nm">John Smith</p>
+        <div class="chiprow" style="margin-top:1px"><span class="k a">琥</span><span class="lbl a">NAME MATCH · NAP</span></div>
+      </div>
+    </div>
+
+    <div class="pnode" style="left:24px;top:380px">
+      <span class="seal"><b>印</b></span>
+      <div>
+        <p class="nm">Margaret Hale</p>
+        <p class="role">Individual</p>
+      </div>
+    </div>
+
+    <div class="pnode" style="left:24px;top:456px">
+      <span class="seal"><b>印</b></span>
+      <div>
+        <p class="nm">Wei Lin Chen</p>
+        <p class="role">Individual</p>
+      </div>
+    </div>
+
+    <!-- evidence popover, open on John Smith -->
+    <div class="pop" style="left:24px;top:352px">
+      <div class="pop-h">
+        <span class="k a">琥</span><b>John Smith</b><span class="tag">Name match</span>
+      </div>
+      <dl>
+        <dt>Estate</dt><dd>SMITH, John Andrew</dd>
+        <dt>Type</dt><dd>No Asset Procedure</dd>
+        <dt>Status</dt><dd>Discharged</dd>
+        <dt>Adjudicated</dt><dd class="mono">14 Mar 2019</dd>
+        <dt>Estate address</dt><dd>12 Kowhai Street, Hamilton</dd>
+        <dt>Director address</dt><dd>88 Great South Road, Auckland</dd>
+      </dl>
+      <div class="pop-f">
+        <span class="mt"><span class="dot g"></span>Name matches</span>
+        <span class="mt"><span class="dot p"></span>Address differs</span>
+        <a href="#" onclick="return false">Open individual ↗</a>
+      </div>
+    </div>
+  </div>
+  </div>
+</div>
+
+<div class="legend">
+  <span class="i"><span class="k c">紅</span> Record against the person, or a prior insolvency</span>
+  <span class="i"><span class="k a">琥</span> Currently insolvent, or matched on name alone</span>
+  <span class="i" style="color:var(--ink-pale)">Unflagged individuals stay exactly as they are today</span>
+</div>
+
+<h2><span class="k">読</span>Does it read?</h2>
+
+<div class="cols">
+  <div>
+    <ul class="dash">
+      <li><b>Three flags among thirteen nodes.</b> Sparse enough that the eye finds them, which is
+      the whole test. If a chart lit up half its people the marks would stop meaning anything.</li>
+      <li><b>The person never outranks the event.</b> John Abercrombie is amber because the
+      companies causing his flag are amber. Peter Rawiri is red because there's a record against
+      <em>him</em>. That reads correctly left to right.</li>
+      <li><b>Clean individuals are untouched</b> — same pill, same "Individual" line as today. No
+      "no records found" badge, because absence of a flag already says it.</li>
+    </ul>
+  </div>
+  <div>
+    <ul class="dash">
+      <li><b>The flag replaces the "Individual" line</b> rather than adding a row, so pills don't
+      grow and the layout doesn't reflow when flags arrive a few seconds after the chart.</li>
+      <li><b>Penrose Storage shows the existing convention working</b> — removed, and 紅 PREV:
+      LIQUIDATION. Nothing about the company treatment changes.</li>
+      <li><b>The dashed wash edges</b> from Abercrombie to the two insolvent subsidiaries are the
+      existing sibling-edge style, so the reason for his flag is visible on the canvas.</li>
+    </ul>
+  </div>
+</div>
+
+<h2><span class="k">段</span>The corrected tiers</h2>
+
+<div class="tbl">
+  <table>
+    <thead><tr><th>Mark</th><th>Meaning</th><th>Established by</th><th>Cost</th></tr></thead>
+    <tbody>
+      <tr><td><span class="k a">琥</span></td><td><b>N insolvent cos</b></td>
+        <td>Director or shareholder of companies on this chart currently in liquidation,
+        receivership or administration. Structural — no name matching at all. Amber to match
+        the companies themselves.</td><td class="mono">free</td></tr>
+      <tr><td><span class="k c">紅</span></td><td><b>Prior insolvency</b></td>
+        <td>Linked to a company carrying <code>hasHistoricInsolvency</code>. Crit, matching the
+        company's own PREV: mark.</td><td class="mono">free</td></tr>
+      <tr><td><span class="k c">紅</span></td><td><b>Bankrupt · matched</b></td>
+        <td>Personal insolvency where name <em>and</em> address corroborate, using
+        <code>physicalAddress</code> against <code>addressAtAdjudication</code>.</td>
+        <td class="mono">2 calls</td></tr>
+      <tr><td><span class="k c">紅</span></td><td><b>Disqualified</b></td>
+        <td>On the disqualified directors register. Already the app's convention —
+        <code>isDisqualified</code> exists and is rendered, it has simply never been set.</td>
+        <td class="mono">2 calls</td></tr>
+      <tr><td><span class="k a">琥</span></td><td><b>Name match</b></td>
+        <td>Personal insolvency or disqualification on name alone. Shown, labelled, one click
+        from the register record.</td><td class="mono">2 calls</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<h2><span class="k">件</span>And in the case file</h2>
+
+<p>So a sixty-node chart doesn't need hunting.</p>
+
+<div class="rail">
+  <div class="rail-h"><span>Individuals · flags</span><span>3 of 5</span></div>
+  <div class="rail-r"><span class="k c">紅</span>
+    <span class="g">Peter Rawiri<span class="s">Bankrupt · name + address matched</span></span></div>
+  <div class="rail-r"><span class="k a">琥</span>
+    <span class="g">John Abercrombie<span class="s">Director · Norak Construction, Penrose Storage</span></span></div>
+  <div class="rail-r"><span class="k a">琥</span>
+    <span class="g">John Smith<span class="s">NAP 2019 · name match only</span></span></div>
+</div>
+
+<h2><span class="k">決</span>Still need from you</h2>
+
+<ol class="dec">
+  <li><b>Automatic, or a button?</b> The two free tiers cost nothing and I'd always compute them.
+  The personal checks are two calls per unique individual — roughly eighty extra on a forty-director
+  chart. Automatic is the better experience; a button makes the cost a deliberate choice.</li>
+  <li><b>Does amber "name match" go into the exported chart?</b> The evidence card doesn't travel
+  with an exported PNG, so an unverified badge stands alone in a document someone else reads. I'd
+  export the red tiers and the linked-company amber, and hold back name-match — but say if you'd
+  rather it all went.</li>
+  <li><b>Discharged records.</b> Peter Rawiri red because it's corroborated, even though discharged
+  in 2011? Or does currency demote it to amber? I've drawn it red here on the basis that the record
+  is real and the reader can see the date.</li>
+</ol>
+
+</div>

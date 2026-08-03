@@ -1,0 +1,520 @@
+<title>Mitsuketa — Sumi Direction</title>
+<style>
+/* ============ TOKENS — washi & ink, light-dark() driven ============ */
+:root{
+  color-scheme: light dark;
+
+  /* accent schemes — 藍 ai-indigo default; switcher overrides */
+  --acc-l: oklch(0.40 0.095 265);
+  --acc-d: oklch(0.72 0.085 260);
+
+  --paper: light-dark(oklch(0.952 0.007 85), oklch(0.185 0.008 75));
+  --paper2: light-dark(oklch(0.930 0.008 85), oklch(0.225 0.009 75));
+  --ink: light-dark(oklch(0.235 0.014 65), oklch(0.905 0.012 85));
+  --ink-mid: light-dark(oklch(0.44 0.012 65), oklch(0.68 0.012 85));
+  --ink-pale: light-dark(oklch(0.62 0.010 70), oklch(0.50 0.010 80));
+  --ink-wash: light-dark(oklch(0.78 0.009 75), oklch(0.35 0.009 75));
+  --rule: light-dark(oklch(0.855 0.008 80), oklch(0.30 0.010 75));
+  --accent: light-dark(var(--acc-l), var(--acc-d));
+  --accent-ink: light-dark(oklch(0.965 0.006 85), oklch(0.185 0.008 75));
+  --crit: light-dark(oklch(0.55 0.17 30), oklch(0.66 0.17 30));     /* red = danger only */
+  --amber: light-dark(oklch(0.60 0.10 78), oklch(0.72 0.10 78));
+  --green: light-dark(oklch(0.50 0.08 150), oklch(0.68 0.09 150));
+  --grain-op:.35;
+  --serif: "Yu Mincho","Hiragino Mincho ProN","MS PMincho","Iowan Old Style",Palatino,serif;
+  --gothic: "Yu Gothic UI","Hiragino Sans","Segoe UI",system-ui,sans-serif;
+  --mono: "Cascadia Mono",Consolas,ui-monospace,monospace;
+}
+:root[data-accent="matsu"]{--acc-l:oklch(0.44 0.075 155);--acc-d:oklch(0.70 0.085 155)}
+:root[data-accent="karashi"]{--acc-l:oklch(0.55 0.10 80);--acc-d:oklch(0.76 0.10 85)}
+:root[data-theme="light"]{color-scheme: light}
+:root[data-theme="dark"]{color-scheme: dark}
+@media (prefers-color-scheme: dark){ :root{--grain-op:.22} }
+:root[data-theme="light"]{--grain-op:.35}
+:root[data-theme="dark"]{--grain-op:.22}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--gothic);font-size:14px;line-height:1.6}
+/* washi grain — one fixed, pointer-transparent layer, no repaint cost */
+body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:var(--grain-op);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.45 0 0 0 0 0.42 0 0 0 0 0.38 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E")}
+main{position:relative;z-index:1}
+.jp{font-family:var(--serif)}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ============ PAGE CHROME ============ */
+.chrome{max-width:1240px;margin:0 auto;padding:30px 24px 0;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.chrome h1{font-family:var(--serif);font-weight:600;font-size:21px;margin:0;letter-spacing:.01em}
+.chrome h1 em{font-style:normal;color:var(--accent)}
+.chrome .sub{color:var(--ink-mid);font-size:12.5px;margin-top:3px}
+.pickers{display:flex;gap:18px;align-items:center}
+.accpick{display:flex;border:1px solid var(--rule)}
+.accpick button{display:flex;align-items:center;gap:7px;padding:7px 13px;font-size:12px;color:var(--ink-mid);border-right:1px solid var(--rule)}
+.accpick button:last-child{border-right:none}
+.accpick button i{width:11px;height:11px;display:inline-block}
+.accpick button.cur{background:var(--paper2);color:var(--ink)}
+.themepick{border:1px solid var(--rule);padding:7px 13px;font-size:12px;color:var(--ink-mid);display:flex;gap:7px;align-items:center}
+.themepick:hover{color:var(--ink);border-color:var(--ink-mid)}
+.tabs{max-width:1240px;margin:16px auto 0;padding:0 24px;display:flex;border-bottom:1px solid var(--rule)}
+.tabs button{padding:9px 16px;font-size:13px;color:var(--ink-mid);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.stage{max-width:1240px;margin:0 auto;padding:20px 24px 6px}
+.screen{display:none}
+.screen.on{display:block}
+@media (prefers-reduced-motion: no-preference){
+  .screen.on{animation:rise .3s cubic-bezier(.16,1,.3,1)}
+  @keyframes rise{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}
+}
+.footnote{max-width:1240px;margin:0 auto;padding:10px 24px 44px;color:var(--ink-pale);font-size:11.5px}
+
+/* ============ APP FRAME ============ */
+.frame{border:1px solid var(--rule);background:var(--paper);overflow:hidden}
+.appnav{height:54px;display:flex;align-items:center;gap:14px;padding:0 18px;border-bottom:1px solid var(--rule)}
+.hanko{width:30px;height:30px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-family:var(--serif);font-weight:700;font-size:17px;box-shadow:inset 0 0 14px oklch(0 0 0/.22);flex-shrink:0}
+.wordmark{font-family:var(--serif);font-weight:600;font-size:18px;letter-spacing:.02em}
+.wordmark span{font-size:11px;color:var(--ink-mid);letter-spacing:.24em;margin-left:9px}
+.navmeta{margin-left:auto;display:flex;align-items:center;gap:18px;font-size:11.5px;color:var(--ink-mid)}
+.navmeta .ok i{width:7px;height:7px;background:var(--green);display:inline-block;margin-right:6px}
+.navmeta a{color:var(--ink-mid);text-decoration:none;border-bottom:1px solid var(--rule)}
+
+/* ============ THE FIND (screen 1) ============ */
+.find{min-height:620px;display:grid;place-items:center;position:relative;overflow:hidden}
+.find .inner{width:min(660px,88%);position:relative;text-align:center}
+.find h2{font-family:var(--serif);font-weight:600;font-size:clamp(28px,4vw,40px);letter-spacing:.01em;margin:0 0 6px}
+.find .gloss{color:var(--ink-mid);font-size:13px;margin:0 0 34px}
+.find .gloss .jp{letter-spacing:.3em;margin-right:10px;color:var(--ink)}
+.bigsearch{display:flex;border:1px solid var(--ink-mid);background:var(--paper);text-align:left}
+.bigsearch input{flex:1;border:none;background:none;padding:17px 20px;font:inherit;font-size:16px;color:var(--ink)}
+.bigsearch input::placeholder{color:var(--ink-pale)}
+.bigsearch input:focus{outline:none}
+.bigsearch:focus-within{border-color:var(--accent)}
+.bigsearch button{padding:0 26px;background:var(--ink);color:var(--paper);font-size:14px;letter-spacing:.04em;transition:background .15s,color .15s}
+.bigsearch button:hover{background:var(--accent);color:var(--accent-ink)}
+.suggest{border:1px solid var(--rule);border-top:none;text-align:left;background:var(--paper)}
+.suggest .row{display:flex;justify-content:space-between;align-items:baseline;gap:14px;padding:11px 20px;border-bottom:1px solid var(--rule);cursor:pointer}
+.suggest .row:last-child{border-bottom:none}
+.suggest .row:hover{background:var(--paper2)}
+.suggest b{font-weight:600;font-size:13.5px}
+.suggest .id{font-family:var(--mono);font-size:11px;color:var(--ink-mid);font-variant-numeric:tabular-nums;white-space:nowrap}
+.suggest .hit{background:oklch(from var(--accent) l c h/.12)}
+.find .modes{margin-top:26px;font-size:12.5px;color:var(--ink-mid)}
+.find .modes button{border-bottom:1px solid var(--rule);padding:2px 1px;margin:0 8px;color:var(--ink-mid)}
+.find .modes button.cur{color:var(--ink);border-bottom-color:var(--accent)}
+.find kbd{border:1px solid var(--rule);background:var(--paper2);padding:2px 7px;font-family:var(--mono);font-size:11px}
+.enso{position:absolute;left:50%;top:50%;transform:translate(-50%,-54%);width:540px;height:540px;pointer-events:none;opacity:.10}
+.enso circle{fill:none;stroke:var(--ink);stroke-width:10;stroke-linecap:round;stroke-dasharray:1560 200}
+@media (prefers-reduced-motion: no-preference){
+  .enso circle{stroke-dashoffset:1560;animation:draw 1.4s cubic-bezier(.4,0,.2,1) .2s forwards}
+  @keyframes draw{to{stroke-dashoffset:0}}
+}
+
+/* ============ CANVAS (screen 2) ============ */
+.body{display:flex;min-height:640px}
+.rail{width:64px;flex-shrink:0;border-right:1px solid var(--rule);display:flex;flex-direction:column;align-items:center;padding:14px 0;gap:6px}
+.rail button{width:40px;height:40px;display:grid;place-items:center;color:var(--ink-mid);position:relative}
+.rail button:hover{color:var(--ink)}
+.rail button.cur{color:var(--ink)}
+.rail button.cur::before{content:"";position:absolute;left:-12px;top:8px;bottom:8px;width:2px;background:var(--accent)}
+.rail .grow{flex:1}
+.rail svg{display:block}
+.casefile{width:270px;flex-shrink:0;border-right:1px solid var(--rule);display:flex;flex-direction:column}
+.case-head{padding:18px 18px 14px;border-bottom:1px solid var(--rule)}
+.case-head .lbl{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-pale)}
+.case-head h3{font-family:var(--serif);font-weight:600;font-size:17px;margin:4px 0 3px;line-height:1.3}
+.case-head .id{font-family:var(--mono);font-size:11px;color:var(--ink-mid);font-variant-numeric:tabular-nums}
+.case-stats{display:grid;grid-template-columns:1fr 1fr 1fr;border-bottom:1px solid var(--rule)}
+.case-stats div{padding:12px 8px;text-align:center;border-right:1px solid var(--rule)}
+.case-stats div:last-child{border-right:none}
+.case-stats b{display:block;font-family:var(--serif);font-size:20px;font-weight:600}
+.case-stats span{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-pale)}
+.case-stats .alert b{color:var(--crit)}
+.case-list{flex:1;overflow:auto;padding:12px 18px}
+.case-list .lbl{font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-pale);margin-bottom:8px}
+.trailrow{display:flex;gap:10px;padding:7px 0;font-size:12px;color:var(--ink-mid);border-bottom:1px solid oklch(from var(--rule) l c h/.5)}
+.trailrow .t{font-family:var(--mono);font-size:10.5px;color:var(--ink-pale);white-space:nowrap;font-variant-numeric:tabular-nums}
+.case-exports{border-top:1px solid var(--rule);padding:14px 18px}
+.btn{display:block;width:100%;text-align:center;padding:10px 12px;font-size:12.5px;letter-spacing:.02em;margin-bottom:8px;transition:background .15s,border-color .15s,color .15s}
+.btn.primary{background:var(--ink);color:var(--paper)}
+.btn.primary:hover{background:var(--accent);color:var(--accent-ink)}
+.btn.second{border:1px solid var(--rule);color:var(--ink)}
+.btn.second:hover{border-color:var(--ink)}
+
+.canvas{flex:1;position:relative;overflow:auto}
+.graph{position:relative;width:1000px;height:640px}
+.graph svg{position:absolute;inset:0;pointer-events:none}
+.edge{fill:none;stroke:var(--ink);stroke-linecap:round}
+.edge.d1{stroke-width:2;opacity:.85}
+.edge.d2{stroke-width:1.3;opacity:.45}
+.edge.person{stroke-width:1.6;opacity:.7}
+@media (prefers-reduced-motion: no-preference){
+  .inkdraw .edge{stroke-dasharray:var(--len) var(--len);stroke-dashoffset:var(--len);animation:inkline .7s cubic-bezier(.4,0,.2,1) forwards;animation-delay:var(--d,0s)}
+  @keyframes inkline{to{stroke-dashoffset:0}}
+  .inkdraw .gnode{opacity:0;animation:inknode .5s ease-out forwards;animation-delay:var(--d,0s)}
+  .inkdraw .pnode{opacity:0;animation:inknode .5s ease-out forwards;animation-delay:var(--d,0s)}
+  @keyframes inknode{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  .inkdraw .stamped{animation:thunk .38s cubic-bezier(.2,1.6,.4,1) .15s backwards}
+  @keyframes thunk{from{transform:rotate(-6deg) scale(2.1);opacity:0}to{transform:rotate(-6deg) scale(1);opacity:1}}
+}
+.elabel{position:absolute;font-size:10.5px;color:var(--ink-mid);background:var(--paper);padding:1px 5px;font-variant-numeric:tabular-nums}
+.gnode{position:absolute;background:var(--paper);padding:12px 15px;width:225px;transition:transform .15s}
+.gnode:hover{transform:translateY(-1px)}
+.gnode h4{margin:0 0 3px;font-size:12.5px;font-weight:700;line-height:1.35}
+.gnode .id{font-family:var(--mono);font-size:10.5px;font-variant-numeric:tabular-nums}
+.gnode .row{display:flex;align-items:center;gap:7px;margin-top:8px}
+/* ink depth tiers — the system */
+.gnode.d0{border:2px solid var(--ink)}
+.gnode.d1{border:1px solid var(--ink-mid)}
+.gnode.d1 h4{color:var(--ink)}
+.gnode.d1 .id{color:var(--ink-mid)}
+.gnode.d2{border:1px solid var(--ink-wash)}
+.gnode.d2 h4{color:var(--ink-mid)}
+.gnode.d2 .id{color:var(--ink-pale)}
+.gnode.d0 .id{color:var(--ink-mid)}
+.status{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-pale)}
+.status.reg{color:var(--green)}
+.sq{width:19px;height:19px;display:grid;place-items:center;font-family:var(--serif);font-size:11px;color:var(--paper);flex-shrink:0}
+.sq.r{background:var(--crit)}
+.sq.a{background:var(--amber)}
+.sq.g{background:var(--green)}
+.flagtxt{font-size:10px;letter-spacing:.04em;text-transform:uppercase}
+.flagtxt.r{color:var(--crit)}
+.flagtxt.a{color:var(--amber)}
+.stamped{position:absolute;top:-14px;right:-12px;width:32px;height:32px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-family:var(--serif);font-weight:700;font-size:17px;transform:rotate(-6deg);box-shadow:inset 0 0 14px oklch(0 0 0/.22)}
+.morebadge{position:absolute;bottom:-10px;right:-9px;background:var(--ink);color:var(--paper);font-size:10px;font-weight:700;padding:2px 7px;font-variant-numeric:tabular-nums}
+.pnode{position:absolute;display:flex;align-items:center;gap:10px;background:var(--paper);border:1px solid var(--ink-mid);border-radius:999px;padding:8px 18px 8px 9px;transition:transform .15s}
+.pnode:hover{transform:translateY(-1px)}
+.inkan{width:30px;height:30px;border-radius:50%;border:1px solid var(--accent);display:grid;place-items:center;color:var(--accent);font-family:var(--serif);font-size:12px;position:relative;flex-shrink:0}
+.inkan::after{content:"";position:absolute;inset:2px;border-radius:50%;border:1px solid oklch(from var(--accent) l c h/.35)}
+.pnode b{font-size:12.5px;display:block}
+.pnode i{font-style:normal;font-size:10px;color:var(--ink-pale);letter-spacing:.05em;text-transform:uppercase}
+.inklegend{position:absolute;right:16px;bottom:14px;display:flex;align-items:center;gap:10px;font-size:10.5px;color:var(--ink-mid);background:var(--paper);border:1px solid var(--rule);padding:7px 12px}
+.inklegend .chip{display:flex;align-items:center;gap:5px}
+.inklegend i{width:14px;height:3px;display:inline-block}
+.replay{position:absolute;left:16px;bottom:14px;border:1px solid var(--rule);background:var(--paper);padding:7px 13px;font-size:11.5px;color:var(--ink-mid)}
+.replay:hover{color:var(--ink);border-color:var(--ink-mid)}
+
+/* ============ WHY (screen 3) ============ */
+.why{border:1px solid var(--rule);background:var(--paper);padding:38px 44px}
+.why h2{font-family:var(--serif);font-weight:600;font-size:26px;margin:0 0 6px;letter-spacing:.01em}
+.why .lede{color:var(--ink-mid);max-width:64ch;margin:0 0 34px;font-size:14px}
+.whyg{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:36px 44px}
+.why h3{font-size:13px;letter-spacing:.1em;text-transform:uppercase;margin:0 0 10px;display:flex;align-items:center;gap:10px}
+.why h3 .jp{font-size:15px;letter-spacing:.2em;text-transform:none;color:var(--accent)}
+.why p{font-size:13px;color:var(--ink-mid);margin:0 0 10px;max-width:52ch}
+.inkscale{display:flex;align-items:stretch;border:1px solid var(--rule);margin-top:14px}
+.inkscale div{flex:1;padding:14px 12px;text-align:center}
+.inkscale b{display:block;font-family:var(--serif);font-size:17px}
+.inkscale span{font-size:10px;letter-spacing:.1em;text-transform:uppercase}
+.accrow{display:flex;gap:8px;margin-top:14px}
+.accrow .a{flex:1;border:1px solid var(--rule);padding:12px 10px;text-align:center}
+.accrow .a i{display:block;height:26px;margin-bottom:8px}
+.accrow .a b{font-size:12px;display:block}
+.accrow .a span{font-size:10.5px;color:var(--ink-pale)}
+.diff{border-top:1px solid var(--rule);margin-top:36px;padding-top:26px}
+.diff table{width:100%;border-collapse:collapse;font-size:12.5px}
+.diff th{text-align:left;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-pale);padding:0 14px 10px 0;font-weight:600}
+.diff td{padding:9px 14px 9px 0;border-top:1px solid oklch(from var(--rule) l c h/.6);vertical-align:top;color:var(--ink-mid)}
+.diff td:first-child{color:var(--ink);font-weight:600;white-space:nowrap}
+
+@media (max-width:900px){
+  .body{flex-direction:column}
+  .rail{flex-direction:row;width:100%;border-right:none;border-bottom:1px solid var(--rule);padding:6px 12px}
+  .rail button.cur::before{left:8px;right:8px;top:auto;bottom:-7px;width:auto;height:2px}
+  .rail .grow{display:none}
+  .casefile{width:100%;border-right:none;border-bottom:1px solid var(--rule)}
+  .why{padding:26px 20px}
+  .enso{width:360px;height:360px}
+  .chrome{align-items:flex-start}
+}
+</style>
+
+<main>
+<div class="chrome">
+  <div>
+    <h1>Mitsuketa · direction two <em class="jp">「墨」</em> sumi</h1>
+    <div class="sub">Ink on washi, depth you can see. Red now belongs to danger alone; the brand wears its own dye.</div>
+  </div>
+  <div class="pickers">
+    <div class="accpick" role="group" aria-label="Accent scheme">
+      <button class="cur" data-acc=""><i style="background:oklch(0.40 0.095 265)"></i><span class="jp">藍</span> Indigo</button>
+      <button data-acc="matsu"><i style="background:oklch(0.44 0.075 155)"></i><span class="jp">松</span> Pine</button>
+      <button data-acc="karashi"><i style="background:oklch(0.55 0.10 80)"></i><span class="jp">芥</span> Mustard</button>
+    </div>
+    <button class="themepick" id="themepick" aria-label="Toggle light and dark">
+      <svg width="13" height="13" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.4" fill="none" stroke="currentColor" stroke-width="1.2"/><path d="M7 1.6 A5.4 5.4 0 0 1 7 12.4 Z" fill="currentColor"/></svg>
+      <span id="themelabel">Theme</span>
+    </button>
+  </div>
+</div>
+
+<div class="tabs" role="tablist">
+  <button role="tab" aria-selected="true" data-s="f1">The find</button>
+  <button role="tab" aria-selected="false" data-s="f2">Investigation canvas</button>
+  <button role="tab" aria-selected="false" data-s="f3">Why this works</button>
+</div>
+
+<div class="stage">
+
+<!-- ========= SCREEN 1 : THE FIND ========= -->
+<div class="screen on" id="f1">
+<div class="frame">
+  <div class="appnav">
+    <div class="hanko jp">見</div>
+    <div class="wordmark jp">Mitsuketa<span>見つけた</span></div>
+    <div class="navmeta"><span class="ok"><i></i>Registers · connected</span><a href="#" onclick="return false">About</a></div>
+  </div>
+  <div class="find">
+    <svg class="enso" viewBox="0 0 540 540" aria-hidden="true"><circle cx="270" cy="270" r="250"/></svg>
+    <div class="inner">
+      <h2 class="jp">Who owns what?</h2>
+      <p class="gloss"><span class="jp">見つけた</span>mitsuketa · "found it" — search the NZ registers and say it yourself</p>
+      <div class="bigsearch">
+        <input value="meridian pac" aria-label="Search company or person"/>
+        <button>Search</button>
+      </div>
+      <div class="suggest">
+        <div class="row hit"><b>MERIDIAN <u>PAC</u>IFIC HOLDINGS LIMITED</b><span class="id">NZBN 9429038765021</span></div>
+        <div class="row"><b>MERIDIAN <u>PAC</u>IFIC FISHERIES LIMITED</b><span class="id">NZBN 9429031440207</span></div>
+        <div class="row"><b>MERIDIAN <u>PAC</u>KAGING (2019) LIMITED</b><span class="id">NZBN 9429047336168</span></div>
+      </div>
+      <div class="modes">
+        <button class="cur">Companies</button>·<button>People</button>
+        <span style="margin-left:18px"><kbd>Ctrl</kbd> + <kbd>K</kbd> from anywhere</span>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ========= SCREEN 2 : CANVAS ========= -->
+<div class="screen" id="f2">
+<div class="frame">
+  <div class="appnav">
+    <div class="hanko jp">見</div>
+    <div class="wordmark jp">Mitsuketa<span>見つけた</span></div>
+    <div class="navmeta"><span class="ok"><i></i>Registers · connected</span><a href="#" onclick="return false">About</a></div>
+  </div>
+  <div class="body">
+    <nav class="rail" aria-label="Primary">
+      <button class="cur" aria-label="Search" title="Search"><svg width="17" height="17" viewBox="0 0 17 17" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="7" cy="7" r="4.6"/><path d="m10.6 10.6 4 4"/></svg></button>
+      <button aria-label="Snapshots" title="Snapshots"><svg width="17" height="17" viewBox="0 0 17 17" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="3.5" width="13" height="10" /><path d="M2 6.5h13"/></svg></button>
+      <button aria-label="Console" title="Console"><svg width="17" height="17" viewBox="0 0 17 17" fill="none" stroke="currentColor" stroke-width="1.4"><path d="m3 5 3.5 3.5L3 12M8.5 12H14"/></svg></button>
+      <span class="grow"></span>
+      <button aria-label="Settings" title="Settings"><svg width="16" height="16" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.2"><circle cx="7" cy="7" r="2.2"/><path d="M7 1v2M7 11v2M1 7h2M11 7h2M2.8 2.8l1.4 1.4M9.8 9.8l1.4 1.4M11.2 2.8 9.8 4.2M4.2 9.8l-1.4 1.4"/></svg></button>
+    </nav>
+    <aside class="casefile">
+      <div class="case-head">
+        <span class="lbl">Case file</span>
+        <h3 class="jp">Meridian Pacific Holdings</h3>
+        <span class="id">NZBN 9429038765021 · opened 7:42 pm</span>
+      </div>
+      <div class="case-stats">
+        <div><b>14</b><span>Entities</span></div>
+        <div><b>3</b><span>Depth</span></div>
+        <div class="alert"><b>2</b><span>Flags</span></div>
+      </div>
+      <div class="case-list">
+        <span class="lbl">Trail</span>
+        <div class="trailrow"><span class="t">7:42</span><span>Mapped Meridian Pacific Holdings · 9 entities</span></div>
+        <div class="trailrow"><span class="t">7:44</span><span>Expanded Pacific Ventures GP · +4 subsidiaries</span></div>
+        <div class="trailrow"><span class="t">7:45</span><span>Flag · Whakatane Timber in liquidation</span></div>
+        <div class="trailrow"><span class="t">7:47</span><span>Snapshot saved · "Meridian group · full"</span></div>
+      </div>
+      <div class="case-exports">
+        <button class="btn primary">Export interactive chart</button>
+        <button class="btn second">Snapshot · PNG · JSON</button>
+      </div>
+    </aside>
+    <div class="canvas">
+      <div class="graph inkdraw" id="graph">
+        <svg width="1000" height="640" aria-hidden="true">
+          <defs>
+            <marker id="arr2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6.5" markerHeight="6.5" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="var(--ink)" opacity=".6"/></marker>
+          </defs>
+          <path class="edge person" style="--len:150;--d:.15s" d="M158 100 C 178 150, 220 152, 258 180" marker-end="url(#arr2)"/>
+          <path class="edge person" style="--len:150;--d:.2s" d="M420 100 C 410 144, 392 154, 366 178" marker-end="url(#arr2)"/>
+          <path class="edge d1" style="--len:220;--d:.35s" d="M282 272 C 232 322, 196 324, 166 356" marker-end="url(#arr2)"/>
+          <path class="edge d1" style="--len:220;--d:.45s" d="M340 272 C 396 322, 434 324, 466 356" marker-end="url(#arr2)"/>
+          <path class="edge d1" style="--len:420;--d:.55s" d="M382 252 C 540 292, 660 302, 738 356" marker-end="url(#arr2)"/>
+          <path class="edge d2" style="--len:170;--d:.85s" d="M138 456 C 148 494, 168 500, 196 518" marker-end="url(#arr2)"/>
+          <path class="edge d2" style="--len:170;--d:.95s" d="M790 456 C 798 488, 810 496, 824 512" marker-end="url(#arr2)"/>
+        </svg>
+        <span class="elabel" style="left:184px;top:130px">Director</span>
+        <span class="elabel" style="left:396px;top:128px">65%</span>
+        <span class="elabel" style="left:196px;top:306px">100%</span>
+        <span class="elabel" style="left:406px;top:306px">75%</span>
+        <span class="elabel" style="left:566px;top:298px">50%</span>
+        <span class="elabel" style="left:146px;top:480px">100%</span>
+        <span class="elabel" style="left:796px;top:476px">100%</span>
+
+        <div class="pnode" style="left:58px;top:56px;--d:.1s">
+          <span class="inkan jp">印</span>
+          <span><b>Alistair Fong</b><i>Individual</i></span>
+        </div>
+        <div class="pnode" style="left:340px;top:56px;--d:.15s">
+          <span class="inkan jp">印</span>
+          <span><b>Mere Kaipara</b><i>Individual</i></span>
+        </div>
+
+        <div class="gnode d0" style="left:208px;top:180px;width:250px;--d:0s">
+          <div class="stamped jp" title="Search target">見</div>
+          <h4>MERIDIAN PACIFIC HOLDINGS LIMITED</h4>
+          <div class="id">NZBN 9429038765021</div>
+          <div class="row"><span class="status reg">Registered</span></div>
+        </div>
+
+        <div class="gnode d1" style="left:44px;top:356px;--d:.55s">
+          <h4>MERIDIAN COASTAL PROPERTIES LIMITED</h4>
+          <div class="id">NZBN 9429031882236</div>
+          <div class="row"><span class="status reg">Registered</span></div>
+        </div>
+
+        <div class="gnode d1" style="left:362px;top:356px;width:238px;--d:.65s">
+          <h4>WHAKATANE TIMBER LIMITED</h4>
+          <div class="id">NZBN 9429046120974</div>
+          <div class="row"><span class="sq r jp">紅</span><span class="flagtxt r">In liquidation</span></div>
+        </div>
+
+        <div class="gnode d1" style="left:676px;top:356px;width:232px;--d:.75s">
+          <h4>PACIFIC VENTURES GP LIMITED</h4>
+          <div class="id">NZBN 9429035507118</div>
+          <div class="row"><span class="sq a jp">琥</span><span class="flagtxt a">Removal in progress</span></div>
+          <div class="morebadge">+4</div>
+        </div>
+
+        <div class="gnode d2" style="left:106px;top:518px;width:214px;--d:1.05s">
+          <h4>COASTAL RENTALS LIMITED</h4>
+          <div class="id">NZBN 9429048301553</div>
+          <div class="row"><span class="status">Registered</span></div>
+        </div>
+
+        <div class="gnode d2" style="left:742px;top:512px;width:214px;--d:1.15s">
+          <h4>PV NOMINEES LIMITED</h4>
+          <div class="id">NZBN 9429040918822</div>
+          <div class="row"><span class="status">Registered</span></div>
+        </div>
+
+        <button class="replay" id="replay">Redraw ink</button>
+        <div class="inklegend" aria-label="Ink depth legend">
+          <span class="jp" style="letter-spacing:.15em">墨</span>
+          <span class="chip"><i style="background:var(--ink)"></i>target</span>
+          <span class="chip"><i style="background:var(--ink-mid)"></i>1 hop</span>
+          <span class="chip"><i style="background:var(--ink-wash)"></i>2 hops</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ========= SCREEN 3 : WHY ========= -->
+<div class="screen" id="f3">
+<div class="why">
+  <h2>Why this works</h2>
+  <p class="lede">Direction one made Mitsuketa a well-behaved sibling of Mihari. This direction gives it its own temperament: Mihari watches, Mitsuketa finds. Every choice below traces back to that.</p>
+  <div class="whyg">
+    <div>
+      <h3><span class="jp">墨</span>Ink depth is information</h3>
+      <p>Sumi painting grades its ink formally: full strength, half, pale wash. Here the grade encodes hops from your target. The searched entity is pressed in full ink at 2px; each ring outward dilutes. You read investigative distance at a glance, before you read a single name.</p>
+      <div class="inkscale">
+        <div style="background:var(--ink);color:var(--paper)"><b class="jp">濃</b><span>target</span></div>
+        <div style="border-left:1px solid var(--rule)"><b class="jp" style="color:var(--ink-mid)">中</b><span style="color:var(--ink-mid)">1 hop</span></div>
+        <div style="border-left:1px solid var(--rule)"><b class="jp" style="color:var(--ink-pale)">淡</b><span style="color:var(--ink-pale)">2+ hops</span></div>
+      </div>
+    </div>
+    <div>
+      <h3><span class="jp">染</span>The brand wears its own dye</h3>
+      <p>Mihari owns the red hanko. Mitsuketa's seal takes a dye of its own, and red is released to mean danger and nothing else, so a liquidation flag is the only red thing on the canvas. Three candidate dyes, switchable live in the header:</p>
+      <div class="accrow">
+        <div class="a"><i style="background:oklch(0.40 0.095 265)"></i><b>藍 Ai · indigo</b><span>aizome, the working dye. Recommended.</span></div>
+        <div class="a"><i style="background:oklch(0.44 0.075 155)"></i><b>松 Matsu · pine</b><span>steady, forestry-NZ adjacent</span></div>
+        <div class="a"><i style="background:oklch(0.55 0.10 80)"></i><b>芥 Karashi · mustard</b><span>warm, archival, riskiest</span></div>
+      </div>
+    </div>
+    <div>
+      <h3><span class="jp">筆</span>The graph draws itself</h3>
+      <p>Edges are brush lines that draw in when a branch expands, exactly like the approved intro where the ownership web spreads from the stamp. One CSS animation on stroke-dashoffset, GPU-cheap, gone entirely under reduced motion. Motion only ever means "new evidence arrived".</p>
+      <p>Hit "Redraw ink" on the canvas to replay it.</p>
+    </div>
+    <div>
+      <h3><span class="jp">紙</span>Washi, not slate</h3>
+      <p>The ground is paper: a warm-tinted neutral with a static grain layer, one fixed element with zero repaint cost. Dark mode is the ink-stone version of the same sheet, not an inverted blue-black. Registry work is paperwork; the surface says so quietly.</p>
+    </div>
+    <div>
+      <h3><span class="jp">簿</span>A case file, not a sidebar</h3>
+      <p>The panel stops being generic chrome. It is the case: the entity under investigation, counts that matter (entities, depth, flags), and a timestamped trail of what you did. The trail doubles as your audit record, which is what an investigator actually wants to export.</p>
+    </div>
+    <div>
+      <h3><span class="jp">印</span>What survives from direction one</h3>
+      <p>The stamp on the target, inkan rings for people, the 紅琥青 severity squares. Those were the strongest ideas and they stay, re-dyed. The family resemblance to Mihari now lives in these shared marks and the shared severity language, not in a shared palette.</p>
+    </div>
+  </div>
+  <div class="diff">
+    <table>
+      <thead><tr><th>Call it</th><th>Direction one · family editorial</th><th>Direction two · sumi</th></tr></thead>
+      <tbody>
+        <tr><td>Ground</td><td>Cool slate, dot grid, lacquer dark</td><td>Washi grain, ink-stone dark</td></tr>
+        <tr><td>Accent</td><td>Mihari's seal red, shared</td><td>Own dye (indigo / pine / mustard); red means danger only</td></tr>
+        <tr><td>Depth cue</td><td>None, all nodes equal weight</td><td>Ink dilution by hops from target</td></tr>
+        <tr><td>Panel</td><td>Search / snapshots / export sections</td><td>Case file with live trail</td></tr>
+        <tr><td>Landing</td><td>Sidebar plus empty canvas</td><td>Full-bleed search, the find moment</td></tr>
+        <tr><td>Kanji</td><td>Label pattern on every section</td><td>Only where it carries meaning: stamp, seals, severity, ink scale</td></tr>
+        <tr><td>Risk</td><td>Safe, close to Mihari, slightly generic</td><td>Warmer and more opinionated, needs the grain kept subtle</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+</div>
+
+</div>
+
+<div class="footnote">Static mockups with illustrative data. System JP faces stand in for production's subsetted Shippori Mincho and Zen Kaku Gothic New. Both directions share the severity system, the stamp, and the export designs already built.</div>
+</main>
+
+<script>
+document.querySelectorAll('.tabs button').forEach(function(b){
+  b.addEventListener('click', function(){
+    document.querySelectorAll('.tabs button').forEach(function(x){x.setAttribute('aria-selected','false')});
+    b.setAttribute('aria-selected','true');
+    document.querySelectorAll('.screen').forEach(function(s){s.classList.remove('on')});
+    document.getElementById(b.dataset.s).classList.add('on');
+    if(b.dataset.s==='f2') replayInk();
+  });
+});
+function replayInk(){
+  var g=document.getElementById('graph');
+  g.classList.remove('inkdraw');
+  void g.offsetWidth;
+  g.classList.add('inkdraw');
+}
+document.getElementById('replay').addEventListener('click', replayInk);
+
+/* accent switcher */
+document.querySelectorAll('.accpick button').forEach(function(b){
+  b.addEventListener('click', function(){
+    document.querySelectorAll('.accpick button').forEach(function(x){x.classList.remove('cur')});
+    b.classList.add('cur');
+    if(b.dataset.acc) document.documentElement.setAttribute('data-accent', b.dataset.acc);
+    else document.documentElement.removeAttribute('data-accent');
+  });
+});
+
+/* theme toggle — cycles system → light → dark */
+(function(){
+  var pick=document.getElementById('themepick'), lbl=document.getElementById('themelabel');
+  var states=['auto','light','dark'], i=0;
+  var initial=document.documentElement.getAttribute('data-theme');
+  if(initial==='light') i=1; else if(initial==='dark') i=2;
+  render();
+  pick.addEventListener('click', function(){
+    i=(i+1)%3;
+    if(states[i]==='auto') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', states[i]);
+    render();
+  });
+  function render(){ lbl.textContent = states[i]==='auto' ? 'Theme · auto' : 'Theme · '+states[i]; }
+})();
+</script>

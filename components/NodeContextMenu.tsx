@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Maximize2, Eye, Minimize2, ExternalLink } from 'lucide-react';
+import { Users, Maximize2, Eye, Minimize2, ExternalLink, PenLine } from 'lucide-react';
 
 interface NodeContextMenuProps {
     nodeId: string;
@@ -17,6 +17,7 @@ interface NodeContextMenuProps {
     onExpandStructure: (nodeId: string, nzbn: string, label: string) => void;
     onCollapseBranch: (nodeId: string, nzbn: string, label: string) => void;
     onSearchPerson: (name: string) => void;
+    onAddNote: (nodeId: string, nodeLabel: string, nzbn?: string) => void;
 }
 
 export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
@@ -35,8 +36,18 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
     onExpandStructure,
     onCollapseBranch,
     onSearchPerson,
+    onAddNote,
 }) => {
     const menuItems = [
+        {
+            icon: PenLine,
+            label: 'Add note',
+            onClick: () => {
+                onAddNote(nodeId, nodeLabel, nzbn);
+                // onAddNote closes the menu itself (it reuses the menu position
+                // for the editor) — no onClose() here.
+            },
+        },
         {
             icon: ExternalLink,
             label: 'View on Register',
@@ -108,19 +119,19 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
 
             {/* Context Menu */}
             <div
-                className="fixed z-50 bg-white dark:bg-slate-800 rounded-lg shadow-2xl border border-slate-200 dark:border-slate-700 py-1 min-w-[200px]"
+                className="fixed z-50 bg-paper border border-rule py-1 min-w-[200px]"
                 style={{
                     left: `${position.x}px`,
                     top: `${position.y}px`,
                 }}
             >
                 {/* Header */}
-                <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700">
-                    <p className="text-xs font-semibold text-gray-900 dark:text-gray-100 truncate">
+                <div className="px-3 py-2 border-b border-rule">
+                    <p className="text-xs font-semibold text-ink truncate">
                         {nodeLabel}
                     </p>
                     {nzbn && (
-                        <p className="text-[10px] text-gray-500 dark:text-gray-400 font-mono">
+                        <p className="text-[10px] text-ink-mid" style={{ fontFamily: 'var(--mono)' }}>
                             {nzbn}
                         </p>
                     )}
@@ -139,12 +150,12 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
                   w-full px-3 py-2 text-left text-sm flex items-center gap-2
                   transition-colors
                   ${item.disabled
-                                        ? 'text-gray-400 dark:text-gray-600 cursor-not-allowed'
-                                        : 'text-gray-700 dark:text-gray-200 hover:bg-blue-50 dark:hover:bg-slate-700'
+                                        ? 'text-ink-pale cursor-not-allowed'
+                                        : 'text-ink hover:bg-paper2 hover:text-accent'
                                     }
                 `}
                             >
-                                <Icon size={14} />
+                                <Icon size={14} strokeWidth={1.5} />
                                 <span>{item.label}</span>
                             </button>
                         );

@@ -1,0 +1,10 @@
+{
+  "functions": {
+    "api/mcp.ts": {
+      "includeFiles": "mcp/templates/**/*"
+    },
+    "api/property.ts": {
+      "maxDuration": 30
+    }
+  }
+}

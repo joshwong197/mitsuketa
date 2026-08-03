@@ -1,0 +1,585 @@
+<title>Mitsuketa — directors on the chart, and the blocked masthead</title>
+<style>
+:root{
+  color-scheme: light dark;
+  --acc-l: oklch(0.40 0.095 265); --acc-d: oklch(0.72 0.085 260);
+  --paper: light-dark(oklch(0.952 0.007 85), oklch(0.185 0.008 75));
+  --paper2: light-dark(oklch(0.930 0.008 85), oklch(0.225 0.009 75));
+  --ink: light-dark(oklch(0.235 0.014 65), oklch(0.905 0.012 85));
+  --ink-mid: light-dark(oklch(0.44 0.012 65), oklch(0.68 0.012 85));
+  --ink-pale: light-dark(oklch(0.62 0.010 70), oklch(0.50 0.010 80));
+  --ink-wash: light-dark(oklch(0.78 0.009 75), oklch(0.35 0.009 75));
+  --rule: light-dark(oklch(0.855 0.008 80), oklch(0.30 0.010 75));
+  --accent: light-dark(var(--acc-l), var(--acc-d));
+  --accent-ink: light-dark(oklch(0.965 0.006 85), oklch(0.185 0.008 75));
+  --crit: light-dark(oklch(0.55 0.17 30), oklch(0.66 0.17 30));
+  --amber: light-dark(oklch(0.60 0.10 78), oklch(0.72 0.10 78));
+  --green: light-dark(oklch(0.50 0.08 150), oklch(0.68 0.09 150));
+  --serif:"Shippori Mincho","Yu Mincho","Hiragino Mincho ProN","Noto Serif JP",serif;
+  --gothic:"Zen Kaku Gothic New","Yu Gothic UI","Hiragino Sans","Noto Sans JP","Segoe UI",system-ui,sans-serif;
+  --mono:"Cascadia Mono",Consolas,ui-monospace,monospace;
+  --grain-op:.16;
+}
+:root[data-theme="light"]{color-scheme:light;--grain-op:.16}
+:root[data-theme="dark"]{color-scheme:dark;--grain-op:.09}
+@media (prefers-color-scheme: dark){:root{--grain-op:.09}}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--gothic);font-size:14px;line-height:1.6}
+body::before{content:"";position:fixed;inset:0;z-index:9999;pointer-events:none;opacity:var(--grain-op);
+background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.45 0 0 0 0 0.42 0 0 0 0 0.38 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E")}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px 90px}
+.mast{border-bottom:1px solid var(--rule);padding:44px 0 24px;margin-bottom:6px}
+.eyebrow{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.14em;color:var(--ink-pale)}
+h1{font-family:var(--serif);font-weight:600;font-size:clamp(25px,3.4vw,33px);margin:9px 0 0;line-height:1.18;text-wrap:balance}
+.lede{color:var(--ink-mid);font-size:13.5px;max-width:72ch;margin:12px 0 0}
+h2{font-family:var(--serif);font-weight:600;font-size:19px;margin:44px 0 6px;
+   padding-bottom:7px;border-bottom:1px solid var(--ink);display:flex;align-items:baseline;gap:12px}
+h2 .kj{font-size:15px;color:var(--accent);letter-spacing:.1em}
+h3{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-pale);margin:26px 0 8px}
+p{margin:0 0 13px;max-width:74ch}
+code{font-family:var(--mono);font-size:.88em;background:var(--paper2);border:1px solid var(--rule);padding:1px 5px}
+.q{border-left:2px solid var(--accent);background:var(--paper2);padding:14px 17px;margin:18px 0;font-size:13px;max-width:78ch}
+.q.fix{border-left-color:var(--crit)}
+.q p:last-child{margin-bottom:0}
+ul.dash{list-style:none;margin:0 0 14px;padding:0;max-width:74ch}
+ul.dash li{display:flex;gap:10px;margin-bottom:8px;color:var(--ink-mid);font-size:13.5px}
+ul.dash li::before{content:"—";color:var(--accent);flex:none;font-family:var(--serif)}
+ul.dash li b{color:var(--ink)}
+ol.dec{margin:0;padding-left:20px;max-width:74ch}
+ol.dec li{margin-bottom:12px;font-size:13.5px}
+
+.frame{border:1px solid var(--rule);background:var(--paper);margin:18px 0 6px}
+.frame-cap{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--rule);
+  padding:8px 14px;font-family:var(--mono);font-size:9.5px;text-transform:uppercase;
+  letter-spacing:.1em;color:var(--ink-pale)}
+.frame-cap .bad{color:var(--crit)} .frame-cap .good{color:var(--green)}
+.scroll{overflow-x:auto}
+
+/* ── chart ────────────────────────────────────────────────────── */
+.canvas{position:relative;width:1120px;height:560px;background:var(--paper)}
+.canvas svg{position:absolute;inset:0;width:1120px;height:560px}
+.gnode{position:absolute;background:var(--paper);padding:9px 12px;border-style:solid}
+.gnode h3{font-size:12.5px;font-weight:700;margin:0 0 3px;line-height:1.35;
+  font-family:var(--gothic);text-transform:none;letter-spacing:0;color:var(--ink)}
+.gnode .id{font-family:var(--mono);font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--ink-pale);margin:0}
+.gnode .st{font-size:10px;text-transform:uppercase;font-weight:700;letter-spacing:.08em;margin-top:8px}
+.gnode .st.green{color:var(--green)} .gnode .st.pale{color:var(--ink-pale)}
+.d0{border-width:2px;border-color:var(--ink)}
+.d1{border-width:1px;border-color:var(--ink-mid)}
+.d2{border-width:1px;border-color:var(--ink-wash)}
+.d2 h3{color:var(--ink-mid)}
+.amberborder{border-color:var(--amber)}
+.stamp{position:absolute;top:-14px;right:-12px;width:32px;height:32px;display:grid;place-items:center;
+  background:var(--accent);color:var(--accent-ink);font-family:var(--serif);font-weight:700;font-size:17px;
+  transform:rotate(-6deg);box-shadow:inset 0 0 14px oklch(0 0 0 / .22)}
+.chiprow{display:flex;align-items:center;gap:5px;margin-top:8px}
+.k{display:grid;place-items:center;flex:none;width:15px;height:15px;font-family:var(--serif);
+  font-size:11px;line-height:1;color:var(--accent-ink)}
+.k.a{background:var(--amber)} .k.c{background:var(--crit)}
+.lbl{font-size:10px;text-transform:uppercase;font-weight:700;letter-spacing:.08em;white-space:nowrap}
+.lbl.a{color:var(--amber)} .lbl.c{color:var(--crit)}
+
+.pnode{position:absolute;display:flex;align-items:center;gap:10px;background:var(--paper);
+  border-radius:999px;border:1px solid var(--ink-mid);padding:8px 18px 8px 9px;min-width:190px}
+.pnode .seal{position:relative;flex:none;width:30px;height:30px;border-radius:50%;
+  border:1px solid var(--accent);display:grid;place-items:center}
+.pnode .seal::after{content:"";position:absolute;inset:2px;border-radius:50%;
+  border:1px solid oklch(from var(--accent) l c h / .35)}
+.pnode .seal b{font-family:var(--serif);font-size:12px;font-weight:400;color:var(--accent)}
+.pnode .nm{font-size:12.5px;font-weight:700;margin:0}
+.pnode .role{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-pale);margin:0}
+.rk{font-family:var(--serif);font-size:11px;letter-spacing:0;color:var(--ink-mid);margin-right:4px}
+.pnode.crit{border-color:var(--crit);border-width:2px;padding:7px 17px 7px 8px}
+.pnode.crit .seal{border-color:var(--crit)}
+.pnode.crit .seal::after{border-color:oklch(from var(--crit) l c h / .35)}
+.pnode.crit .seal b{color:var(--crit)}
+/* directors: dashed leading ring marks control rather than ownership */
+.pnode.dir .seal{border-style:dashed}
+/* dual role: the ring itself is half solid, half dashed — the arcs are SVG so
+   one circle can carry two stroke styles. */
+.pnode .seal.split{border:0}
+.pnode .seal.split svg{position:absolute;inset:0;width:30px;height:30px}
+.pnode .seal.split b{position:relative;z-index:1}
+.edgelabel{position:absolute;font-family:var(--mono);font-size:9px;letter-spacing:.05em;
+  color:var(--ink-pale);background:var(--paper);padding:0 4px}
+
+.toolbar{position:absolute;left:14px;top:14px;display:flex;gap:0;align-items:center;
+  border:1px solid var(--rule);background:var(--paper);font-size:11.5px}
+.toolbar span{padding:5px 11px;color:var(--ink-pale);font-family:var(--mono);font-size:9.5px;
+  text-transform:uppercase;letter-spacing:.08em;border-right:1px solid var(--rule)}
+.toolbar button{padding:5px 11px;color:var(--ink-mid);border-right:1px solid var(--rule)}
+.toolbar button:last-child{border-right:0}
+.toolbar button[aria-pressed="true"]{background:oklch(from var(--accent) l c h / .12);color:var(--ink)}
+
+/* ── person page mocks ────────────────────────────────────────── */
+.page{padding:20px 22px;background:var(--paper)}
+.pname{font-family:var(--serif);font-weight:600;font-size:34px;line-height:1.1;margin:0}
+.pmeta{font-size:12.5px;color:var(--ink-mid);margin:5px 0 0}
+.kyd{border:1px solid var(--rule);padding:7px 14px;font-size:12.5px;display:inline-flex;align-items:center;gap:8px}
+.kyd .s{font-family:var(--serif);color:var(--accent);font-size:14px}
+
+/* the OLD block, as it renders today */
+.oldcard{border:1px solid var(--rule);background:var(--paper2);padding:12px;display:flex;gap:12px;margin-top:8px}
+.oldcard .big{width:34px;height:34px;flex:none;display:grid;place-items:center;background:var(--crit);
+  color:var(--accent-ink);font-family:var(--serif);font-size:17px}
+.oldcard b{font-size:13px}
+.oldcard .r{font-size:12px;color:var(--crit);margin-top:3px}
+.oldcard .r span{color:var(--ink-mid)}
+.oldcard .m{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--amber);margin-top:5px}
+
+/* the NEW summary strip */
+.strip{border:1px solid var(--rule);margin-top:12px}
+.strip-r{display:flex;align-items:center;gap:11px;padding:9px 13px;border-top:1px solid var(--rule);
+  width:100%;text-align:left}
+.strip-r:first-child{border-top:0}
+.strip-r .g{flex:1;min-width:0;font-size:12.5px}
+.strip-r .g .s{color:var(--ink-mid)}
+.strip-r .cv{font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.06em;
+  color:var(--ink-pale);white-space:nowrap}
+.strip-r .caret{color:var(--ink-pale);font-size:11px;transition:transform .15s}
+.strip-r[aria-expanded="true"] .caret{transform:rotate(90deg)}
+.strip-body{border-top:1px solid var(--rule);background:var(--paper2);padding:2px 13px 10px}
+.strip-body dl{display:grid;grid-template-columns:118px minmax(0,1fr);margin:0}
+.strip-body dt,.strip-body dd{margin:0;padding:5px 0;border-top:1px solid var(--rule);font-size:12px}
+.strip-body dt{color:var(--ink-pale);text-align:right;padding-right:14px;font-size:11px}
+.strip-body .grp{padding-top:9px}
+.strip-body .grp:first-child{padding-top:2px}
+.strip-body .grp b{font-size:12px;display:block;margin-bottom:2px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+/* timeline band */
+.band{position:relative;height:74px;margin:10px 0 4px}
+.band svg{width:100%;height:74px;display:block}
+.bandcap{font-family:var(--mono);font-size:9.5px;color:var(--ink-pale);letter-spacing:.05em}
+
+.sortrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:14px;
+  padding-top:12px;border-top:1px solid var(--rule);font-size:12px}
+.sortrow .lab{font-family:var(--mono);font-size:9.5px;text-transform:uppercase;
+  letter-spacing:.09em;color:var(--ink-pale)}
+.sortrow .b{border:1px solid var(--rule);padding:4px 11px;color:var(--ink-mid)}
+.sortrow .b.on{border-color:var(--accent);color:var(--ink);background:oklch(from var(--accent) l c h / .10)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.cco{border:1px solid var(--rule);padding:10px 12px}
+.cco b{font-size:12.5px;display:block}
+.cco .s{font-family:var(--mono);font-size:10px;color:var(--ink-pale);margin-top:2px;display:block}
+.fold{border-top:1px dashed var(--crit);margin:0;position:relative;height:0}
+.fold span{position:absolute;right:0;top:-9px;background:var(--paper);padding-left:8px;
+  font-family:var(--mono);font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--crit)}
+.tbl2{overflow-x:auto;border:1px solid var(--rule);margin:16px 0;max-width:78ch}
+.tbl2 table{border-collapse:collapse;width:100%;min-width:520px;font-size:12.5px}
+.tbl2 th,.tbl2 td{text-align:left;padding:8px 13px;border-top:1px solid var(--rule);vertical-align:top}
+.tbl2 thead th{border-top:0;font-family:var(--mono);font-size:9.5px;text-transform:uppercase;
+  letter-spacing:.09em;color:var(--ink-pale);font-weight:400;background:var(--paper2)}
+.tbl2 .mono{font-family:var(--mono);font-size:11px}
+.tbl2 .ok{color:var(--green);font-family:var(--mono);font-size:10.5px;text-transform:uppercase}
+.tbl2 .no{color:var(--amber);font-family:var(--mono);font-size:10.5px;text-transform:uppercase}
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <div class="eyebrow">Design direction · directors on the chart · Eco-Smart Residential West Auckland</div>
+  <h1>The chart has no directors on it, and the individual page can't be scrolled past</h1>
+  <p class="lede">You were right on both counts. I confirmed the first in the code rather than the
+  screenshot, and it turns out the director data is already being fetched and thrown away. The
+  second is a layout fault with a straightforward fix that doesn't depend on scroll behaviour.</p>
+</header>
+
+<h2><span class="kj">欠</span>Confirmed: the graph is shareholders only</h2>
+
+<p><code>apiService.ts</code> builds the upstream crawl from <code>shareholdings.shareAllocation
+→ shareholder</code>. Directors never become nodes. There <em>is</em> a
+<code>details.roles</code> branch at line 334 — but it's an <code>else if</code>, so it only runs
+when a company has no shareholdings at all. It exists to catch General Partners of a Limited
+Partnership, not directors of a normal company.</p>
+
+<div class="q">
+  <p><strong>And the data is already in hand.</strong> The NZBN entity response carries a
+  <code>roles</code> collection — "the persons and business entities that are directors, trustees,
+  partners, officers" — and <code>fetchEntityDetailsFull</code> already returns it. Same shape as
+  the property estates: fetched on every crawl, then discarded. Adding directors costs no extra API
+  calls at all.</p>
+</div>
+
+<p>This also makes the insolvency-flag work land properly. Flagging individuals matters most for the
+people with <em>control</em>, and right now those people aren't on the chart — only the ones who own
+shares. On Eco-Smart that's the whole story: Ritesh Mani appears as a director.</p>
+
+<h2><span class="kj">図</span>Eco-Smart with directors shown</h2>
+
+<p class="lede" style="font-size:13px;margin-bottom:4px">The structure below is illustrative — I
+can't reach the NZBN API from here, so I've mocked a plausible shape around the real names from your
+screenshot. The <em>treatments</em> are faithful.</p>
+
+<div class="frame">
+  <div class="frame-cap"><span>Company · Eco-Smart Residential West Auckland Limited</span><span>Directors shown</span></div>
+  <div class="scroll">
+  <div class="canvas">
+    <svg viewBox="0 0 1120 560" aria-hidden="true">
+      <defs><marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+        <path d="M0,0 L7,3 L0,6 z" fill="var(--ink)" opacity=".6"/></marker></defs>
+      <!-- shareholder chain: solid -->
+      <path d="M600,150 C600,168 600,168 600,186" stroke="var(--ink)" stroke-width="2" opacity=".85" fill="none" marker-end="url(#ar)"/>
+      <path d="M600,296 C600,318 520,320 500,340" stroke="var(--ink)" stroke-width="2" opacity=".85" fill="none" marker-end="url(#ar)"/>
+      <path d="M660,296 C660,318 790,322 810,340" stroke="var(--ink)" stroke-width="2" opacity=".85" fill="none" marker-end="url(#ar)"/>
+      <!-- director edges: dashed, control not ownership -->
+      <path d="M258,222 C360,222 440,228 556,236" stroke="var(--ink-mid)" stroke-width="1.6" stroke-dasharray="5 4" opacity=".8" fill="none"/>
+
+      <!-- Mani also directs Land Acquisitions #2 -->
+      <path d="M120,242 C86,330 96,412 210,450" stroke="var(--ink-wash)" stroke-width="1.4" stroke-dasharray="6 5" opacity=".75" fill="none"/>
+      <path d="M262,310 C360,268 460,250 556,248" stroke="var(--ink)" stroke-width="1.6" opacity=".7" fill="none"/>
+      <path d="M262,326 C380,368 480,300 556,274" stroke="var(--ink-mid)" stroke-width="1.6" stroke-dasharray="5 4" opacity=".8" fill="none"/>
+    </svg>
+
+    <div class="toolbar">
+      <span>Show</span>
+      <button aria-pressed="true">Shareholders</button>
+      <button aria-pressed="true">Directors</button>
+      <button aria-pressed="false">Ceased roles</button>
+    </div>
+
+    <div class="gnode d1" style="left:500px;top:78px;width:200px">
+      <h3>ECO-SMART HOLDINGS LIMITED</h3>
+      <p class="id">NZBN: 9429041002233</p>
+      <div class="st green">REGISTERED</div>
+    </div>
+
+    <div class="gnode d0" style="left:556px;top:186px;width:250px">
+      <div class="stamp">見</div>
+      <h3>ECO-SMART RESIDENTIAL WEST AUCKLAND LIMITED</h3>
+      <p class="id">NZBN: 9429046889104</p>
+      <div class="st green">REGISTERED</div>
+    </div>
+
+    <div class="gnode d1 amberborder" style="left:400px;top:340px;width:200px">
+      <h3>ECO-SMART BUILD LIMITED</h3>
+      <p class="id">NZBN: 9429045110877</p>
+      <div class="chiprow"><span class="k a">琥</span><span class="lbl a">IN LIQUIDATION</span></div>
+    </div>
+
+    <div class="gnode d1" style="left:730px;top:340px;width:200px">
+      <h3>ECO-SMART PROJECTS LIMITED</h3>
+      <p class="id">NZBN: 9429047330561</p>
+      <div class="st green">REGISTERED</div>
+    </div>
+
+    <div class="gnode d2" style="left:196px;top:446px;width:190px;opacity:.9">
+      <h3>LAND ACQUISITIONS #2 LIMITED</h3>
+      <p class="id">NZBN: 9429033471902</p>
+      <div class="st pale">REMOVED</div>
+    </div>
+
+    <!-- directors -->
+    <div class="pnode dir crit" style="left:24px;top:196px">
+      <span class="seal"><b>印</b></span>
+      <div>
+        <p class="nm">Ritesh Mani</p>
+        <div class="chiprow" style="margin-top:1px"><span class="rk">締</span><span class="k c">紅</span><span class="lbl c">2 INSOLVENCIES</span></div>
+      </div>
+    </div>
+
+    <div class="pnode" style="left:24px;top:300px">
+      <span class="seal split">
+        <svg viewBox="0 0 30 30" aria-hidden="true">
+          <path d="M15,0.5 A14.5,14.5 0 0,0 15,29.5" fill="none" stroke="var(--accent)" stroke-width="1"/>
+          <path d="M15,0.5 A14.5,14.5 0 0,1 15,29.5" fill="none" stroke="var(--accent)" stroke-width="1" stroke-dasharray="3 2.5"/>
+          <path d="M15,2.5 A12.5,12.5 0 0,0 15,27.5" fill="none" stroke="var(--accent)" stroke-width="1" opacity=".35"/>
+          <path d="M15,2.5 A12.5,12.5 0 0,1 15,27.5" fill="none" stroke="var(--accent)" stroke-width="1" opacity=".35" stroke-dasharray="3 2.5"/>
+        </svg>
+        <b>印</b>
+      </span>
+      <div>
+        <p class="nm">Anjali Mani</p>
+        <p class="role"><span class="rk">株締</span>Shareholder 50% · Director</p>
+      </div>
+    </div>
+
+    <span class="edgelabel" style="left:300px;top:246px">▼ Shareholder 50%</span>
+    <span class="edgelabel" style="left:300px;top:348px">▼ Director</span>
+  </div>
+  </div>
+</div>
+
+<h3>How directors are kept from swamping the chart</h3>
+<ul class="dash">
+  <li><b>A dashed leading ring and a dashed edge.</b> Directors control; shareholders own. Making
+  that visually distinct means a chart with both doesn't read as one undifferentiated crowd — you
+  can see at a glance which people hold shares and which run the thing.</li>
+  <li><b>"Director" replaces "Individual"</b> on the pill, so the role is stated rather than
+  inferred from edge style alone.</li>
+  <li><b>A toolbar toggle, on by default.</b> Shareholders / Directors / Ceased roles, independently.
+  A company with nine directors can be collapsed back to the ownership view in one click, which is
+  the anti-obfuscation escape hatch you asked for.</li>
+  <li><b>Ceased roles stay off by default.</b> The <code>roles</code> collection includes resigned
+  directors; showing them always would double the person count on any long-lived company.</li>
+</ul>
+
+<h2><span class="kj">塞</span>The blocked masthead</h2>
+
+<p>Two discharged insolvencies render as two full cards, roughly 350px, above a
+<code>max-h-[240px]</code> scroller — so you get a nested scrollbar <em>and</em> a masthead that
+still eats the viewport. The comment on that line says the cap exists to stop exactly this; it just
+isn't aggressive enough. Here's today, cropped where your fold was:</p>
+
+<div class="frame">
+  <div class="frame-cap"><span>Today</span><span class="bad">~420px before the first company</span></div>
+  <div class="page">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
+      <div><p class="pname">ritesh mani</p>
+        <p class="pmeta">45 companies found · 43 directorships · 31 shareholdings · 8 active</p></div>
+      <span class="kyd"><span class="s">印</span>KYD Verification</span>
+    </div>
+    <div class="oldcard">
+      <span class="big">紅</span>
+      <div><b>Insolvency · MANI, Ritesh <span style="color:var(--ink-pale);font-weight:400">(CONDITIONAL) DISCHARGED</span></b>
+        <p class="r">Type: <span>Creditor Application</span></p>
+        <p class="r">Adjudication: <span>16 January 2002</span></p>
+        <p class="m">Multiple insolvencies on record</p></div>
+    </div>
+    <div class="oldcard">
+      <span class="big">紅</span>
+      <div><b>Insolvency · MANI, Ritesh <span style="color:var(--ink-pale);font-weight:400">(CONDITIONAL) DISCHARGED</span></b>
+        <p class="r">Type: <span>Creditor Application</span></p>
+        <p class="r">Adjudication: <span>18 August 2011</span></p>
+        <p class="m">Multiple insolvencies on record</p></div>
+    </div>
+    <div class="sortrow">
+      <span class="lab">Sort</span><span class="b on">Directors first</span><span class="b">Shareholding %</span>
+      <span class="lab" style="margin-left:10px">Filter</span><span class="b on">All (45)</span><span class="b">Active (8)</span>
+    </div>
+    <div class="fold"><span>fold</span></div>
+    <div class="grid2" style="opacity:.45">
+      <div class="cco"><b>LAND ACQUISITIONS #2 LIMITED</b><span class="s">Removed</span></div>
+      <div class="cco"><b>ECO-SMART RESIDENTIAL WEST AUCKLAND LIMITED</b><span class="s">Registered</span></div>
+    </div>
+  </div>
+</div>
+
+<h3>Proposed — one summary row per register, collapsed by default</h3>
+
+<div class="frame">
+  <div class="frame-cap"><span>Proposed</span><span class="good">~150px before the first company</span></div>
+  <div class="page">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
+      <div><p class="pname">ritesh mani</p>
+        <p class="pmeta">45 companies · 43 directorships · 31 shareholdings · 8 active</p></div>
+      <span class="kyd"><span class="s">印</span>KYD Verification</span>
+    </div>
+
+    <div class="strip">
+      <button class="strip-r" aria-expanded="true" onclick="var b=this.parentNode.querySelector('.strip-body');var o=this.getAttribute('aria-expanded')==='true';this.setAttribute('aria-expanded',String(!o));b.style.display=o?'none':'block';return false">
+        <span class="k c">紅</span>
+        <span class="g"><b>Insolvency</b> <span class="s">· 2 records · both discharged · 2002, 2011</span></span>
+        <span class="cv">No current</span>
+        <span class="caret">▸</span>
+      </button>
+      <div class="strip-body">
+        <div class="band">
+          <svg viewBox="0 0 900 74" preserveAspectRatio="none" aria-label="Bankruptcy periods against the span of directorships held">
+            <defs>
+              <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                <line x1="0" y1="0" x2="0" y2="6" stroke="var(--crit)" stroke-width="2" opacity=".5"/>
+              </pattern>
+            </defs>
+            <!-- directorships held -->
+            <rect x="70" y="20" width="800" height="9" fill="var(--accent)" opacity=".18"/>
+            <text x="470" y="16" fill="var(--ink-pale)" text-anchor="middle" style="font-family:var(--mono);font-size:9px">directorships held</text>
+            <!-- bankruptcy 1: adjudicated 16 Jan 2002, discharged 2005 -->
+            <rect x="136" y="34" width="94" height="10" fill="var(--crit)" opacity=".9"/>
+            <rect x="230" y="34" width="30" height="10" fill="url(#hatch)"/>
+            <text x="136" y="58" fill="var(--crit)" style="font-family:var(--mono);font-size:9.5px">2002 — 2005</text>
+            <!-- bankruptcy 2: adjudicated 18 Aug 2011, discharged 2014 -->
+            <rect x="419" y="34" width="94" height="10" fill="var(--crit)" opacity=".9"/>
+            <rect x="513" y="34" width="30" height="10" fill="url(#hatch)"/>
+            <text x="419" y="58" fill="var(--crit)" style="font-family:var(--mono);font-size:9.5px">2011 — 2014</text>
+            <!-- ruler -->
+            <line x1="10" y1="68" x2="890" y2="68" stroke="var(--rule)" stroke-width="1"/>
+            <text x="10" y="66" fill="var(--ink-pale)" style="font-family:var(--mono);font-size:9px">1998</text>
+            <text x="880" y="66" fill="var(--ink-pale)" text-anchor="end" style="font-family:var(--mono);font-size:9px">2026</text>
+          </svg>
+        </div>
+        <div class="grp">
+          <b>MANI, Ritesh — Creditor Application</b>
+          <dl>
+            <dt>Adjudicated</dt><dd class="mono">16 January 2002</dd>
+            <dt>Discharged</dt><dd class="mono">16 January 2005 · conditional</dd>
+            <dt>Conditions expire</dt><dd class="mono">16 January 2006</dd>
+          </dl>
+        </div>
+        <div class="grp">
+          <b>MANI, Ritesh — Creditor Application</b>
+          <dl>
+            <dt>Adjudicated</dt><dd class="mono">18 August 2011</dd>
+            <dt>Discharged</dt><dd class="mono">18 August 2014 · conditional</dd>
+            <dt>Conditions expire</dt><dd class="mono">18 August 2015</dd>
+          </dl>
+        </div>
+      </div>
+    </div>
+
+    <div class="sortrow">
+      <span class="lab">Sort</span><span class="b on">Directors first</span><span class="b">Shareholding %</span>
+      <span class="lab" style="margin-left:10px">Filter</span><span class="b on">All (45)</span><span class="b">Active (8)</span>
+    </div>
+    <div class="grid2">
+      <div class="cco"><b>LAND ACQUISITIONS #2 LIMITED</b><span class="s">Removed · Director</span></div>
+      <div class="cco"><b>ECO-SMART RESIDENTIAL WEST AUCKLAND LIMITED</b><span class="s">Registered · Director</span></div>
+    </div>
+  </div>
+</div>
+
+<p class="bandcap" style="margin-top:8px">The strip above is interactive — click the row to
+collapse it and watch the companies rise.</p>
+
+<h3>Why this shape</h3>
+<ul class="dash">
+  <li><b>Collapsed by default, not scroll-driven.</b> You tried auto-collapse on scroll and it
+  didn't hold up — that's because scroll-linked collapse is fighting the browser and fails hardest
+  exactly when content is tall. A default-collapsed disclosure is deterministic: it's the same
+  height every time, on every screen, with no nested scrollbar.</li>
+  <li><b>The summary line already answers the question.</b> "2 records · both discharged · 2002,
+  2011" plus <em>No current</em> is the whole triage. You only expand when the answer matters.</li>
+  <li><b>Currency is called out separately</b> from count, because a current bankruptcy and a
+  discharged one from 2002 are different facts and the old cards weighted them identically.</li>
+  <li><b>The timeline is the creative bit you asked for.</b> Two dates in a list don't tell you
+  anything; two adjudication marks against the span of directorships answer the question a reader
+  actually has — <em>was he running companies while bankrupt?</em> Both marks fall inside the band,
+  which is the finding. It's derived purely from dates we already hold.</li>
+  <li><b>Same strip serves disqualification</b> and the clear state — one row saying "Register
+  checks · clear" rather than a full card announcing nothing.</li>
+</ul>
+
+<h2><span class="kj">同</span>One person, one node — and a bug underneath</h2>
+
+<p>Yes, and it should be one node regardless of how it looks, because the current behaviour is
+wrong. <code>apiService.ts</code> mints person node ids like this:</p>
+
+<p style="max-width:none"><code style="display:inline-block;padding:8px 12px">holderId = `IND-${'$'}{holderLabel.replace(/\s+/g, '-')}-${'$'}{Math.random().toString(36).substr(2, 5)}`</code></p>
+
+<div class="q fix">
+  <p><strong>A random suffix, so people can never deduplicate.</strong> The guard on the next line
+  — <code>if (this.nodes.has(holderId)) continue</code> — can never fire for a person. That means
+  someone holding shares in two subsidiaries <em>already</em> appears as two separate nodes today,
+  before directors enter the picture at all.</p>
+  <p>And the app already assumes otherwise. Case notes are keyed by
+  <code>nzbn ?? personId(label)</code>, and <code>compareService</code> exports a proper stable
+  <code>personId()</code> that normalises and sorts name tokens. Adding a note to a duplicated
+  person highlights every copy of them, because the note system was built expecting the identity
+  the graph never assigned.</p>
+</div>
+
+<p>So the fix is to use the <code>personId()</code> that already exists. One node per person, and
+their relationships become <em>edges</em> — which is the correct model anyway: a role belongs to the
+link between a person and a company, not to the person. Anjali Mani directing one company and
+holding shares in another is two edges from one node, not two Anjalis.</p>
+
+<p>That also turns the chart into something more useful. Once people deduplicate you can see at a
+glance that one individual controls three of five subsidiaries — which is invisible today, because
+they're drawn as three unrelated pills.</p>
+
+<h3>The half-and-half mark</h3>
+
+<p>Rather than invent a new glyph, the ring does it. Directors already get a dashed leading ring and
+shareholders a solid one, so someone who is both gets a ring that is <strong>literally half of
+each</strong> — solid arc on the left for ownership, dashed on the right for control. It's two SVG
+arcs on one circle, and it reads at 30px where two kanji crammed into a square would not.</p>
+
+<p>Both role characters then sit together on the role line — 株締 — with the detail spelled out in
+words beside them. The mark is the signal; the text carries the content. Look at Anjali Mani on the
+chart above: one node, split ring, two labelled edges to the target.</p>
+
+<div class="q">
+  <p><strong>The node shows the union of roles across the whole chart; the edges carry the
+  specifics.</strong> If someone directs company A and holds shares in company B, the pill says
+  株締 and the two edges say which is which. That keeps the node honest without pretending every
+  relationship is the same.</p>
+</div>
+
+<h2><span class="kj">期</span>The dates check out — and there are more than two</h2>
+
+<p>You asked whether the register exposes both ends. It does, and the official schema in
+<code>docs/insolvency-trustee-services.json</code> carries four more fields we currently declare
+nowhere:</p>
+
+<div class="tbl2">
+  <table>
+    <thead><tr><th>Field</th><th>What it gives us</th><th>Read today?</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">adjudicationOrLiquidationDate</td><td>Start of the bankruptcy</td><td class="ok">yes</td></tr>
+      <tr><td class="mono">dischargeOrCompletionDate</td><td>End of it</td><td class="ok">yes</td></tr>
+      <tr><td class="mono">dischargeOrCompletionType</td><td>Reason for discharge</td><td class="no">no</td></tr>
+      <tr><td class="mono">dischargeConditionExpiryDate</td><td>When discharge conditions lapse — this is what "(conditional) discharged" is pointing at</td><td class="no">no</td></tr>
+      <tr><td class="mono">dischargeSuspended</td><td>Boolean. A suspended discharge means still bankrupt</td><td class="no">no</td></tr>
+      <tr><td class="mono">annulmentDate</td><td>Bankruptcy annulled rather than discharged</td><td class="no">no</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>So the timeline becomes a <strong>span, not a point</strong> — I've redrawn it above. Solid bar
+is the bankruptcy period, hatched tail is the conditional-discharge window from
+<code>dischargeConditionExpiryDate</code>.</p>
+
+<div class="q fix">
+  <p><strong>And that changes what the timeline is for.</strong> Two dots told you when something
+  happened. Two bars laid against the directorship band show whether the person held directorships
+  <em>during</em> a bankruptcy — and an undischarged bankrupt is prohibited from managing a company
+  in New Zealand. On this record both periods fall inside the band.</p>
+  <p>The app should state that as a mechanical overlap and nothing more — "2 directorships held
+  during a bankruptcy period" — never as a conclusion that anything was breached. Dates overlap for
+  innocent reasons, the register lags, and that call is the reader's. But it's exactly the kind of
+  thing a person would otherwise have to work out on paper, and we already hold every date needed
+  to compute it.</p>
+</div>
+
+<p><code>dischargeSuspended</code> is worth wiring on its own merits: a suspended discharge means
+the person is still bankrupt regardless of what <code>insolvencyStatus</code> reads, which is
+precisely the case where an amber "historic" flag would be wrong.</p>
+
+<h2><span class="kj">株</span>Different kanji for the two roles</h2>
+
+<p>Agreed, and it costs nothing since the pill already has a role line. Taking the key character of
+each register's own term:</p>
+
+<div class="tbl2">
+  <table>
+    <thead><tr><th>Mark</th><th>Role</th><th>From</th></tr></thead>
+    <tbody>
+      <tr><td><span class="rk" style="font-size:16px">株</span></td><td>Shareholder</td>
+          <td>株主 <em>kabunushi</em> — shareholder. The character means share/stock outright.</td></tr>
+      <tr><td><span class="rk" style="font-size:16px">締</span></td><td>Director</td>
+          <td>取締役 <em>torishimariyaku</em> — company director.</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<p>I deliberately avoided <strong>役</strong>, which would be the obvious pick from 役員, because
+the property report already uses it for easements (地役権). One glyph meaning two unrelated things
+in one app is the kind of thing that reads fine on the day and confuses everyone later.</p>
+
+<p>Placement: the glyph sits on the role line rather than replacing 印 in the ring, so the inkan
+stays the person mark and the role reads as an attribute. On a flagged pill the role glyph survives
+next to the flag — Ritesh Mani above shows 締 紅 together, so you don't lose the role to the alert.</p>
+
+<h2><span class="kj">決</span>Decisions</h2>
+
+<ol class="dec">
+  <li><b>Directors on by default?</b> I've drawn it on, with a toggle. On is right for
+  due-diligence, but it does grow the person count on every chart — say if you'd rather it defaulted
+  off with the toggle to bring them in.</li>
+  <li><b>Do directors get crawled, or just drawn?</b> Drawing them is free. But if a director is
+  also a shareholder of something else, do we follow that upstream like we do for corporate
+  shareholders? Following makes the chart far more revealing and considerably bigger.</li>
+  <li><b>Does the summary strip expand automatically when there's a <em>current</em> insolvency?</b>
+  My instinct is yes — collapsed for historic, open for current, since that's the case where you
+  want the detail without asking. <code>dischargeSuspended</code> should count as current.</li>
+  <li><b>Does the overlap count get stated?</b> "2 directorships held during a bankruptcy period"
+  on the summary line, computed from dates we already hold. I think yes, phrased mechanically —
+  but it is the single most consequential sentence the app would ever generate, so it is your
+  call rather than mine.</li>
+</ol>
+
+</div>
