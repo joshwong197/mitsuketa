@@ -43,6 +43,19 @@ export function hasUsers(env: NodeJS.ProcessEnv = process.env): boolean {
     return Object.keys(env).some(k => k.startsWith(PREFIX) && !!env[k]);
 }
 
+/**
+ * Configured credential variable names — NOT their values.
+ *
+ * For diagnostics only. A deployment silently running in shared-password mode
+ * because it cannot see any PROPERTY_PW_* variable looks identical, from the
+ * browser, to one where every password is wrong; this is what tells the two
+ * apart in `vercel logs`. Names are derived from email addresses and hold no
+ * secret, so they are safe to log — the hashes are never printed.
+ */
+export function configuredUserKeys(env: NodeJS.ProcessEnv = process.env): string[] {
+    return Object.keys(env).filter(k => k.startsWith(PREFIX) && !!env[k]).sort();
+}
+
 /** The stored hash string for a username, or null. This IS the secret. */
 export function storedHash(username: string, env: NodeJS.ProcessEnv = process.env): string | null {
     if (!username) return null;

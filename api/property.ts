@@ -37,7 +37,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createHmac, createHash, timingSafeEqual } from 'node:crypto';
 import { add } from '../utils/audit.js';
-import { authenticate, hasUsers, storedHash, userSessionSecret } from '../utils/propertyUsers.js';
+import { authenticate, configuredUserKeys, envKeyFor, hasUsers, storedHash, userSessionSecret } from '../utils/propertyUsers.js';
 import {
     LDSClient, searchAddress, searchOwner, titleReport,
 } from '../utils/lds.js';
@@ -224,6 +224,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (mode === 'login') {
         if (req.method !== 'POST') return res.status(405).json({ error: 'POST required' });
+
+        // Which mode is live, and which accounts exist. Without this, "the
+        // deployment cannot see any PROPERTY_PW_* variable" and "everyone typed
+        // the wrong password" are indistinguishable from the browser — they were
+        // once, and the shared password quietly answering for one account is
+        // exactly what that looks like. Names only; hashes are never logged.
+        const keys = configuredUserKeys();
+        console.log(`[property] auth mode=${perUser ? 'per-user' : 'shared'}`
+            + ` credentials=${keys.length}${keys.length ? ` [${keys.join(', ')}]` : ''}`
+            + `${perUser && password ? ' (PROPERTY_PASS present but ignored)' : ''}`);
         const body = (req.body ?? {}) as Record<string, unknown>;
         const supplied = str(body.password);
         const searcher = str(body.searcher).slice(0, 120).toLowerCase();
@@ -256,6 +266,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             : !!supplied && sameSecret(supplied, password);
 
         if (!ok) {
+            // Says whether the account exists at all, so a variable named wrongly
+            // is distinguishable from a password typed wrongly. The slug is
+            // derived from what the caller typed and reveals nothing; the client
+            // still gets an undifferentiated 401.
+            if (perUser && !storedHash(searcher)) {
+                console.warn(`[property] no credential variable ${envKeyFor(searcher)}`
+                    + ` — configured: [${configuredUserKeys().join(', ') || 'none'}]`);
+            }
             recordFailure(throttleKeys);
             await add({ action: 'sign-in-failed', searcher, ip });
             return res.status(401).json({ error: 'invalid_credentials' });
