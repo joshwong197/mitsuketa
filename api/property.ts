@@ -16,20 +16,20 @@
 //   2. The LINZ key never leaves the server. The browser talks to this handler.
 //   3. Every search is logged with the reference the searcher supplied.
 //
-// AUTH has two modes, and per-user wins whenever it is configured:
+// AUTH is per-user only: one PROPERTY_PW_<SLUG> variable each, holding that
+// person's password (utils/propertyUsers.ts). Sign in with the address.
 //
-//   per-user  PROPERTY_PW_<SLUG> — one variable each (utils/propertyUsers.ts).
-//             Sign in with an email address and that person's own password.
-//   shared    PROPERTY_PASS — the original single credential, kept only so a
-//             deployment that has not been migrated still works. It is IGNORED
-//             the moment any PROPERTY_PW_* exists, because leaving both live
-//             would make the shared password a standing bypass around per-user
-//             revocation.
+// There is deliberately NO shared-password fallback. The previous PROPERTY_PASS
+// was removed rather than kept as a legacy path, for two reasons: a single
+// credential that still works for everybody is precisely the thing per-user
+// accounts exist to end, and — as this cost an afternoon to diagnose — a
+// deployment that could not see the per-user variables fell back to it
+// silently, so a misconfiguration looked exactly like "everyone typed their
+// password wrong" while whoever knew the shared one sailed in. Now the same
+// misconfiguration is a 503 that says so.
 //
-// The session secret is derived from the credential, so changing it invalidates
-// existing sessions — otherwise rotating a leaked password buys nothing until
-// the old cookies expire. In per-user mode that isolation is per-person:
-// resetting one password signs out that person alone.
+// The session secret is derived from the credential, so changing a password
+// invalidates that person's existing sessions — and only that person's.
 //
 // Identity is still a shared secret, not proof — nothing here verifies that the
 // person typing an address owns that mailbox. The audit log records
@@ -37,7 +37,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createHmac, createHash, timingSafeEqual } from 'node:crypto';
 import { add } from '../utils/audit.js';
-import { authenticate, configuredUserKeys, envKeyFor, hasUsers, storedHash, userSessionSecret } from '../utils/propertyUsers.js';
+import { authenticate, configuredUserKeys, envKeyFor, hasUsers, storedCredential, userSessionSecret } from '../utils/propertyUsers.js';
 import {
     LDSClient, searchAddress, searchOwner, titleReport,
 } from '../utils/lds.js';
@@ -59,9 +59,8 @@ const MAX_REFERENCE = 100;
 // Login throttle
 // --------------------------------------------------------------------------- //
 //
-// scrypt makes one guess cost ~80ms, which is not on its own a defence: an
-// attacker running requests in parallel still gets hundreds of attempts a
-// second, and this endpoint is reachable by anyone holding the deployment URL.
+// This endpoint is reachable by anyone holding the deployment URL, and a stored
+// password is compared in microseconds, so nothing slows a guess down on its own.
 //
 // Counted per account AND per IP, with very different limits, because the two
 // are guarding different things and a shared limit gets one of them wrong:
@@ -117,9 +116,8 @@ function clearAccountFailures(searcher: string): void {
 // Session
 // --------------------------------------------------------------------------- //
 
-// `secret` is the shared password in legacy mode, or the per-user session secret
-// derived from that user's stored hash — never a plaintext password in per-user
-// mode, and never anything the browser sees in either.
+// `secret` is the per-user session secret derived from that person's stored
+// credential — never the credential itself, and never anything the browser sees.
 function sessionKey(secret: string): Buffer {
     return createHmac('sha256', secret).update('mitsuketa-property-session-v1').digest();
 }
@@ -150,16 +148,8 @@ function issueCookie(searcher: string, secret: string, secure: boolean): string 
 
 interface Session { searcher: string }
 
-/**
- * Verifies the cookie against whichever secret issued it.
- *
- * In per-user mode the signing secret is derived from that user's stored hash,
- * so it has to be looked up from the identity inside the payload — which is
- * safe, because the signature is what proves the payload was not edited. A
- * cookie naming a user who no longer exists simply fails to verify, which is
- * how revocation takes effect immediately rather than at cookie expiry.
- */
-function readSession(req: VercelRequest, sharedPassword: string): Session | null {
+/** Verifies the cookie against the secret derived from that user's credential. */
+function readSession(req: VercelRequest): Session | null {
     const raw = req.cookies?.[COOKIE];
     if (!raw) return null;
     const parts = raw.split('.');
@@ -173,14 +163,13 @@ function readSession(req: VercelRequest, sharedPassword: string): Session | null
         return null;
     }
 
-    let secret: string;
-    if (hasUsers()) {
-        const stored = storedHash(searcher);
-        if (!stored) return null; // user removed, or a forged identity
-        secret = userSessionSecret(stored);
-    } else {
-        secret = sharedPassword;
-    }
+    // Looked up from the identity in the payload, which is safe because the
+    // signature is what proves the payload was not edited. A cookie naming a
+    // user who no longer exists simply fails to verify — that is how revoking
+    // someone takes effect on their next request rather than at cookie expiry.
+    const stored = storedCredential(searcher);
+    if (!stored) return null;
+    const secret = userSessionSecret(stored);
 
     const payload = `${exp}.${who}`;
     if (!sameSecret(sig, sign(payload, secret))) return null;
@@ -196,7 +185,6 @@ function readSession(req: VercelRequest, sharedPassword: string): Session | null
 const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-    const password = process.env.PROPERTY_PASS || '';
     const mode = str(req.query.mode);
     const ip = (req.headers['x-forwarded-for'] as string) || undefined;
 
@@ -206,9 +194,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // config state is not the public's business. Note that Vercel binds env
     // vars at BUILD time, so a deployment built before a variable was added
     // will land here until it is redeployed. Check `vercel logs <url>`.
-    const perUser = hasUsers();
     const missing = [
-        !perUser && !password && 'PROPERTY_PASS (or any PROPERTY_PW_*)',
+        !hasUsers() && 'at least one PROPERTY_PW_* credential',
         !process.env.LINZ_API_KEY && 'LINZ_API_KEY',
     ].filter(Boolean);
     if (missing.length > 0) {
@@ -231,18 +218,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // once, and the shared password quietly answering for one account is
         // exactly what that looks like. Names only; hashes are never logged.
         const keys = configuredUserKeys();
-        console.log(`[property] auth mode=${perUser ? 'per-user' : 'shared'}`
-            + ` credentials=${keys.length}${keys.length ? ` [${keys.join(', ')}]` : ''}`
-            + `${perUser && password ? ' (PROPERTY_PASS present but ignored)' : ''}`);
+        console.log(`[property] ${keys.length} credential(s) configured [${keys.join(', ')}]`);
         const body = (req.body ?? {}) as Record<string, unknown>;
         const supplied = str(body.password);
         const searcher = str(body.searcher).slice(0, 120).toLowerCase();
         if (!searcher) {
             return res.status(400).json({
                 error: 'searcher_required',
-                message: perUser
-                    ? 'Enter your work email address.'
-                    : 'Enter your name so searches can be attributed.',
+                message: 'Enter your work email address.',
             });
         }
 
@@ -258,19 +241,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             });
         }
 
-        // Per-user mode: the email selects the credential. Wrong password and
-        // unknown account are indistinguishable to the caller, by design — the
-        // response says neither which it was nor how long it took to decide.
-        const ok = perUser
-            ? authenticate(searcher, supplied)
-            : !!supplied && sameSecret(supplied, password);
+        // The email selects the credential. Wrong password and unknown account
+        // are indistinguishable to the caller, by design — the response says
+        // neither which it was, nor how long it took to decide.
+        const ok = authenticate(searcher, supplied);
 
         if (!ok) {
             // Says whether the account exists at all, so a variable named wrongly
             // is distinguishable from a password typed wrongly. The slug is
             // derived from what the caller typed and reveals nothing; the client
             // still gets an undifferentiated 401.
-            if (perUser && !storedHash(searcher)) {
+            if (!storedCredential(searcher)) {
                 console.warn(`[property] no credential variable ${envKeyFor(searcher)}`
                     + ` — configured: [${configuredUserKeys().join(', ') || 'none'}]`);
             }
@@ -280,9 +261,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
         clearAccountFailures(searcher);
 
-        const stored = perUser ? storedHash(searcher) : null;
-        const secret = stored ? userSessionSecret(stored) : password;
         await add({ action: 'sign-in', searcher, ip });
+        const secret = userSessionSecret(storedCredential(searcher)!);
         res.setHeader('Set-Cookie', issueCookie(searcher, secret, secure));
         return res.status(200).json({ ok: true, searcher });
     }
@@ -294,7 +274,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json({ ok: true });
     }
 
-    const session = readSession(req, password);
+    const session = readSession(req);
     if (!session) {
         await add({ action: 'refused', query: mode, ip });
         return res.status(401).json({ error: 'unauthorised' });

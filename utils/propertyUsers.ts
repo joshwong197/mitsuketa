@@ -1,6 +1,6 @@
 // Per-user credentials for the property feature, held one-per-environment-variable.
 //
-//   PROPERTY_PW_NITESHNI_SWAMI_FBU_COM = scrypt$<salt-hex>$<key-hex>
+//   PROPERTY_PW_NITESHNI_SWAMI_FBU_COM = fiji_lobster_2
 //
 // ONE VARIABLE PER USER, deliberately. The obvious alternative — a single
 // PROPERTY_USERS="a:pw,b:pw" blob — fails the requirement that resetting one
@@ -8,9 +8,16 @@
 // string, from memory if the variable is marked Sensitive, and one slip locks a
 // colleague out. Here, add / reset / revoke each touch exactly one variable.
 //
-// Passwords are never stored. The scrypt hash is what lives in the environment,
-// so dashboard read access yields something unusable rather than a credential
-// people have reused elsewhere.
+// The value is the PASSWORD ITSELF, so it can be set and changed straight from
+// the Vercel dashboard with no tooling in the loop. The trade is real and worth
+// naming: anyone who can read the environment — a teammate, a screen share, an
+// account compromise — reads the passwords. That is acceptable for purpose-made
+// credentials used only here, and not acceptable for a password reused
+// elsewhere.
+//
+// A value of the form `scrypt.<salt>.<key>` is still accepted and verified as a
+// hash, so credentials minted by the earlier tooling keep working and hashing
+// can be reintroduced per-user without a migration.
 
 import { randomBytes, scryptSync, timingSafeEqual, createHash } from 'node:crypto';
 
@@ -56,8 +63,8 @@ export function configuredUserKeys(env: NodeJS.ProcessEnv = process.env): string
     return Object.keys(env).filter(k => k.startsWith(PREFIX) && !!env[k]).sort();
 }
 
-/** The stored hash string for a username, or null. This IS the secret. */
-export function storedHash(username: string, env: NodeJS.ProcessEnv = process.env): string | null {
+/** The stored credential for a username, or null. Password or hash — this IS the secret. */
+export function storedCredential(username: string, env: NodeJS.ProcessEnv = process.env): string | null {
     if (!username) return null;
     return env[envKeyFor(username)] || null;
 }
@@ -97,25 +104,40 @@ export function verifyPassword(password: string, stored: string): boolean {
     }
 }
 
+/** Constant-time equality for plaintext, via digests so lengths always match. */
+function sameString(a: string, b: string): boolean {
+    return timingSafeEqual(
+        createHash('sha256').update(a).digest(),
+        createHash('sha256').update(b).digest());
+}
+
+const isHashed = (stored: string): boolean => /^scrypt[.$]/.test(stored);
+
 /**
- * Runs scrypt even when the user does not exist, so a missing account and a
- * wrong password take the same time. Without this, response timing tells an
- * attacker which addresses are registered.
+ * Verifies a supplied password against whatever is stored — the password itself,
+ * or a scrypt hash if the value looks like one. Never throws.
  */
-const DUMMY_HASH = hashPassword(randomBytes(16).toString('hex'));
+export function verifyCredential(password: string, stored: string): boolean {
+    if (!password || !stored) return false;
+    return isHashed(stored) ? verifyPassword(password, stored) : sameString(password, stored);
+}
 
 export function authenticate(username: string, password: string, env: NodeJS.ProcessEnv = process.env): boolean {
-    const stored = storedHash(username, env);
-    if (!stored) { verifyPassword(password, DUMMY_HASH); return false; }
-    return verifyPassword(password, stored);
+    const stored = storedCredential(username, env);
+    // Compare against a decoy when the account does not exist, so that a missing
+    // account and a wrong password cannot be told apart by response timing.
+    if (!stored) { sameString(password || '', randomBytes(16).toString('hex')); return false; }
+    return verifyCredential(password, stored);
 }
 
 /**
- * Session-signing key for a user: their stored hash, never the password.
+ * Session-signing key for a user, derived from their stored credential — the
+ * credential itself never leaves the server, and this derived value is what
+ * signs the cookie.
  *
  * This is what makes a reset isolated. Change one person's password and their
- * stored hash changes, so their existing cookie no longer verifies and they —
- * and only they — are signed out. Everyone else's sessions continue untouched.
+ * signing secret changes with it, so their existing cookie stops verifying and
+ * they — and only they — are signed out. Everyone else's sessions are untouched.
  */
 export function userSessionSecret(stored: string): string {
     return createHash('sha256').update(`mitsuketa-property-user-v1:${stored}`).digest('base64url');

@@ -3,41 +3,51 @@
 Status: **phase 1 built.** Phase 2 (OIDC) still open. Read this before touching
 `api/property.ts`.
 
-**Shape as shipped** — one environment variable per user, keyed by slugged
-email, holding a scrypt hash:
+**Shape as shipped** — one environment variable per person, keyed by slugged
+email, holding that person's password:
 
 ```
-PROPERTY_PW_NITESHNI_SWAMI_FBU_COM = scrypt$<salt>$<key>
+PROPERTY_PW_YONA_LI_FBU_COM = china_swimming_3
+PROPERTY_PW_JOSHWONG197     = <admin account, a bare username rather than an email>
 ```
 
-`npm run property:user -- someone@fbu.com` mints one. Sign in with the full
-address. Code: `utils/propertyUsers.ts` (slug, hash, verify, session secret),
-`utils/property.pw.ts` (CLI), `api/property.ts` (login + session).
+Sign in with the address. `npm run property:user -- <email>` prints the variable
+name; the value is just the password, set and changed in the Vercel dashboard
+with no tooling in the loop. Code: `utils/propertyUsers.ts`, `api/property.ts`.
 
-`PROPERTY_PASS` still works when **no** `PROPERTY_PW_*` exists, and is ignored
-entirely once one does — leaving both live would make the shared password a
-standing bypass around per-user revocation.
+Passwords were originally scrypt-hashed. That was dropped as too much friction —
+every reset had to go through a hashing step the account owner could not run
+themselves. A `scrypt.<salt>.<key>` value is still accepted and verified as a
+hash, so hashing can return per-account without a migration. The trade being
+made: anyone who can read the environment reads the passwords, which is fine for
+purpose-made credentials used only here and not fine for a password reused
+anywhere else.
+
+**There is no shared password.** `PROPERTY_PASS` was removed rather than kept as
+a fallback. Two reasons, the second learned the hard way: a credential that
+works for everybody is what per-user accounts exist to end, and as a silent
+fallback it made a deployment that could not see the per-user variables look
+exactly like "everyone typed their password wrong" — while whoever knew the
+shared password signed in fine. That misconfiguration is now a 503 that names
+what is missing, and every sign-in logs the credentials it can see.
 
 Why one variable each rather than a `user:pass,user:pass` blob: resetting one
 password must not touch anyone else's. With a blob you rewrite the whole string
 — from memory, if it is marked Sensitive — and one slip locks out a colleague.
 
-The session cookie is signed with the user's **stored hash**, so a reset changes
-their signing secret and signs out that person alone. Deleting their variable
-revokes them immediately rather than at cookie expiry, because `readSession`
-looks the hash up on every request.
+The session cookie is signed with a secret derived from the user's stored
+credential, so a reset changes their signing secret and signs out that person
+alone. Deleting their variable revokes them on the next request rather than at
+cookie expiry, because the credential is looked up every time.
 
-Passwords are never stored, so the variable does not need the Sensitive flag to
-be safe from disclosure — a reader gets a scrypt hash, not a credential. Marking
-it Sensitive is still cheap defence in depth, at the cost of not being able to
-read the value back.
+Sign-in is throttled: 10 failures per account and 100 per IP in 15 minutes. The
+limits differ because a tight IP limit locks out a whole office sharing one
+public address — the first version did exactly that in testing.
 
-Verified by direct test, not inspection: correct/wrong/cross-user passwords,
-unknown accounts, case and whitespace handling, salting, malformed stored
-values, and — the one that matters — that rotating one user changes only that
-user's session secret and leaves everyone else authenticating.
-
----
+Verified against a running server, not by inspection: all six accounts signing
+in with their own passwords, every cross-account password refused, an unknown
+account refused, the throttle locking one account while another on the same IP
+still signs in, and `PROPERTY_PASS` having no effect while present.
 
 ## 1. What is actually true today (verified, not assumed)
 
@@ -56,15 +66,15 @@ personal data into a second store would give it its own retention story.
 **The reference is already mandatory server-side**, not just in the UI —
 `api/property.ts` refuses the request with `reference_required`.
 
-**And it is mandatory *because* the credential is shared.** With one shared
-password the log cannot record *who*, so the reference records *why*. That is
-aimed at the LINZ Licence for Personal Data wanting a record of who searched for
-what. Today the reference is the only real accountability the log carries;
-removing it would leave searches attributable to a free-text name and an IP.
+**It was mandatory *because* the credential was shared.** With one password for
+everyone the log could not record *who*, so the reference recorded *why* — aimed
+at the LINZ Licence for Personal Data wanting a record of who searched for what.
 
-Once identity is verified (§3) the reference stops being load-bearing and
-becomes a genuine product choice. **Do the auth work first, then revisit the
-field** — not the other way round.
+That has partly changed: the log now carries a per-person account rather than a
+free-text name, so the reference is no longer the only accountability there is.
+It is still the only record of *why* a search was run, and identity is still
+self-asserted rather than proven (§2), so dropping it is now a real choice
+rather than an obvious one. Revisit it after phase 2, not before.
 
 Caveat worth carrying: captured ≠ auditable. Platform logs only, not queryable
 in-app, no stated retention period, no deletion routine. `audit.ts` already
@@ -96,30 +106,21 @@ stay honestly distinguishable from post-SSO ones instead of being silently
 conflated. Write the domain-allowlist check now but leave it inert unless
 `verified` is true.
 
-### Phase 1 — explicit person allowlist (buildable today)
+### Phase 1 — per-person credentials — **BUILT**
 
-- `PROPERTY_USERS=email:password,email:password`, e.g.
-  `joshwong197@gmail.com:ABC123`. Takes precedence over `PROPERTY_PASS`; fail
-  closed if neither is set.
-- Login form swaps *name* for *email* — it already requires a name, so it is a
-  straight substitution — and the email becomes the `searcher` in the audit log.
-- Server lower-cases the email, looks it up, `timingSafeEqual`s the password.
-- Cookie keeps its current design but signs with **that user's** password as the
-  HMAC key. This preserves the existing "rotate the credential and sessions die"
-  property, now per-user: changing one password logs out only that person.
-  `readSession` reads the email from the signed payload, looks up that user's
-  password, verifies against it.
+See the summary at the top of this document for the shape as shipped. It differs
+from what was sketched here: one variable per person rather than a
+`PROPERTY_USERS` blob (a blob cannot be edited safely one entry at a time), and
+`PROPERTY_PASS` deleted outright rather than kept as a precedence rule.
 
-Limits to state plainly rather than paper over: this is an allowlist with a
-per-person shared secret, **not verified identity** — nothing proves the person
-typing an address owns that mailbox. Passwords sit in plaintext in an env var,
-which is acceptable for a handful of internal users; storing scrypt hashes is
-the next increment.
+Limits worth restating: this is an allowlist with a per-person secret, **not
+verified identity** — nothing proves the person typing an address owns that
+mailbox, which is why the audit log records `verified: false`.
 
 ### Phase 2 — OIDC, tenant-restricted
 
 Swap the credential check for an OIDC callback, set `verified: true`, switch on
-the domain assertion, delete `PROPERTY_USERS`. Cookie, session, audit and the
+the domain assertion, delete the `PROPERTY_PW_*` variables. Cookie, session, audit and the
 reference gate are all untouched.
 
 **Open question:** is fbu.com on Microsoft 365 / Entra ID or Google Workspace?
@@ -128,19 +129,17 @@ but it was never confirmed, and it decides the library and the app-registration
 paperwork. The registration (client ID + redirect URI, approved by IT) is
 usually the slow part — not the code.
 
-## 4. Running the phase-1 test
+## 4. Testing locally
 
-1. `.env`: `PROPERTY_USERS=joshwong197@gmail.com:ABC123` plus `LINZ_API_KEY`.
-2. **Add `PROPERTY_USERS` to `SERVER_ENV_KEYS` in `vite-api-plugin.ts`.** That
-   plugin copies an explicit allowlist of vars onto `process.env` to emulate the
-   Vercel functions; a var missing from that list is invisible in dev and
-   property fails closed. Easy hour to lose.
-3. `npm run dev` → localhost:3000 → property tab.
-4. Four cases: right email + right password → in; right email + wrong password →
-   refused; a non-allowlisted email + `ABC123` → refused; and `[property-audit]`
-   lines in the terminal carry the email.
-5. On Vercel, add `PROPERTY_USERS` scoped to **Preview only** and redeploy the
-   branch. Never Production — `ABC123` must not outlive the test.
+1. `.env`: `LINZ_API_KEY=...` plus one line per account, e.g.
+   `PROPERTY_PW_YONA_LI_FBU_COM=china_swimming_3`.
+2. `npm run dev` → localhost:3000 → property tab. The dev API plugin matches
+   `PROPERTY_PW_*` by prefix, so new accounts need no plugin change — but note
+   it reads `.env` once at startup, so adding an account means a restart.
+3. Worth covering: each account with its own password; one account's password
+   against another's; an unknown address; and ten failures locking one account
+   while a second still signs in.
 
-The test address is deliberately a gmail one, not `@fbu.com`, so it exercises
-the person-allowlist and domain rules as genuinely independent.
+`vercel logs` shows `[property] N credential(s) configured [...]` on every
+sign-in, and names the variable it looked for when an account has none — which
+is how a mistyped variable name is told apart from a mistyped password.
