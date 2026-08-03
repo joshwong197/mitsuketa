@@ -152,7 +152,7 @@ const SignIn: React.FC = () => {
                     Property titles
                 </h3>
                 <p className="text-ink-mid text-center" style={{ fontSize: 12.5, marginTop: 5 }}>
-                    LINZ Title Register. Restricted to named team members.
+                    LINZ Title Register, restricted access for designated members only
                 </p>
             </div>
 

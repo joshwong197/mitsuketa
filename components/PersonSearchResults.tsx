@@ -339,7 +339,7 @@ const IdentitySpine: React.FC<{
                         )}
                     </>
                 ) : (
-                    <p className="text-ink-pale" style={{ fontSize: '11.5px' }}>No residential address filed against these roles.</p>
+                    <p className="text-ink-pale" style={{ fontSize: '11.5px' }}>No address filed against these roles.</p>
                 )}
 
                 {/* Signature — one, fetched lazily. White ground stays on the frame: the

@@ -2,24 +2,64 @@
 
 ## ⟢ Where this stands (paused 2026-08-01)
 
-Branch **`claude/previous-session-status-0346ac`**, 11 commits on top of the
-handover below, all pushed, **not merged to main**. `npm run build` passes and
-`npx tsc --noEmit` adds no errors over the pre-existing ~23.
+Branch **`claude/previous-session-status-0346ac`**, ~50 commits ahead of main,
+all pushed. `npm run build` passes and `npx tsc --noEmit` adds no errors over
+the pre-existing ~23. Built and checked against live register data on this
+branch's Vercel preview.
 
-Everything below §3 has been built and eyeballed against live register data on
-the Vercel preview for this branch.
+**Note main has never had the property feature at all** — no `api/property.ts`,
+no LINZ code. It exists only on this branch, so merging takes property search to
+production for the first time. Production will need `LINZ_API_KEY` plus the
+`PROPERTY_PW_*` credentials set before that, or property 503s there.
 
-**Next up, in order:**
+**Next up:**
 
-1. **Property access control** — agreed in principle, nothing built. The plan is
-   its own document: **`design/PROPERTY_ACCESS_PLAN.md`**. Read that first; it
-   corrects two wrong assumptions about what the audit log already does, and
-   explains why a `@fbu.com` domain check without an IdP would be weaker than
-   what is shipped today.
-2. **Merge to main** — the user wanted the property work architected before
-   merging, so this branch is deliberately still open.
+1. **Merge to main + custom domain** — the intended next step.
+2. **Property access phase 2 (OIDC)** — per-user passwords are shipped and
+   working; see `design/PROPERTY_ACCESS_PLAN.md`. That document also corrects two
+   wrong assumptions about the audit log, and explains why an `@fbu.com` domain
+   check without an IdP would be weaker than what ships today.
 3. **Landing page** — a public page explaining what Mitsuketa is, with the app
    behind it. Raised, explicitly deferred, nothing designed.
+
+### Dated: Companies Register address change — 18 November 2026
+
+The Companies (Address Information) Amendment Act 2025 comes into force that
+day. A director may then publish an **alternative address** in place of their
+residential one; it may extend to a shareholder living with them. Where that
+happens the residential address is **not public and not in the API** — we get
+the alternative instead. (MBIE notice to API users, received Aug 2026.)
+
+This lands squarely on the address work: `utils/addressSummary.ts`, the identity
+spine's most-used address, and the KYD panel's match verdict are all built on
+`physicalAddress` from entity-roles/v3.
+
+**The question that decides how much work this is:** will the API distinguish an
+alternative address from a residential one — a flag, a type, anything? The
+notice says "the API itself does not need to be updated", which hints at *no*
+distinguishing field. Ask the helpdesk before designing anything, because:
+
+- if it DOES flag them, we label per address and the verdict stays meaningful;
+- if it does NOT, the "all match / N different addresses" verdict becomes
+  unsound. A director who switches part-way leaves older roles showing
+  residential and newer ones showing alternative, so the tool reports a mismatch
+  that is not one. **A false mismatch in a DD tool is worse than no signal**, so
+  the verdict would need softening to a plain list rather than a judgement.
+
+Also exposed, and easy to miss: `api/consent-forms.ts` scrapes the Companies
+Office directors page for the literal string `Residential Address:`. If that
+page relabels the field for directors who have elected an alternative address,
+the scraper silently finds nothing and their signature stops being fetched.
+
+Not affected: LINZ titles/property (a different register), insolvency,
+disqualified directors.
+
+Already done as a hedge: nothing user-facing calls this a "residential" address
+any more, so no wording has to change in a hurry on the day.
+
+To do: ask the helpdesk the flag question; register for the sandbox they are
+offering before go-live; revisit the match verdict once the answer is known.
+Note the API is offline 7pm–midnight on 17 Nov 2026.
 
 **Open question left hanging:** is fbu.com on Microsoft 365 / Entra ID or Google
 Workspace? It decides the phase-2 IdP and was never confirmed.

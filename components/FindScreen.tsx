@@ -349,13 +349,13 @@ export const FindScreen: React.FC<FindScreenProps> = ({
             margin: '0 0 6px',
           }}
         >
-          Who owns what?
+          <span style={{ letterSpacing: '.16em' }}>見つけた</span>
+          <span style={{ color: 'var(--ink-mid)', marginLeft: 14 }}>(Mitsuketa)</span>
         </h2>
+        {/* The kanji now carries the name, so the gloss keeps only what the
+            masthead did not already say. */}
         <p className="text-ink-mid" style={{ fontSize: 13, margin: '0 0 34px' }}>
-          <span style={{ fontFamily: 'var(--serif)', letterSpacing: '.3em', marginRight: 10, color: 'var(--ink)' }}>
-            見つけた
-          </span>
-          mitsuketa · &quot;found it&quot; — search the NZ registers and say it yourself
+          &quot;found it&quot; — search the NZ registers and say it yourself
         </p>
 
         {/* Big search */}

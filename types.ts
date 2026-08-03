@@ -182,7 +182,10 @@ export interface PersonCompanyResult {
   companyNumber?: string; // NZCN - Companies Office company number
   firstName?: string; // Director's first name from API
   lastName?: string; // Director's last name from API
-  physicalAddress?: PhysicalAddress; // Residential address from API
+  physicalAddress?: PhysicalAddress; // Address the register publishes for this role.
+  // Residential today, but from 18 Nov 2026 a director may publish an alternative
+  // address instead (Companies (Address Information) Amendment Act 2025) — so do
+  // not assert to the reader that this is where they live. See design/HANDOVER.md.
   isDirector: boolean;
   shareholding: number; // 0-100 percentage
   status: string;

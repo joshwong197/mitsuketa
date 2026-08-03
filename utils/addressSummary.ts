@@ -1,8 +1,12 @@
 import { PersonCompanyResult } from '../types';
 
 /**
- * Groups a person's company results by the residential address the register
- * holds against each role, most-used first.
+ * Groups a person's company results by the address the register publishes for
+ * each role, most-used first.
+ *
+ * Deliberately not called "residential": from 18 Nov 2026 a director may publish
+ * an alternative address instead, and the API is not expected to say which is
+ * which. See design/HANDOVER.md — the match verdict needs revisiting before then.
  *
  * Pure — every field is already in memory from the person search, so this costs
  * no API calls. That is why the summary can sit on the individual page up front
