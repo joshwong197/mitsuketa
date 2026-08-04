@@ -18,7 +18,7 @@ export const TILE_SIZE = 256;
  * whole grid comes back empty, which is what rural titles need.
  */
 export const MAX_ZOOM = 20;
-const MIN_ZOOM = 1;
+export const MIN_ZOOM = 1;
 
 export interface TileRef { z: number; x: number; y: number }
 
@@ -44,6 +44,66 @@ export function lonLatToPixel(lon: number, lat: number, z: number): [number, num
     const sin = Math.sin(clamp(lat, -85.05112878, 85.05112878) * Math.PI / 180);
     const y = (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * scale;
     return [x, y];
+}
+
+/**
+ * The inverse of `lonLatToPixel`. Panning and cursor-anchored zooming both work
+ * by moving a point in pixel space and asking where on the ground it landed, so
+ * the round trip has to hold to well under a pixel — see utils/tiles.check.ts.
+ */
+export function pixelToLonLat(px: number, py: number, z: number): [number, number] {
+    const scale = TILE_SIZE * Math.pow(2, z);
+    const lon = (px / scale) * 360 - 180;
+    // Clamped to the Mercator limit, so dragging past the pole yields the pole
+    // rather than NaN.
+    const n = Math.PI * (1 - 2 * clamp(py / scale, 0, 1));
+    const lat = (180 / Math.PI) * Math.atan(Math.sinh(n));
+    return [lon, lat];
+}
+
+/**
+ * The tile mosaic covering a `width`×`height` box centred on one point at a
+ * given zoom.
+ *
+ * This is the primitive: `tileGrid` picks a zoom from a bbox and defers here,
+ * and the interactive map calls it directly because pan and zoom are exactly a
+ * centre and a zoom. `z` must be an integer — fractional zoom is a scale
+ * transform applied over an integer tile level, not a different set of tiles.
+ */
+export function gridAt(
+    lon: number, lat: number, z: number, width: number, height: number,
+): TileGrid {
+    const [cx, cy] = lonLatToPixel(lon, lat, z);
+    // Top-left of the visible box in absolute world pixels.
+    const originX = cx - width / 2;
+    const originY = cy - height / 2;
+
+    const scale = Math.pow(2, z);
+    const firstX = Math.floor(originX / TILE_SIZE);
+    const firstY = Math.floor(originY / TILE_SIZE);
+    const lastX = Math.floor((originX + width) / TILE_SIZE);
+    const lastY = Math.floor((originY + height) / TILE_SIZE);
+
+    const tiles: TileGrid['tiles'] = [];
+    for (let x = firstX; x <= lastX; x++) {
+        for (let y = firstY; y <= lastY; y++) {
+            // Off-world tiles do not exist; skip rather than request a 404.
+            if (y < 0 || y >= scale) continue;
+            tiles.push({
+                z, x: ((x % scale) + scale) % scale, y,
+                left: Math.round(x * TILE_SIZE - originX),
+                top: Math.round(y * TILE_SIZE - originY),
+            });
+        }
+    }
+    return { z, tiles, width, height, originX, originY };
+}
+
+/** Tiles the box spans before off-world rows are dropped — the budget figure. */
+function spanCount(grid: TileGrid): number {
+    const across = Math.floor((grid.originX + grid.width) / TILE_SIZE) - Math.floor(grid.originX / TILE_SIZE) + 1;
+    const down = Math.floor((grid.originY + grid.height) / TILE_SIZE) - Math.floor(grid.originY / TILE_SIZE) + 1;
+    return across * down;
 }
 
 /**
@@ -86,37 +146,47 @@ export function tileGrid(
     zoomOut = 0,
 ): TileGrid {
     let z = Math.max(MIN_ZOOM, zoomForBbox(bbox, width, height) - Math.max(0, zoomOut));
+    const [minx, miny, maxx, maxy] = bbox;
+    const lon = (minx + maxx) / 2;
+    const lat = (miny + maxy) / 2;
 
     for (;;) {
-        const [minx, miny, maxx, maxy] = bbox;
-        const [cx, cy] = lonLatToPixel((minx + maxx) / 2, (miny + maxy) / 2, z);
-        // Top-left of the visible box in absolute world pixels.
-        const originX = cx - width / 2;
-        const originY = cy - height / 2;
-
-        const scale = Math.pow(2, z);
-        const firstX = Math.floor(originX / TILE_SIZE);
-        const firstY = Math.floor(originY / TILE_SIZE);
-        const lastX = Math.floor((originX + width) / TILE_SIZE);
-        const lastY = Math.floor((originY + height) / TILE_SIZE);
-
-        const count = (lastX - firstX + 1) * (lastY - firstY + 1);
-        if (count > maxTiles && z > MIN_ZOOM) { z--; continue; }
-
-        const tiles: TileGrid['tiles'] = [];
-        for (let x = firstX; x <= lastX; x++) {
-            for (let y = firstY; y <= lastY; y++) {
-                // Off-world tiles do not exist; skip rather than request a 404.
-                if (y < 0 || y >= scale) continue;
-                tiles.push({
-                    z, x: ((x % scale) + scale) % scale, y,
-                    left: Math.round(x * TILE_SIZE - originX),
-                    top: Math.round(y * TILE_SIZE - originY),
-                });
-            }
-        }
-        return { z, tiles, width, height, originX, originY };
+        const grid = gridAt(lon, lat, z, width, height);
+        if (spanCount(grid) > maxTiles && z > MIN_ZOOM) { z--; continue; }
+        return grid;
     }
+}
+
+/** The centre of a bbox — the point a fitted grid is built around. */
+export function bboxCentre(bbox: [number, number, number, number]): [number, number] {
+    return [(bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2];
+}
+
+/** A map view: a centre and a zoom. Zoom may be fractional. */
+export interface View { lon: number; lat: number; z: number }
+
+/**
+ * Re-centre `view` at zoom `z` so the ground point sitting `dx`,`dy` pixels from
+ * the frame centre stays exactly there. Without this a zoom drifts away from
+ * whatever the cursor was pointing at, which is the difference between a map
+ * that zooms and a map that feels like one.
+ *
+ * Offsets are in frame pixels, which are world pixels at the view's own zoom —
+ * that identity is what lets the arithmetic stay this short.
+ */
+export function zoomAbout(view: View, z: number, dx: number, dy: number): View {
+    const [px, py] = lonLatToPixel(view.lon, view.lat, view.z);
+    const [alon, alat] = pixelToLonLat(px + dx, py + dy, view.z);
+    const [apx, apy] = lonLatToPixel(alon, alat, z);
+    const [lon, lat] = pixelToLonLat(apx - dx, apy - dy, z);
+    return { lon, lat, z };
+}
+
+/** Move a view by a drag of `dx`,`dy` frame pixels. */
+export function panBy(view: View, dx: number, dy: number): View {
+    const [px, py] = lonLatToPixel(view.lon, view.lat, view.z);
+    const [lon, lat] = pixelToLonLat(px - dx, py - dy, view.z);
+    return { lon, lat, z: view.z };
 }
 
 /** Rings of a Polygon/MultiPolygon as pixel paths inside the grid's box. */
