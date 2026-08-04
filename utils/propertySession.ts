@@ -20,9 +20,6 @@ export interface PropertySession {
     searcher: string;
     /** Has the privacy notice been accepted this session? */
     acknowledged: boolean;
-    /** The matter/file reference for this session's searches. Same lifetime, so
-     *  it lives here rather than in component state that unmounts on navigation. */
-    reference: string;
 }
 
 let current: PropertySession | null = null;
@@ -37,19 +34,13 @@ export function getSession(): PropertySession | null {
 }
 
 export function signIn(searcher: string): void {
-    current = { searcher, acknowledged: false, reference: '' };
+    current = { searcher, acknowledged: false };
     emit();
 }
 
 export function acknowledge(): void {
     if (!current) return;
     current = { ...current, acknowledged: true };
-    emit();
-}
-
-export function setReference(reference: string): void {
-    if (!current || current.reference === reference) return;
-    current = { ...current, reference };
     emit();
 }
 

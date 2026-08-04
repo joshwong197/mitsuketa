@@ -457,7 +457,8 @@ export function buildTitleReportHtml(view: TitleView, now: Date, mapSvg = ''): s
     const isLive = (view.status ?? '').toLowerCase().startsWith('live');
 
     const eventRow = (e: MemorialEvent) => `
-    <article class="ev">
+    <article class="ev" data-ts="${e.date ? e.date.getTime() : ''}" data-cat="${esc(e.category)}"
+             data-live="${e.current ? '1' : '0'}" data-year="${esc(yearOf(e))}">
       <div class="ev-when">${esc(formatDate(e.date, e.undated))}</div>
       <div class="ev-body">
         <h4>${mark(e)}<span>${esc(e.headline)}</span>
@@ -471,10 +472,38 @@ export function buildTitleReportHtml(view: TitleView, now: Date, mapSvg = ''): s
       </div>
     </article>`;
 
+    const CATEGORY_LABELS: Record<string, string> = {
+        mortgage: 'Mortgage', discharge: 'Discharge', transfer: 'Transfer',
+        caveat: 'Caveat', lease: 'Lease', other: 'Other',
+    };
+    // Only offer filters for what is actually on this title — a chip that always
+    // yields nothing is worse than no chip.
+    const presentCats = [...new Set(view.chronology.map(e => e.category))]
+        .sort((a, b) => (CATEGORY_LABELS[a] ?? a).localeCompare(CATEGORY_LABELS[b] ?? b));
+    const liveCount = view.chronology.filter(e => e.current).length;
+
+    // Progressive enhancement: the document is complete and correctly ordered
+    // without scripting, and the controls only appear once the script runs.
+    const controls = view.chronology.length < 2 ? '' : `
+    <div class="ctl" id="ctl" hidden>
+      <div class="ctl-row">
+        <span class="ctl-lbl">Order</span>
+        <button type="button" class="chip" data-sort="desc" aria-pressed="true">Newest first</button>
+        <button type="button" class="chip" data-sort="asc" aria-pressed="false">Oldest first</button>
+      </div>
+      <div class="ctl-row">
+        <span class="ctl-lbl">Show</span>
+        <button type="button" class="chip" data-all aria-pressed="true">All ${view.chronology.length}</button>
+        ${liveCount ? `<button type="button" class="chip" data-live-only aria-pressed="false">Live only ${liveCount}</button>` : ''}
+        ${presentCats.map(c => `<button type="button" class="chip" data-cat="${esc(c)}" aria-pressed="false">${esc(CATEGORY_LABELS[c] ?? c)}</button>`).join('')}
+      </div>
+      <p class="ctl-count" id="ctlCount"></p>
+    </div>`;
+
     let lastYear: string | null = null;
     const chronology = view.chronology.map(e => {
         const y = yearOf(e);
-        const heading = y === lastYear ? '' : `<div class="ev-year"><span>${esc(y)}</span></div>`;
+        const heading = y === lastYear ? '' : `<div class="ev-year" data-yearhead><span>${esc(y)}</span></div>`;
         lastYear = y;
         return heading + eventRow(e);
     }).join('');
@@ -558,6 +587,19 @@ dt:first-of-type,dt:first-of-type + dd{border-top:none}
 .tag.on{color:var(--accent)}
 .sq{display:inline-grid;place-items:center;width:19px;height:19px;flex:none;align-self:flex-start;
  font-family:"Shippori Mincho","Yu Mincho",serif;font-size:12px;line-height:1}
+/* Chronology controls — only shown once the script enables them */
+.ctl{margin:0 0 18px;display:flex;flex-direction:column;gap:7px}
+.ctl-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.ctl-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-pale);margin-right:4px}
+.chip{font:inherit;font-size:11.5px;padding:3px 10px;border:1px solid var(--rule);background:var(--paper);
+ color:var(--ink-mid);cursor:pointer;border-radius:0}
+.chip:hover{border-color:var(--ink-mid);color:var(--ink)}
+.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.ctl-count{margin:0;font-size:11px;color:var(--ink-pale)}
+.ev[hidden]{display:none}
+@media print{.ctl{display:none}}
+
 /* Chronology */
 .ev{position:relative;border-top:1px solid var(--rule);padding:12px 0}
 .ev-when{position:absolute;left:calc((var(--margin) + var(--gap)) * -1);top:13px;width:var(--margin);
@@ -638,7 +680,7 @@ ${section('現況', 'Currently registered', String(view.live.length),
         : view.live.map(e => entry(e)).join(''))}
 
 ${section('履歴', 'History', `${view.chronology.length} dealing${view.chronology.length === 1 ? '' : 's'}`,
-    chronology || '<p class="note">No dated dealings on this title.</p>')}
+    controls + `<div id="chron">${chronology}</div>` || '<p class="note">No dated dealings on this title.</p>')}
 
 ${view.burdens.length === 0 ? '' : section('負担', 'Standing burdens', String(view.burdens.length),
     '<p class="hint">Easements, covenants and statutory conditions. These sit on the land indefinitely rather than happening at a moment.</p>'
@@ -655,5 +697,99 @@ ${view.burdens.length === 0 ? '' : section('負担', 'Standing burdens', String(
   <p>Generated ${esc(nzTimestamp(now))} · Mitsuketa 見つけた</p>
 </div>
 
-</div></body></html>`;
+</div>
+<script>
+/* Chronology sort + filter. The document is already complete and correctly
+   ordered without this — the controls stay hidden unless the script runs, so a
+   print or a no-script viewer sees the full record rather than a broken one.
+   Year separators are regenerated after every change, because sorting or
+   filtering makes the server-rendered ones wrong. */
+(function () {
+  var ctl = document.getElementById('ctl'), chron = document.getElementById('chron');
+  if (!ctl || !chron) return;
+  var rows = [].slice.call(chron.querySelectorAll('.ev'));
+  if (rows.length < 2) return;
+  ctl.hidden = false;
+
+  var count = document.getElementById('ctlCount');
+  var sortBtns = [].slice.call(ctl.querySelectorAll('[data-sort]'));
+  var catBtns = [].slice.call(ctl.querySelectorAll('[data-cat]'));
+  var allBtn = ctl.querySelector('[data-all]');
+  var liveBtn = ctl.querySelector('[data-live-only]');
+  var dir = 'desc', cats = {}, liveOnly = false;
+
+  function press(btn, on) { if (btn) btn.setAttribute('aria-pressed', on ? 'true' : 'false'); }
+  function anyCat() { for (var k in cats) if (cats[k]) return true; return false; }
+
+  function apply() {
+    // An undated dealing has no timestamp; keep those last in either direction
+    // rather than letting them sort as 1970.
+    var order = rows.slice().sort(function (a, b) {
+      var x = a.getAttribute('data-ts'), y = b.getAttribute('data-ts');
+      if (!x && !y) return 0;
+      if (!x) return 1;
+      if (!y) return -1;
+      return dir === 'desc' ? (+y) - (+x) : (+x) - (+y);
+    });
+
+    [].slice.call(chron.querySelectorAll('[data-yearhead]')).forEach(function (h) { h.remove(); });
+
+    var shown = 0, lastYear = null, frag = document.createDocumentFragment();
+    order.forEach(function (row) {
+      var okCat = !anyCat() || cats[row.getAttribute('data-cat')];
+      var okLive = !liveOnly || row.getAttribute('data-live') === '1';
+      var visible = okCat && okLive;
+      row.hidden = !visible;
+      if (visible) {
+        var y = row.getAttribute('data-year');
+        if (y !== lastYear) {
+          var h = document.createElement('div');
+          h.className = 'ev-year';
+          h.setAttribute('data-yearhead', '');
+          h.innerHTML = '<span></span>';
+          h.firstChild.textContent = y;
+          frag.appendChild(h);
+          lastYear = y;
+        }
+        shown++;
+      }
+      frag.appendChild(row);
+    });
+    chron.appendChild(frag);
+
+    press(allBtn, !anyCat() && !liveOnly);
+    count.textContent = shown === rows.length
+      ? 'Showing all ' + rows.length + ' dealings'
+      : 'Showing ' + shown + ' of ' + rows.length + ' dealings';
+  }
+
+  sortBtns.forEach(function (b) {
+    b.addEventListener('click', function () {
+      dir = b.getAttribute('data-sort');
+      sortBtns.forEach(function (o) { press(o, o === b); });
+      apply();
+    });
+  });
+  catBtns.forEach(function (b) {
+    b.addEventListener('click', function () {
+      var c = b.getAttribute('data-cat');
+      cats[c] = !cats[c];
+      press(b, cats[c]);
+      apply();
+    });
+  });
+  if (liveBtn) liveBtn.addEventListener('click', function () {
+    liveOnly = !liveOnly; press(liveBtn, liveOnly); apply();
+  });
+  if (allBtn) allBtn.addEventListener('click', function () {
+    cats = {}; liveOnly = false;
+    catBtns.forEach(function (o) { press(o, false); });
+    press(liveBtn, false);
+    apply();
+  });
+
+  apply();
+})();
+</script>
+</body></html>`;
 }

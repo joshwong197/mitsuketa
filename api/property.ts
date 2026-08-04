@@ -1,9 +1,9 @@
 // Property search — LINZ Title Register, gated to the team.
 //
 //   POST /api/property?mode=login                  { searcher, password }
-//   GET  /api/property?mode=address&q=&ref=[&address_id=]
-//   GET  /api/property?mode=owner&q=&ref=
-//   GET  /api/property?mode=title&title_no=&ref=
+//   GET  /api/property?mode=address&q=[&address_id=]
+//   GET  /api/property?mode=owner&q=
+//   GET  /api/property?mode=title&title_no=
 //   GET  /api/property?mode=tile&z=&x=&y=
 //   POST /api/property?mode=logout
 //
@@ -14,7 +14,7 @@
 //   1. It FAILS CLOSED. No credential configured means nobody gets in,
 //      rather than everybody.
 //   2. The LINZ key never leaves the server. The browser talks to this handler.
-//   3. Every search is logged with the reference the searcher supplied.
+//   3. Every search is logged against the account that ran it.
 //
 // AUTH is per-user only: one PROPERTY_PW_<SLUG> variable each, holding that
 // person's password (utils/propertyUsers.ts). Sign in with the address.
@@ -329,15 +329,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).send(Buffer.from(await upstream.arrayBuffer()));
     }
 
-    // The reference is the accountability record — a shared credential cannot
-    // say who searched, so it must at least say what for.
-    const reference = str(req.query.ref).slice(0, MAX_REFERENCE);
-    if (!reference) {
-        return res.status(400).json({
-            error: 'reference_required',
-            message: 'Enter a file or matter reference for this search.',
-        });
-    }
+    // A matter reference is no longer required. It existed because one shared
+    // credential could not say WHO searched, so the reference had to say WHY;
+    // per-user sign-in records the account on every entry, so the field was
+    // costing a keystroke per search and buying nothing. Still recorded when a
+    // caller sends one, so older clients lose nothing.
+    const reference = str(req.query.ref).slice(0, MAX_REFERENCE) || undefined;
 
     const query = str(req.query.q).slice(0, MAX_QUERY);
     const base = { reference, searcher: session.searcher, ip };
