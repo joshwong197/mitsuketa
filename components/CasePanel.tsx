@@ -143,13 +143,11 @@ export interface CasePanelProps {
   personFlagsCount: number;
   personSearchOpened?: string;
 
-  // Role filter — hides director/shareholder people so a prolific chart reads.
+  // Role filter — hides director-only people so a prolific chart reads.
   // View-only: nothing is refetched and exports still carry the whole chart.
   hideDirectors: boolean;
-  hideShareholders: boolean;
   onToggleHideDirectors: () => void;
-  onToggleHideShareholders: () => void;
-  roleCounts: { directors: number; shareholders: number };
+  hideableDirectors: number;
 
   trail: { time: string; text: string }[];
 
@@ -201,10 +199,8 @@ export const CasePanel: React.FC<CasePanelProps> = ({
   personFlagsCount,
   personSearchOpened,
   hideDirectors,
-  hideShareholders,
   onToggleHideDirectors,
-  onToggleHideShareholders,
-  roleCounts,
+  hideableDirectors,
   trail,
   caseNotes,
   noteTabLabels,
@@ -301,36 +297,25 @@ export const CasePanel: React.FC<CasePanelProps> = ({
           </Section>
         )}
 
-        {/* VIEW — role filter. A prolific company brings hundreds of director
-               and shareholder people, and the chart becomes unreadable long
-               before it becomes wrong. Hiding them is a view over the same
-               data: nothing is refetched, and exports and save points still
-               carry the whole chart. */}
-        {showCompanyFile && graphLoaded && (roleCounts.directors > 0 || roleCounts.shareholders > 0) && (
+        {/* VIEW — role filter. A prolific parent brings hundreds of director
+               people and the chart becomes unreadable long before it becomes
+               wrong. Hiding them is a view over the same data: nothing is
+               refetched, and exports and save points still carry the whole
+               chart. Directors only — see the note in App.tsx on why the
+               shareholder companion was removed. */}
+        {showCompanyFile && graphLoaded && hideableDirectors > 0 && (
           <Section title="View">
             <div className="px-[18px] pb-3 flex flex-col gap-1.5">
-              {roleCounts.directors > 0 && (
-                <RoleToggle
-                  on={hideDirectors}
-                  onClick={onToggleHideDirectors}
-                  kanji="締"
-                  label="Hide directors"
-                  count={roleCounts.directors}
-                />
-              )}
-              {roleCounts.shareholders > 0 && (
-                <RoleToggle
-                  on={hideShareholders}
-                  onClick={onToggleHideShareholders}
-                  kanji="株"
-                  label="Hide shareholders"
-                  count={roleCounts.shareholders}
-                />
-              )}
-              {hideDirectors && hideShareholders && (
+              <RoleToggle
+                on={hideDirectors}
+                onClick={onToggleHideDirectors}
+                kanji="締"
+                label="Hide directors"
+                count={hideableDirectors}
+              />
+              {hideDirectors && (
                 <p className="text-ink-pale" style={{ fontSize: 10.5, marginTop: 2 }}>
-                  Corporate structure only. Someone who is both a director and a
-                  shareholder is hidden only while both are off.
+                  Ownership structure only. Anyone who also holds shares stays on the chart.
                 </p>
               )}
             </div>

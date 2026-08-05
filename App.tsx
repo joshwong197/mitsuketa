@@ -1951,8 +1951,16 @@ function App() {
   // No consumer yet — Stage B's CustomNodes dog-ear renders these. Kept cheap:
   // identity when there are no notes, untouched node objects when unannotated.
   // Role filter (left panel) — view-only, never persisted.
+  //
+  // Directors only, deliberately. A "hide shareholders" companion was built and
+  // removed: it appeared to work on the searched company and do nothing further
+  // out, which is not a bug in the filter but in what there is to filter —
+  // individual shareholders are only ever parsed by crawlUpstream (the root and
+  // its parents). crawlDownstream never creates a person node for a subsidiary's
+  // shareholders, so there was nothing out there to hide. A control that behaves
+  // differently depending on where you look is worse than no control, and hiding
+  // directors is what makes the corporate structure readable anyway.
   const [hideDirectors, setHideDirectors] = useState(false);
-  const [hideShareholders, setHideShareholders] = useState(false);
 
   const nodesWithAnnotations = useMemo(() => {
     if (caseNotes.length === 0) return nodes;
@@ -1982,36 +1990,28 @@ function App() {
    */
   const hidePerson = useCallback((data: NodeData): boolean => {
     if (data.type !== NodeType.PERSON) return false;
-    const role = data.roleKind;
-    if (role === 'both') return hideDirectors && hideShareholders;
-    if (role === 'director') return hideDirectors;
-    if (role === 'shareholder') return hideShareholders;
-    return false; // role unknown — never hide something we cannot classify
-  }, [hideDirectors, hideShareholders]);
+    // Only a director-ONLY person is hidden. Someone who also holds shares is
+    // part of the ownership structure, which is the thing being looked at.
+    return hideDirectors && data.roleKind === 'director';
+  }, [hideDirectors]);
 
   const visibleNodes = useMemo(() => {
-    if (!hideDirectors && !hideShareholders) return nodesWithAnnotations;
+    if (!hideDirectors) return nodesWithAnnotations;
     return nodesWithAnnotations.filter(n => !hidePerson(n.data as unknown as NodeData));
-  }, [nodesWithAnnotations, hideDirectors, hideShareholders, hidePerson]);
+  }, [nodesWithAnnotations, hideDirectors, hidePerson]);
 
   const visibleEdges = useMemo(() => {
-    if (!hideDirectors && !hideShareholders) return edges;
+    if (!hideDirectors) return edges;
     const ids = new Set(visibleNodes.map(n => n.id));
     return edges.filter(e => ids.has(e.source) && ids.has(e.target));
-  }, [edges, visibleNodes, hideDirectors, hideShareholders]);
+  }, [edges, visibleNodes, hideDirectors]);
 
-  // How many people each filter would remove, for the panel's counts. Derived
-  // from the unfiltered set so the numbers do not change as filters are applied.
-  const roleCounts = useMemo(() => {
-    let directors = 0, shareholders = 0;
-    for (const n of nodes) {
-      const d = n.data as unknown as NodeData;
-      if (d.type !== NodeType.PERSON) continue;
-      if (d.roleKind === 'director' || d.roleKind === 'both') directors++;
-      if (d.roleKind === 'shareholder' || d.roleKind === 'both') shareholders++;
-    }
-    return { directors, shareholders };
-  }, [nodes]);
+  // How many the filter would remove, for the panel's count. Counts only
+  // director-ONLY people, matching what hidePerson actually hides, so the number
+  // on the button is the number that disappears.
+  const hideableDirectors = useMemo(
+    () => nodes.filter(n => (n.data as unknown as NodeData).roleKind === 'director').length,
+    [nodes]);
 
   // Case-file derived values
   const graphLoaded = allNodesInMemory.length > 0;
@@ -2127,10 +2127,8 @@ function App() {
             personFlagsCount={personFlagsCount}
             personSearchOpened={personSearchOpened}
             hideDirectors={hideDirectors}
-            hideShareholders={hideShareholders}
             onToggleHideDirectors={() => setHideDirectors(v => !v)}
-            onToggleHideShareholders={() => setHideShareholders(v => !v)}
-            roleCounts={roleCounts}
+            hideableDirectors={hideableDirectors}
             trail={trail}
             caseNotes={caseNotes}
             noteTabLabels={Object.fromEntries(graphTabs.map(t => [t.id, t.label]))}

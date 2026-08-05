@@ -630,11 +630,13 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                                         </span>
                                     </p>
                                 </span>
+                                {/* Names the register: "No current" on its own reads as a
+                                    fragment, and the reader has to guess what is not current. */}
                                 <span
-                                    className={`uppercase font-bold whitespace-nowrap ${disqualifiedCurrent ? 'text-crit' : 'text-ink-pale'}`}
+                                    className={`uppercase font-bold text-right ${disqualifiedCurrent ? 'text-crit' : 'text-ink-pale'}`}
                                     style={{ fontSize: '10px', letterSpacing: '.04em' }}
                                 >
-                                    {disqualifiedCurrent ? 'Current' : 'No current'}
+                                    {disqualifiedCurrent ? 'Current disqualification' : 'No current disqualification'}
                                 </span>
                                 <span
                                     className="text-ink-pale"
@@ -704,10 +706,10 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                                     )}
                                 </span>
                                 <span
-                                    className={`uppercase font-bold whitespace-nowrap ${insolvencyCurrent ? 'text-crit' : 'text-ink-pale'}`}
+                                    className={`uppercase font-bold text-right ${insolvencyCurrent ? 'text-crit' : 'text-ink-pale'}`}
                                     style={{ fontSize: '10px', letterSpacing: '.04em' }}
                                 >
-                                    {insolvencyCurrent ? 'Current' : 'No current'}
+                                    {insolvencyCurrent ? 'Current insolvency' : 'No current insolvency'}
                                 </span>
                                 <span
                                     className="text-ink-pale"
