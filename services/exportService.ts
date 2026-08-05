@@ -3,7 +3,7 @@
 
 import { GraphNode, GraphEdge, PersonCompanyResult, CaseNote } from '../types';
 import { DisqualifiedDirector } from '../src/api/disqualifiedDirectorsApi';
-import { InsolvencyRecord } from '../src/api/insolvencyApi';
+import { InsolvencyRecord, isInsolvencyRecordCurrent } from '../src/api/insolvencyApi';
 import { heldFor, type MemorialEvent } from '../utils/memorials';
 import {
     buildTitleView, closedVerb, formatDate, markFor, yearOf,
@@ -203,51 +203,110 @@ export function buildPersonReportHtml(opts: {
     const { personName, results, disqualified, insolvency, signatures, generatedAt: now } = opts;
     const addresses = groupAddresses(results);
 
-    const flagBlock = (disqualified.length === 0 && insolvency.length === 0)
-        ? `<div class="flag clear"><strong>No adverse records found.</strong> No matches in the Disqualified Directors register or the Insolvency register for "${esc(personName)}" at the time of generation.</div>`
-        : `
-        ${insolvency.map((r) => `
-        <div class="flag alert">
-            <strong>Insolvency record — ${esc(r.insolvencyStatus)}</strong>
-            <table class="kv">
-                <tr><td>Estate name</td><td>${esc(r.estateName)}</td></tr>
-                <tr><td>Type</td><td>${esc(r.insolvencyTypeDescription)}</td></tr>
-                <tr><td>Adjudication / liquidation date</td><td>${esc(r.adjudicationOrLiquidationDate)}</td></tr>
-                ${r.dischargeOrCompletionDate ? `<tr><td>Discharge / completion date</td><td>${esc(r.dischargeOrCompletionDate)}</td></tr>` : ''}
-                ${r.addressAtAdjudication ? `<tr><td>Address at adjudication</td><td>${esc(r.addressAtAdjudication)}</td></tr>` : ''}
-                ${r.alternateNames?.length ? `<tr><td>Alternate names</td><td>${esc(r.alternateNames.join(', '))}</td></tr>` : ''}
-                ${r.multipleInsolvencies ? '<tr><td>Multiple insolvencies</td><td>Yes</td></tr>' : ''}
-            </table>
-        </div>`).join('')}
-        ${disqualified.map((d) => `
-        <div class="flag alert">
-            <strong>Disqualified director — ${esc(d.firstName)} ${esc(d.middleName || '')} ${esc(d.lastName)}</strong>
-            ${d.aliases?.aliases?.length ? `<p>Aliases: ${esc(d.aliases.aliases.join(', '))}</p>` : ''}
-            ${(d.disqualificationCriteria?.criteria || []).map((c) => `
-            <table class="kv">
-                <tr><td>Period</td><td>${esc(c.startDate)}${c.endDate ? ` — ${esc(c.endDate)}` : ' — ongoing'}</td></tr>
-                ${c.criteria ? `<tr><td>Criteria</td><td>${esc(c.criteria)}</td></tr>` : ''}
-                ${c.comments ? `<tr><td>Comments</td><td>${esc(c.comments)}</td></tr>` : ''}
-            </table>`).join('')}
-            ${d.associations?.associations?.length ? `<p>Associated companies: ${esc(d.associations.associations.map((a) => a.associatedCompanyName).filter(Boolean).join(', '))}</p>` : ''}
-        </div>`).join('')}`;
+    const anyInsolvencyCurrent = insolvency.some(r => isInsolvencyRecordCurrent(r));
+    const anyDisqCurrent = disqualified.some(d => d.disqualificationCriteria?.criteria?.some(c => !c.endDate));
 
+    const flagBlock = (disqualified.length === 0 && insolvency.length === 0)
+        ? `<div class="flag"><span class="sq green" aria-hidden="true">青</span><div>
+             <h3>Register checks · clear</h3>
+             <p>No records for "${esc(personName)}" in the Disqualified Directors or Insolvency
+                registers at the time of generation.</p></div></div>`
+        : `
+        ${insolvency.length ? `<div class="flag"><span class="sq crit" aria-hidden="true">紅</span><div>
+             <h3>Insolvency<span class="st">${insolvency.length} record${insolvency.length === 1 ? '' : 's'}${anyInsolvencyCurrent ? ' · current' : ' · none current'}</span></h3>
+             ${insolvency.some(r => r.multipleInsolvencies) ? '<p>Multiple insolvencies on record.</p>' : ''}
+             ${insolvency.map((r) => `
+             <table class="kv">
+                 <tr><td>Estate</td><td>${esc(r.estateName)} — ${esc(r.insolvencyStatus)}${r.dischargeSuspended ? ' (discharge suspended)' : ''}</td></tr>
+                 <tr><td>Type</td><td>${esc(r.insolvencyTypeDescription)}</td></tr>
+                 ${r.yearOfBirth ? `<tr><td>Born</td><td>${esc([r.monthOfBirth, r.yearOfBirth].filter(Boolean).join(' '))}</td></tr>` : ''}
+                 ${r.occupationAtAdjudicationOrIndustryAtLiquidation ? `<tr><td>Occupation</td><td>${esc(r.occupationAtAdjudicationOrIndustryAtLiquidation)}</td></tr>` : ''}
+                 <tr><td>Adjudication</td><td>${esc(r.adjudicationOrLiquidationDate)}</td></tr>
+                 <tr><td>Discharge</td><td>${r.dischargeOrCompletionDate ? esc(r.dischargeOrCompletionDate) : 'not recorded on the register'}</td></tr>
+                 ${r.addressAtAdjudication ? `<tr><td>Address then</td><td>${esc(r.addressAtAdjudication)}</td></tr>` : ''}
+                 ${r.alternateNames?.length ? `<tr><td>Also known as</td><td>${esc(r.alternateNames.join(', '))}</td></tr>` : ''}
+             </table>`).join('')}
+           </div></div>` : ''}
+        ${disqualified.length ? `<div class="flag"><span class="sq crit" aria-hidden="true">紅</span><div>
+             <h3>Disqualified director<span class="st">${disqualified.length} record${disqualified.length === 1 ? '' : 's'}${anyDisqCurrent ? ' · current' : ''}</span></h3>
+             ${disqualified.map((d) => `
+             <p><b>${esc(d.firstName)} ${esc(d.middleName || '')} ${esc(d.lastName)}</b>${d.aliases?.aliases?.length ? ` · also known as ${esc(d.aliases.aliases.join(', '))}` : ''}</p>
+             ${(d.disqualificationCriteria?.criteria || []).map((c) => `
+             <table class="kv">
+                 <tr><td>Period</td><td>${esc(c.startDate)}${c.endDate ? ` — ${esc(c.endDate)}` : ' — indefinite'}</td></tr>
+                 ${c.criteria ? `<tr><td>Reason</td><td>${esc(c.criteria)}</td></tr>` : ''}
+                 ${c.comments ? `<tr><td>Comments</td><td>${esc(c.comments)}</td></tr>` : ''}
+             </table>`).join('')}
+             ${d.associations?.associations?.length ? `<p>Associated companies: ${esc(d.associations.associations.map((a) => a.associatedCompanyName).filter(Boolean).join(', '))}</p>` : ''}`).join('')}
+           </div></div>` : ''}`;
+
+    // Sort/filter is a VIEW: every company is in the document, exactly as the
+    // title report carries the full memorial set. A report that silently omits
+    // rows is a misleading record, so the filters only ever hide.
     const companyRows = results.map((r) => {
-        const flags = [
-            r.isInExternalAdmin && r.externalAdminType ? r.externalAdminType : '',
-            r.removalCommenced ? 'Removal in progress' : '',
-            r.hasHistoricInsolvency ? `Previously: ${r.historicInsolvencyType || 'insolvent'}` : '',
-        ].filter(Boolean).join('; ');
-        return `<tr${flags ? ' class="warn-row"' : ''}>
-            <td>${esc(r.companyName)}</td>
-            <td class="mono">${esc(r.nzbn)}</td>
-            <td>${esc(r.roleType)}${r.isInactive ? ' (inactive)' : ''}</td>
-            <td>${r.shareholding > 0 ? `${r.shareholding.toFixed(1)}%` : '—'}</td>
-            <td>${esc(r.entityStatusDescription || r.status)}</td>
-            <td>${esc(r.resignationDate || '—')}</td>
-            <td>${esc(flags || '—')}</td>
+        const removed = (r.entityStatusDescription || '').toLowerCase().includes('removed')
+            || (r.entityStatusDescription || '').toLowerCase() === 'inactive'
+            || (r.entityStatusCode || 0) >= 80;
+        const active = !removed && !r.isInactive;
+        const status = (r.isInExternalAdmin && r.externalAdminType) ? r.externalAdminType
+            : (r.entityStatusDescription || r.status);
+        const stCls = r.isInExternalAdmin ? 'st-crit' : removed ? 'st-rem'
+            : (r.status || '').toUpperCase() === 'REGISTERED' ? 'st-reg' : 'st-rem';
+        const marks: string[] = [];
+        if (r.isInExternalAdmin && r.externalAdminType) {
+            marks.push(`<span class="sq crit sm" aria-hidden="true">紅</span><span style="color:var(--crit)">${esc(r.externalAdminType)}</span>`);
+        }
+        if (removed && r.hasHistoricInsolvency) {
+            marks.push(`<span class="sq crit sm" aria-hidden="true">紅</span><span style="color:var(--crit)">Prev: ${esc((r.historicInsolvencyType || 'Insolvency').replace(/^in\s+/i, ''))}</span>`);
+        }
+        if (r.removalCommenced && !removed) {
+            marks.push(`<span class="sq amber sm" aria-hidden="true">琥</span><span style="color:var(--amber)">Removal in progress</span>`);
+        }
+        const roles = [
+            r.isDirector ? 'Director' : null,
+            r.shareholding > 0 ? `Shareholder · ${r.shareholding.toFixed(1)}%` : null,
+        ].filter(Boolean).join(' & ');
+        return `<tr data-director="${r.isDirector ? 1 : 0}" data-shareholder="${r.shareholding > 0 ? 1 : 0}"
+             data-active="${active ? 1 : 0}" data-pct="${r.shareholding || 0}"
+             data-name="${esc((r.companyName || '').toUpperCase())}">
+            <td>
+              <div class="co-name${removed ? ' dead' : ''}">${esc(r.companyName)}</div>
+              <div class="nzbn mono">${esc(r.nzbn)}</div>
+              ${marks.length ? `<div class="rowflag">${marks.join('<span style="width:6px"></span>')}</div>` : ''}
+            </td>
+            <td class="role-cell">${esc(roles) || '—'}${r.isInactive ? ' <span class="ceased">· ceased</span>' : ''}</td>
+            <td class="mono" style="white-space:nowrap;color:var(--ink-pale);font-size:11px">${esc(r.resignationDate || '—')}</td>
+            <td class="st-cell ${stCls}">${esc(status)}</td>
         </tr>`;
     }).join('');
+
+    const activeCount = results.filter(r => {
+        const removed = (r.entityStatusDescription || '').toLowerCase().includes('removed')
+            || (r.entityStatusCode || 0) >= 80;
+        return !removed && !r.isInactive;
+    }).length;
+    const directorCount = results.filter(r => r.isDirector).length;
+    const shareholderCount = results.filter(r => r.shareholding > 0).length;
+    const flagCount = results.filter(r => r.isInExternalAdmin || r.hasHistoricInsolvency || r.removalCommenced).length
+        + insolvency.length + disqualified.length;
+
+    const rosterControls = results.length < 2 ? '' : `
+    <div class="ctl" id="ctl" hidden>
+      <div class="ctl-row">
+        <span class="ctl-lbl">Sort</span>
+        <button type="button" class="chip" data-sort="default" aria-pressed="true">Directors first</button>
+        <button type="button" class="chip" data-sort="pct" aria-pressed="false">Shareholding %</button>
+        <button type="button" class="chip" data-sort="name" aria-pressed="false">Alphabetical</button>
+      </div>
+      <div class="ctl-row">
+        <span class="ctl-lbl">Filter</span>
+        <button type="button" class="chip" data-filter="all" aria-pressed="true">All ${results.length}</button>
+        <button type="button" class="chip" data-filter="active" aria-pressed="false">Active ${activeCount}</button>
+        <button type="button" class="chip" data-filter="director" aria-pressed="false">Directors ${directorCount}</button>
+        <button type="button" class="chip" data-filter="shareholder" aria-pressed="false">Shareholders ${shareholderCount}</button>
+      </div>
+      <p class="ctl-count" id="ctlCount"></p>
+    </div>`;
 
     return `<!DOCTYPE html>
 <html lang="en">
@@ -255,7 +314,8 @@ export function buildPersonReportHtml(opts: {
 <meta charset="UTF-8" />
 <title>Mitsuketa — Director Report: ${esc(personName)}</title>
 <style>
-    /* Sumi tokens (mirror of design/SUMI_SPEC.md §1) — self-contained, prints light */
+    /* Sumi tokens (mirror of design/SUMI_SPEC.md §1). Self-contained: this file
+       is emailed and opened offline, so nothing is referenced externally. */
     :root {
         color-scheme: light dark;
         --paper:    light-dark(oklch(0.952 0.007 85), oklch(0.185 0.008 75));
@@ -263,11 +323,14 @@ export function buildPersonReportHtml(opts: {
         --ink:      light-dark(oklch(0.235 0.014 65), oklch(0.905 0.012 85));
         --ink-mid:  light-dark(oklch(0.44 0.012 65),  oklch(0.68 0.012 85));
         --ink-pale: light-dark(oklch(0.62 0.010 70),  oklch(0.50 0.010 80));
+        --ink-wash: light-dark(oklch(0.78 0.009 75),  oklch(0.35 0.009 75));
         --rule:     light-dark(oklch(0.855 0.008 80), oklch(0.30 0.010 75));
+        --accent:   light-dark(oklch(0.40 0.095 265), oklch(0.72 0.085 260));
+        --accent-ink: light-dark(oklch(0.965 0.006 85), oklch(0.185 0.008 75));
         --crit:     light-dark(oklch(0.55 0.17 30),  oklch(0.66 0.17 30));
         --amber:    light-dark(oklch(0.60 0.10 78),  oklch(0.72 0.10 78));
         --green:    light-dark(oklch(0.50 0.08 150), oklch(0.68 0.09 150));
-        --serif:  "Shippori Mincho", "Yu Mincho", serif;
+        --serif:  "Shippori Mincho", "Yu Mincho", "Hiragino Mincho ProN", serif;
         --gothic: "Zen Kaku Gothic New", "Yu Gothic UI", "Segoe UI", system-ui, sans-serif;
         --mono:   "Cascadia Mono", Consolas, ui-monospace, monospace;
     }
@@ -276,92 +339,242 @@ export function buildPersonReportHtml(opts: {
     :root[data-theme="light"] { color-scheme: light; }
     :root[data-theme="dark"]  { color-scheme: dark; }
     ${THEME_TOGGLE_CSS}
-    body { font-family: var(--gothic); color: var(--ink); margin: 0; background: var(--paper2); }
-    .page { max-width: 900px; margin: 0 auto; padding: 32px; background: var(--paper); min-height: 100vh; box-sizing: border-box; }
-    header { border-bottom: 2px solid var(--ink); padding-bottom: 16px; margin-bottom: 24px; }
-    h1 { margin: 0 0 4px; font-size: 24px; font-family: var(--serif); font-weight: 600; }
-    h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--ink-mid); border-bottom: 1px solid var(--rule); padding-bottom: 6px; margin: 28px 0 12px; }
-    .timestamp { font-weight: 600; font-size: 13px; color: var(--ink); }
-    .disclaimer { font-size: 11px; color: var(--ink-pale); margin-top: 6px; }
-    .flag { padding: 12px 16px; margin-bottom: 12px; font-size: 13px; }
-    .flag.alert { background: oklch(from var(--crit) l c h / .08); border: 1px solid oklch(from var(--crit) l c h / .4); color: var(--crit); }
-    .flag.clear { background: oklch(from var(--green) l c h / .08); border: 1px solid oklch(from var(--green) l c h / .4); color: var(--green); }
-    table.kv { font-size: 12px; margin: 8px 0 0; border-collapse: collapse; }
-    table.kv td { padding: 2px 12px 2px 0; vertical-align: top; }
-    table.kv td:first-child { color: var(--ink-mid); white-space: nowrap; }
-    table.companies { width: 100%; border-collapse: collapse; font-size: 12px; }
-    table.companies th { text-align: left; padding: 6px 8px; background: var(--paper2); border-bottom: 2px solid var(--rule); white-space: nowrap; }
-    table.companies td { padding: 6px 8px; border-bottom: 1px solid var(--rule); vertical-align: top; }
-    tr.warn-row td { background: oklch(from var(--amber) l c h / .10); }
-    .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 11px; }
-    .addr { font-size: 13px; padding: 8px 12px; border: 1px solid var(--rule); margin-bottom: 8px; }
-    .addr .who { color: var(--ink-pale); font-size: 11px; margin-top: 2px; }
-    .addr-verdict { font-size: 12px; font-weight: 600; margin-bottom: 10px; }
-    .addr-verdict.match { color: var(--green); } .addr-verdict.mismatch { color: var(--amber); }
-    .sigs { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
-    .sig { border: 1px solid var(--rule); overflow: hidden; break-inside: avoid; }
-    .sig .co { font-size: 11px; font-weight: 600; padding: 4px 8px; background: var(--paper2); }
-    .sig img { width: 100%; display: block; background: #fff; } /* white stays: PNG signature crops */
-    footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid var(--rule); font-size: 10px; color: var(--ink-pale); }
-    /* Print: white ground, ink outlines. Every tinted surface — the page wash,
-       table headers, flag blocks, the address and signature panels — becomes
-       white with a hairline, so a 40-company report does not lay down a solid
-       page of toner. Severity squares keep their fill: they are the one thing
-       whose colour carries meaning rather than decoration. */
+    *{box-sizing:border-box}
+    html,body{margin:0}
+    body{background:var(--paper);color:var(--ink);font-family:var(--gothic);
+     font-size:14px;line-height:1.6}
+    .doc{max-width:880px;margin:0 auto;padding:34px 26px 72px}
+    .mono,.nzbn,b{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+    /* Masthead — the register-extract idiom the title report uses. */
+    .mast{border-bottom:2px solid var(--ink);padding-bottom:14px}
+    .sup{font-size:11.5px;color:var(--ink-pale);margin:0 0 4px}
+    .sup em{font-family:var(--serif);font-style:normal;letter-spacing:.2em;
+     margin-right:8px;color:var(--ink-mid)}
+    h1{font-family:var(--serif);font-size:40px;font-weight:600;margin:0;line-height:1.06;
+     letter-spacing:.01em}
+    .role{font-size:10.5px;text-transform:uppercase;letter-spacing:.12em;
+     color:var(--ink-pale);margin:7px 0 0}
+    .rule2{border-top:1px solid var(--ink);margin-bottom:26px}
+    .stamp{font-size:11.5px;color:var(--ink-mid);margin:9px 0 0}
+
+    /* Stats strip — cells sharing hairlines, serif numerals. */
+    .stats{display:flex;border:1px solid var(--rule);margin:22px 0 30px}
+    .stat{flex:1;padding:10px 12px;border-right:1px solid var(--rule)}
+    .stat:last-child{border-right:0}
+    .stat b{display:block;font-family:var(--serif);font-size:22px;font-weight:600;
+     line-height:1.1;font-variant-numeric:tabular-nums}
+    .stat span{font-size:9.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-pale)}
+    .stat.crit b{color:var(--crit)}
+
+    /* Section marks — the kanji names the register the section draws on. */
+    .sec{margin:0 0 30px}
+    .sec-head{display:flex;align-items:baseline;gap:10px;margin:0 0 13px}
+    .sec-head i{font-family:var(--serif);font-style:normal;font-size:15px;color:var(--accent);line-height:1}
+    .sec-head span{font-size:10.5px;text-transform:uppercase;letter-spacing:.16em;color:var(--ink-pale)}
+    .sec-head u{flex:1;height:1px;background:var(--rule);text-decoration:none}
+
+    /* Severity kanji square — the one place colour carries meaning. */
+    .sq{display:inline-grid;place-items:center;width:26px;height:26px;flex:none;
+     font-family:var(--serif);font-size:14px;color:var(--paper)}
+    .sq.crit{background:var(--crit)} .sq.green{background:var(--green)}
+    .sq.amber{background:var(--amber)}
+    .sq.sm{width:17px;height:17px;font-size:10px}
+
+    .flag{display:flex;gap:12px;align-items:flex-start;border:1px solid var(--rule);
+     background:var(--paper2);padding:12px;margin:0 0 10px}
+    .flag h3{margin:0;font-size:13px;font-weight:700}
+    .flag .st{font-size:10px;text-transform:uppercase;letter-spacing:.05em;
+     font-weight:400;color:var(--amber);margin-left:7px}
+    .kv{border-collapse:collapse;margin:7px 0 0;font-size:12px}
+    .kv td{padding:2px 12px 2px 0;vertical-align:top;color:var(--ink-mid)}
+    .kv td:first-child{color:var(--crit);white-space:nowrap}
+    .flag p{margin:4px 0 0;font-size:12px;color:var(--ink-mid)}
+
+    /* Addresses + signatures */
+    .verdict{display:flex;align-items:center;gap:7px;margin:0 0 9px;
+     font-size:10.5px;text-transform:uppercase;letter-spacing:.06em}
+    .addr{border:1px solid var(--rule);background:var(--paper2);padding:9px 11px;margin:0 0 7px}
+    .addr .who{font-size:11px;color:var(--ink-pale);margin-top:4px}
+    .sigs{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
+    .sig{border:1px solid var(--rule)}
+    .sig .co{font-size:10.5px;padding:5px 8px;color:var(--ink-mid);border-bottom:1px solid var(--rule)}
+    .sig img{width:100%;display:block;background:#fff} /* white stays: PNG crop of paper */
+
+    /* Roster controls — only shown once the script enables them. */
+    .ctl{margin:0 0 13px;display:flex;flex-direction:column;gap:7px}
+    .ctl-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+    .ctl-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.1em;
+     color:var(--ink-pale);margin-right:4px}
+    .chip{font:inherit;font-size:11.5px;padding:3px 11px;border:1px solid var(--rule);
+     background:var(--paper);color:var(--ink-mid);cursor:pointer}
+    .chip:hover{border-color:var(--ink-mid);color:var(--ink)}
+    .chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--paper)}
+    .chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+    .ctl-count{margin:0;font-size:11px;color:var(--ink-pale)}
+
+    /* Roster — a ruled list, like the on-screen page. */
+    table.co{width:100%;border-collapse:collapse;font-size:12.5px}
+    table.co th{text-align:left;font-size:9.5px;text-transform:uppercase;letter-spacing:.1em;
+     color:var(--ink-pale);font-weight:500;padding:0 10px 6px 0;border-bottom:1px solid var(--rule)}
+    table.co td{padding:8px 10px 8px 0;border-bottom:1px solid var(--rule);vertical-align:top}
+    table.co tr[hidden]{display:none}
+    .co-name{font-weight:700}
+    .co-name.dead{color:var(--ink-mid);text-decoration:line-through;text-decoration-thickness:1px}
+    .nzbn{font-size:11px;color:var(--ink-pale)}
+    .role-cell{color:var(--accent);white-space:nowrap}
+    .role-cell .ceased{color:var(--ink-pale)}
+    .st-cell{white-space:nowrap;font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+    .st-reg{color:var(--green)} .st-rem{color:var(--ink-pale)} .st-crit{color:var(--crit)}
+    .rowflag{display:flex;align-items:center;gap:5px;margin-top:4px}
+    .rowflag span{font-size:9.5px;text-transform:uppercase;letter-spacing:.05em}
+
+    footer{margin-top:34px;border-top:1px solid var(--rule);padding-top:12px;
+     font-size:10.5px;color:var(--ink-pale)}
+
+    @media (max-width:640px){
+     .stats{flex-wrap:wrap}.stat{flex:1 1 40%;border-bottom:1px solid var(--rule)}
+     h1{font-size:30px}
+    }
+    /* Print: white ground, ink outlines, and light even if dark was chosen — a
+       dark document lays down a solid page of toner. Severity squares keep their
+       fill: that colour is the finding, not decoration. */
     @media print {
-        :root { color-scheme: light; }
-        body, .page { background: #fff; }
-        .page { max-width: none; padding: 0; }
-        h2 { break-after: avoid; }
-        .flag, .addr, tr { break-inside: avoid; }
-        table.companies th, .sig .co, .flag, .addr, .card, .strip { background: #fff !important; }
-        table.companies th { border-bottom: 1px solid #999; }
-        .flag, .addr { border: 1px solid #bbb; }
+        :root,:root[data-theme="dark"] { color-scheme: light; }
+        body,.doc,.flag,.addr,table.co th{background:#fff !important}
+        .doc{max-width:none;padding:0}
+        .ctl{display:none}
+        .sec-head span,h1{break-after:avoid}
+        .flag,.addr,tr,.sig{break-inside:avoid}
+        .flag,.addr,.sig{border-color:#bbb}
+        table.co th{border-bottom:1px solid #999}
     }
 </style>
 </head>
 <body>
-<div class="page">
-    <header>
-        <h1>Director report — ${esc(personName)}</h1>
-        <div class="timestamp">Generated: ${esc(nzTimestamp(now))}</div>
-        <div class="disclaimer">Point-in-time snapshot of NZ Government register data (MBIE) as at the generation date. Provided for informational purposes only. Print this page to PDF for a paginated copy.</div>
-    </header>
-
-    <h2>Register checks</h2>
-    ${flagBlock}
-
-    <h2>Associated companies (${results.length})</h2>
-    <table class="companies">
-        <thead><tr><th>Company</th><th>NZBN</th><th>Role</th><th>Shareholding</th><th>Status</th><th>Resigned</th><th>Flags</th></tr></thead>
-        <tbody>${companyRows}</tbody>
-    </table>
-
-    ${addresses.length > 0 ? `
-    <h2>Known addresses (KYD)</h2>
-    <div class="addr-verdict ${addresses.length === 1 ? 'match' : 'mismatch'}">
-        ${addresses.length === 1 ? '✓ All company records use the same address' : `⚠ ${addresses.length} different addresses on record`}
+<div class="doc">
+    <div class="mast">
+        <p class="sup"><em>個人調書</em>Individual record · Mitsuketa 見つけた</p>
+        <h1>${esc(personName)}</h1>
+        <p class="role">${esc([results.some(r => r.shareholding > 0) ? 'Shareholder' : null,
+                              results.some(r => r.isDirector) ? 'Director' : null]
+                              .filter(Boolean).join(' · ') || 'Individual')}</p>
+        <p class="stamp">Generated ${esc(nzTimestamp(now))} · point-in-time snapshot of NZ register
+           data (MBIE) as at that moment. Informational only — not a formal search.</p>
     </div>
-    ${addresses.map((a) => `
-    <div class="addr">
-        <div>${esc(a.fullAddress)}</div>
-        <div class="who">Used by ${a.companies.length} compan${a.companies.length === 1 ? 'y' : 'ies'}: ${esc(a.companies.join(', '))}</div>
-    </div>`).join('')}` : ''}
+    <div class="rule2"></div>
 
-    ${signatures.length > 0 ? `
-    <h2>Signatures from consent forms (KYD)</h2>
-    <div class="sigs">
-        ${signatures.map((s) => `
-        <div class="sig">
-            <div class="co">${esc(s.companyName)} · #${esc(s.companyNumber)}</div>
-            <img src="${s.imageDataUrl}" alt="Signature from ${esc(s.companyName)}" />
-        </div>`).join('')}
-    </div>` : ''}
+    <div class="stats">
+        <div class="stat"><b>${results.length}</b><span>Companies</span></div>
+        <div class="stat"><b>${activeCount}</b><span>Active</span></div>
+        <div class="stat"><b>${directorCount}</b><span>Directorships</span></div>
+        <div class="stat"><b>${shareholderCount}</b><span>Shareholdings</span></div>
+        <div class="stat${flagCount > 0 ? ' crit' : ''}"><b>${flagCount}</b><span>Flags</span></div>
+    </div>
 
-    <footer>Mitsuketa 見つけた · Generated ${esc(nzTimestamp(now))} · Data sourced from NZ Government registers (MBIE)</footer>
+    <section class="sec">
+        <div class="sec-head"><i>険</i><span>Register checks</span><u></u></div>
+        ${flagBlock}
+    </section>
+
+    ${addresses.length > 0 || signatures.length > 0 ? `
+    <section class="sec">
+        <div class="sec-head"><i>印</i><span>Verification</span><u></u></div>
+        ${addresses.length > 0 ? `
+        <div class="verdict">
+            <span class="sq ${addresses.length === 1 ? 'green' : 'amber'} sm" aria-hidden="true">${addresses.length === 1 ? '青' : '琥'}</span>
+            <span style="color:var(--${addresses.length === 1 ? 'green' : 'amber'})">${addresses.length === 1
+                ? 'All company records use the same address'
+                : `${addresses.length} different addresses on record`}</span>
+        </div>
+        ${addresses.map((a) => `
+        <div class="addr">
+            <div>${esc(a.fullAddress)}</div>
+            <div class="who">Used by ${a.companies.length} compan${a.companies.length === 1 ? 'y' : 'ies'}: ${esc(a.companies.join(', '))}</div>
+        </div>`).join('')}` : ''}
+        ${signatures.length > 0 ? `
+        <div class="sigs" style="margin-top:${addresses.length > 0 ? '14px' : '0'}">
+            ${signatures.map((sig) => `
+            <div class="sig">
+                <div class="co">${esc(sig.companyName)} · #${esc(sig.companyNumber)}</div>
+                <img src="${sig.imageDataUrl}" alt="Signature from ${esc(sig.companyName)}" />
+            </div>`).join('')}
+        </div>` : ''}
+    </section>` : ''}
+
+    <section class="sec">
+        <div class="sec-head"><i>社</i><span>Companies · ${results.length}</span><u></u></div>
+        ${rosterControls}
+        <table class="co" id="roster">
+            <thead><tr><th style="width:44%">Company</th><th>Role</th><th>Ceased</th><th>Status</th></tr></thead>
+            <tbody id="rosterBody">${companyRows}</tbody>
+        </table>
+    </section>
+
+    <footer>
+        Mitsuketa <span style="font-family:var(--serif)">見つけた</span> · Generated ${esc(nzTimestamp(now))} ·
+        Data sourced from NZ Government registers (MBIE). Individuals are matched by name; the registers
+        publish no unique identifier for a person, so two people sharing a name cannot be told apart.
+    </footer>
 </div>
 ${THEME_TOGGLE_HTML}
 ${THEME_TOGGLE_JS}
+<script>
+/* Roster sort + filter. The document is complete and correctly ordered without
+   this — the controls stay hidden unless the script runs, and are suppressed in
+   print, so a no-script reader or a printout sees every company rather than a
+   broken list. Filters only ever hide; nothing is removed from the file. */
+(function () {
+  var ctl = document.getElementById('ctl'), body = document.getElementById('rosterBody');
+  if (!ctl || !body) return;
+  var rows = [].slice.call(body.querySelectorAll('tr'));
+  if (rows.length < 2) return;
+  ctl.hidden = false;
+
+  var count = document.getElementById('ctlCount');
+  var sortBtns = [].slice.call(ctl.querySelectorAll('[data-sort]'));
+  var filtBtns = [].slice.call(ctl.querySelectorAll('[data-filter]'));
+  var sort = 'default', filter = 'all';
+  var num = function (r, a) { return +(r.getAttribute(a) || 0); };
+
+  function apply() {
+    var order = rows.slice();
+    if (sort === 'pct') order.sort(function (a, b) { return num(b,'data-pct') - num(a,'data-pct'); });
+    else if (sort === 'name') order.sort(function (a, b) {
+      return (a.getAttribute('data-name')||'').localeCompare(b.getAttribute('data-name')||''); });
+    else order.sort(function (a, b) {
+      // Directors first, then by holding — the on-screen default.
+      var d = num(b,'data-director') - num(a,'data-director');
+      return d !== 0 ? d : num(b,'data-pct') - num(a,'data-pct'); });
+
+    var shown = 0, frag = document.createDocumentFragment();
+    order.forEach(function (r) {
+      var ok = filter === 'all'
+        || (filter === 'active' && num(r,'data-active') === 1)
+        || (filter === 'director' && num(r,'data-director') === 1)
+        || (filter === 'shareholder' && num(r,'data-shareholder') === 1);
+      r.hidden = !ok;
+      if (ok) shown++;
+      frag.appendChild(r);
+    });
+    body.appendChild(frag);
+    count.textContent = shown === rows.length
+      ? 'Showing all ' + rows.length + ' companies'
+      : 'Showing ' + shown + ' of ' + rows.length + ' companies';
+  }
+
+  sortBtns.forEach(function (b) { b.addEventListener('click', function () {
+    sort = b.getAttribute('data-sort');
+    sortBtns.forEach(function (o) { o.setAttribute('aria-pressed', String(o === b)); });
+    apply(); }); });
+  filtBtns.forEach(function (b) { b.addEventListener('click', function () {
+    filter = b.getAttribute('data-filter');
+    filtBtns.forEach(function (o) { o.setAttribute('aria-pressed', String(o === b)); });
+    apply(); }); });
+
+  apply();
+})();
+</script>
 </body>
 </html>`;
 }
