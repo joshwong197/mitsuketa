@@ -28,6 +28,7 @@ import { TabBar } from './components/TabBar';
 import { CasePanel } from './components/CasePanel';
 import { enrichCompanyResults, enrichGraphNodes } from './src/api/companyStatusApi';
 import { enrichPersonNodes } from './src/api/personStatusApi';
+import { displaySubjectName } from './utils/personName';
 import { markDirectLineage, calculateHiddenDescendants, expandNodeSubtree, collapseNodeSubtree } from './utils/graphVisibility';
 import { getLayoutedElements } from './services/layoutService';
 import { tidyUpLayout } from './services/layoutOptimizer';
@@ -2120,7 +2121,7 @@ function App() {
             caseDepth={caseDepth}
             caseFlags={caseFlags}
             caseOpened={caseOpened}
-            personSearchName={personSearchName}
+            personSearchName={displaySubjectName(personSearchName, personSearchResults)}
             personResultsCount={personSearchResults.length}
             personActiveCount={personActiveCount}
             personFlagsCount={personFlagsCount}

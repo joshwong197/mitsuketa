@@ -271,6 +271,11 @@ export function buildPersonReportHtml(opts: {
         --gothic: "Zen Kaku Gothic New", "Yu Gothic UI", "Segoe UI", system-ui, sans-serif;
         --mono:   "Cascadia Mono", Consolas, ui-monospace, monospace;
     }
+    /* The toggle stamps data-theme; flipping color-scheme makes every
+       light-dark() token above follow it, in both directions. */
+    :root[data-theme="light"] { color-scheme: light; }
+    :root[data-theme="dark"]  { color-scheme: dark; }
+    ${THEME_TOGGLE_CSS}
     body { font-family: var(--gothic); color: var(--ink); margin: 0; background: var(--paper2); }
     .page { max-width: 900px; margin: 0 auto; padding: 32px; background: var(--paper); min-height: 100vh; box-sizing: border-box; }
     header { border-bottom: 2px solid var(--ink); padding-bottom: 16px; margin-bottom: 24px; }
@@ -355,6 +360,8 @@ export function buildPersonReportHtml(opts: {
 
     <footer>Mitsuketa 見つけた · Generated ${esc(nzTimestamp(now))} · Data sourced from NZ Government registers (MBIE)</footer>
 </div>
+${THEME_TOGGLE_HTML}
+${THEME_TOGGLE_JS}
 </body>
 </html>`;
 }
@@ -444,6 +451,43 @@ export async function downloadTitleReportHtml(report: TitleReportData): Promise<
     const html = buildTitleReportHtml(view, now, map);
     downloadHtml(html, `mitsuketa-title-${safeName(view.titleNo)}-${now.toISOString().split('T')[0]}.html`);
 }
+
+
+/**
+ * Theme toggle for the standalone HTML reports.
+ *
+ * Both reports use light-dark() against `color-scheme`, so with no toggle they
+ * silently follow the reader's OS — which is why a report opened on a dark
+ * desktop arrived dark with no way back. Setting data-theme on :root flips
+ * color-scheme explicitly and every token follows, the same mechanism index.css
+ * uses. Default stays "whatever the OS says"; the button is an override.
+ *
+ * The label names what you will GET, not what you are looking at.
+ */
+const THEME_TOGGLE_CSS = `
+.theme-btn{position:fixed;top:12px;right:12px;z-index:50;font:inherit;font-size:11px;
+ letter-spacing:.06em;text-transform:uppercase;padding:5px 11px;cursor:pointer;
+ background:var(--paper);color:var(--ink-mid);border:1px solid var(--rule)}
+.theme-btn:hover{border-color:var(--ink-mid);color:var(--ink)}
+.theme-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media print{.theme-btn{display:none}}`;
+
+const THEME_TOGGLE_HTML = '<button type="button" class="theme-btn" id="themeBtn">Dark</button>';
+
+const THEME_TOGGLE_JS = `<script>
+(function(){
+  var b=document.getElementById('themeBtn');if(!b)return;
+  function current(){
+    return document.documentElement.dataset.theme
+      || (window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+  }
+  function paint(){var c=current();b.textContent=c==='dark'?'Light':'Dark';
+    b.setAttribute('aria-label','Switch to '+(c==='dark'?'light':'dark')+' theme');}
+  b.addEventListener('click',function(){
+    document.documentElement.dataset.theme=current()==='dark'?'light':'dark';paint();});
+  paint();
+})();
+</script>`;
 
 const TONE_HEX: Record<string, string> = {
     accent: '#2f3f6b', green: '#3f6b4f', amber: '#8a6a2a', ink: '#2e2b26', wash: '#b6b1a8',
@@ -535,8 +579,18 @@ export function buildTitleReportHtml(view: TitleView, now: Date, mapSvg = ''): s
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${esc(view.titleNo)} — Record of title — Mitsuketa</title>
 <style>
-:root{--paper:#f3f1ed;--ink:#2e2b26;--ink-mid:#5f5a52;--ink-pale:#8c8579;--ink-wash:#c3bdb2;
---rule:#dcd8d0;--accent:#2f3f6b;--accent-ink:#f4f2ee;--margin:84px;--gap:22px}
+:root{
+ color-scheme:light dark;
+ /* Was light-only hex. Paired so the reader can switch, since a report opened on
+    a dark desktop should not be stuck bright — print still forces light below. */
+ --paper:light-dark(#f3f1ed,#211f1c);--ink:light-dark(#2e2b26,#e6e2d9);
+ --ink-mid:light-dark(#5f5a52,#a8a29a);--ink-pale:light-dark(#8c8579,#7d776e);
+ --ink-wash:light-dark(#c3bdb2,#4a453f);--rule:light-dark(#dcd8d0,#3a352f);
+ --accent:light-dark(#2f3f6b,#93a5d6);--accent-ink:light-dark(#f4f2ee,#211f1c);
+ --margin:84px;--gap:22px}
+:root[data-theme="light"]{color-scheme:light}
+:root[data-theme="dark"]{color-scheme:dark}
+${THEME_TOGGLE_CSS}
 *{box-sizing:border-box}
 html,body{margin:0}
 body{background:var(--paper);color:var(--ink);font-size:14px;line-height:1.6;
@@ -810,5 +864,7 @@ ${view.burdens.length === 0 ? '' : section('負担', 'Standing burdens', String(
   apply();
 })();
 </script>
+${THEME_TOGGLE_HTML}
+${THEME_TOGGLE_JS}
 </body></html>`;
 }

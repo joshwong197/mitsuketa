@@ -161,6 +161,17 @@ function ExportedGraph({ payload }: { payload: ExportPayload }) {
 
     const resetView = () => setAllNodes(initialRef.current);
 
+    // Theme. export-viewer.css already carries the :root[data-theme] rules, but
+    // nothing ever set the attribute — so an exported chart silently followed the
+    // reader's OS and arrived dark with no way back. Default stays the OS
+    // preference; this is an override, and the label names what you will get.
+    const [theme, setTheme] = useState<'light' | 'dark' | null>(null);
+    const effective = theme
+        ?? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    useEffect(() => {
+        if (theme) document.documentElement.dataset.theme = theme;
+    }, [theme]);
+
     const generated = new Date(payload.generatedAt);
     const generatedStr = generated.toLocaleString('en-NZ', {
         dateStyle: 'full',
@@ -204,6 +215,13 @@ function ExportedGraph({ payload }: { payload: ExportPayload }) {
                     </button>
                     <button onClick={resetView} className="text-[11px] px-2 py-1 border border-rule text-ink-mid hover:border-ink-mid hover:text-ink">
                         Reset view
+                    </button>
+                    <button
+                        onClick={() => setTheme(effective === 'dark' ? 'light' : 'dark')}
+                        aria-label={`Switch to ${effective === 'dark' ? 'light' : 'dark'} theme`}
+                        className="text-[11px] px-2 py-1 border border-rule text-ink-mid hover:border-ink-mid hover:text-ink"
+                    >
+                        {effective === 'dark' ? 'Light' : 'Dark'}
                     </button>
                 </div>
                 <NotesBlock notes={notes} />
