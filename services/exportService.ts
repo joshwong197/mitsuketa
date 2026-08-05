@@ -298,12 +298,20 @@ export function buildPersonReportHtml(opts: {
     .sig .co { font-size: 11px; font-weight: 600; padding: 4px 8px; background: var(--paper2); }
     .sig img { width: 100%; display: block; background: #fff; } /* white stays: PNG signature crops */
     footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid var(--rule); font-size: 10px; color: var(--ink-pale); }
+    /* Print: white ground, ink outlines. Every tinted surface — the page wash,
+       table headers, flag blocks, the address and signature panels — becomes
+       white with a hairline, so a 40-company report does not lay down a solid
+       page of toner. Severity squares keep their fill: they are the one thing
+       whose colour carries meaning rather than decoration. */
     @media print {
         :root { color-scheme: light; }
-        body { background: var(--paper); }
+        body, .page { background: #fff; }
         .page { max-width: none; padding: 0; }
         h2 { break-after: avoid; }
         .flag, .addr, tr { break-inside: avoid; }
+        table.companies th, .sig .co, .flag, .addr, .card, .strip { background: #fff !important; }
+        table.companies th { border-bottom: 1px solid #999; }
+        .flag, .addr { border: 1px solid #bbb; }
     }
 </style>
 </head>
@@ -640,7 +648,18 @@ dt:first-of-type,dt:first-of-type + dd{border-top:none}
  .ev-when{position:static;display:block;width:auto;padding-right:0;text-align:left;margin-bottom:3px}
  .ev-year::before{left:0}
  h1{font-size:32px}}
-@media print{body{background:#fff}.memo{border-left-color:#999}}
+/* Print: drop every tinted ground so a long chronology does not cost a
+   cartridge. Severity squares keep their fill — that colour is the meaning.
+   Controls are hidden (they do nothing on paper) and events avoid splitting. */
+@media print{
+ :root{color-scheme:light}
+ body,.doc,.sec,.ev,.entry,.fact{background:#fff !important}
+ .memo{border-left-color:#999}
+ .ctl{display:none}
+ .ev,.entry{break-inside:avoid}
+ .sec-head,.ev-year{break-after:avoid}
+ .ev-year span{background:#fff}
+}
 </style></head>
 <body><div class="doc">
 

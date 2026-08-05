@@ -1227,36 +1227,6 @@ function App() {
     }
   };
 
-  const exportAsPNG = async () => {
-    let element: HTMLElement | null = null;
-    let filename = 'mitsuketa';
-
-    if (activeMainTab === 'individual' && personSearchResults.length > 0) {
-      element = document.getElementById('person-search-results');
-      filename = `person-results-${personSearchName.replace(/[^a-z0-9]/gi, '_')}`;
-    } else if (nodes.length > 0) {
-      element = document.querySelector('.react-flow') as HTMLElement;
-      filename = `mitsuketa-${new Date().toISOString().split('T')[0]}`;
-    }
-
-    if (!element) return;
-
-    try {
-      const { toPng } = await import('html-to-image');
-      const dataUrl = await toPng(element, {
-        backgroundColor: theme === 'dark' ? '#020617' : '#f8fafc',
-        quality: 1.0,
-      });
-
-      const link = document.createElement('a');
-      link.download = `${filename}.png`;
-      link.href = dataUrl;
-      link.click();
-    } catch (err) {
-      console.error('Failed to export PNG:', err);
-      setError('Failed to export as PNG');
-    }
-  };
 
   const [isExportingHtml, setIsExportingHtml] = useState(false);
 
@@ -1979,6 +1949,10 @@ function App() {
   // keyed by nzbn ?? personId(label) (the one person-identity normalization).
   // No consumer yet — Stage B's CustomNodes dog-ear renders these. Kept cheap:
   // identity when there are no notes, untouched node objects when unannotated.
+  // Role filter (left panel) — view-only, never persisted.
+  const [hideDirectors, setHideDirectors] = useState(false);
+  const [hideShareholders, setHideShareholders] = useState(false);
+
   const nodesWithAnnotations = useMemo(() => {
     if (caseNotes.length === 0) return nodes;
     const flagByKey = new Map<string, boolean>();
@@ -1992,6 +1966,51 @@ function App() {
       return { ...n, data: { ...data, hasNote: true, noteFlagged: !!flagByKey.get(key) } as any };
     });
   }, [nodes, caseNotes]);
+
+  /**
+   * Role filter — hides person nodes so a prolific chart can be read.
+   *
+   * Someone who is BOTH a director and a shareholder is only hidden when both
+   * filters are on: they are genuinely part of the ownership structure, so
+   * "hide directors" must not remove them from it. Edges are filtered to match,
+   * because React Flow warns and misroutes when an edge names a node that is
+   * no longer in the list.
+   *
+   * Purely a view over the same data — nothing is refetched, and allNodesInMemory
+   * is untouched, so exports and save points still carry the whole chart.
+   */
+  const hidePerson = useCallback((data: NodeData): boolean => {
+    if (data.type !== NodeType.PERSON) return false;
+    const role = data.roleKind;
+    if (role === 'both') return hideDirectors && hideShareholders;
+    if (role === 'director') return hideDirectors;
+    if (role === 'shareholder') return hideShareholders;
+    return false; // role unknown — never hide something we cannot classify
+  }, [hideDirectors, hideShareholders]);
+
+  const visibleNodes = useMemo(() => {
+    if (!hideDirectors && !hideShareholders) return nodesWithAnnotations;
+    return nodesWithAnnotations.filter(n => !hidePerson(n.data as unknown as NodeData));
+  }, [nodesWithAnnotations, hideDirectors, hideShareholders, hidePerson]);
+
+  const visibleEdges = useMemo(() => {
+    if (!hideDirectors && !hideShareholders) return edges;
+    const ids = new Set(visibleNodes.map(n => n.id));
+    return edges.filter(e => ids.has(e.source) && ids.has(e.target));
+  }, [edges, visibleNodes, hideDirectors, hideShareholders]);
+
+  // How many people each filter would remove, for the panel's counts. Derived
+  // from the unfiltered set so the numbers do not change as filters are applied.
+  const roleCounts = useMemo(() => {
+    let directors = 0, shareholders = 0;
+    for (const n of nodes) {
+      const d = n.data as unknown as NodeData;
+      if (d.type !== NodeType.PERSON) continue;
+      if (d.roleKind === 'director' || d.roleKind === 'both') directors++;
+      if (d.roleKind === 'shareholder' || d.roleKind === 'both') shareholders++;
+    }
+    return { directors, shareholders };
+  }, [nodes]);
 
   // Case-file derived values
   const graphLoaded = allNodesInMemory.length > 0;
@@ -2106,6 +2125,11 @@ function App() {
             personActiveCount={personActiveCount}
             personFlagsCount={personFlagsCount}
             personSearchOpened={personSearchOpened}
+            hideDirectors={hideDirectors}
+            hideShareholders={hideShareholders}
+            onToggleHideDirectors={() => setHideDirectors(v => !v)}
+            onToggleHideShareholders={() => setHideShareholders(v => !v)}
+            roleCounts={roleCounts}
             trail={trail}
             caseNotes={caseNotes}
             noteTabLabels={Object.fromEntries(graphTabs.map(t => [t.id, t.label]))}
@@ -2136,7 +2160,6 @@ function App() {
             onImportSavePoint={handleImportSnapshot}
             onCheckChanges={handleCheckChanges}
             onExportHtml={exportAsHtml}
-            onExportPng={exportAsPNG}
             isExportingHtml={isExportingHtml}
             canExport={nodes.length > 0 || personSearchResults.length > 0}
           />
@@ -2242,8 +2265,8 @@ function App() {
               />
             ) : (
               <ReactFlow
-                nodes={nodesWithAnnotations}
-                edges={edges}
+                nodes={visibleNodes}
+                edges={visibleEdges}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onNodeClick={handleNodeClick}

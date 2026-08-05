@@ -95,3 +95,25 @@ body {
 .react-flow__node.selected,
 .react-flow__node:focus,
 .react-flow__node:focus-visible { outline: none; }
+
+/* ─── Print ─────────────────────────────────────────────────────────
+   The exported chart is a web page first, but it does get printed. Drop
+   every tinted ground to white and let the node borders carry the
+   structure, so a 200-node chart costs ink for the ink, not the paper.
+   Severity squares keep their fill — that colour is the finding, not
+   decoration. The dot grid, the controls and the attribution go: none of
+   them mean anything on paper. */
+@media print {
+  :root { color-scheme: light; }
+  body { background: #fff; }
+  .react-flow__background,
+  .react-flow__controls,
+  .react-flow__attribution { display: none !important; }
+  /* Node cards and the header panel: white ground, hairline border. */
+  .bg-paper, .bg-paper2 { background: #fff !important; }
+  .react-flow__node { box-shadow: none !important; }
+  /* Anything that is a coloured severity mark keeps its fill. */
+  .bg-crit, .bg-amber, .bg-green { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* Let the chart spill onto as many sheets as it needs rather than clipping. */
+  .w-screen, .h-screen { width: auto !important; height: auto !important; }
+}

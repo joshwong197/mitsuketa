@@ -213,7 +213,7 @@ export const AboutPage: React.FC<Props> = ({ onClose }) => {
                                 },
                                 {
                                     title: 'Maps and exports',
-                                    body: 'Pan, zoom, and expand branches. Save snapshots of an investigation, or export the chart as an interactive page, PNG, or JSON.',
+                                    body: 'Pan, zoom, and expand branches. Hide directors or shareholders to read a crowded chart. Save a point to compare against later, or export the chart as an interactive page or JSON.',
                                 },
                             ].map((f) => (
                                 <div key={f.title} className="bg-paper p-3.5">
