@@ -292,7 +292,12 @@ export interface NZBNFullEntity {
           };
           otherShareholder?: {
             currentEntityName?: string;
+            // Often absent: the register stores a corporate shareholder as a
+            // name plus a register number, and only links it to an NZBN when
+            // MBIE has matched the two. resolveEntityNzbn() recovers it.
             nzbn?: string;
+            companyNumber?: string; // sourceRegisterUniqueId (NZCN) of the holder
+            entityType?: string;
           };
           appointmentDate?: string;
         }>;
@@ -309,8 +314,12 @@ export interface NZBNFullEntity {
       fullName?: string;
     };
     roleEntity?: {
+      // The NZBN spec calls this entityName; `name` is kept because some
+      // payloads carry it. Read both — reading only `name` silently dropped
+      // every corporate role holder.
+      entityName?: string;
       name?: string;
-      nzbn?: string;
+      nzbn?: string; // documented as "currently not populated"
     };
   }>;
 }

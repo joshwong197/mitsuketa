@@ -1,5 +1,5 @@
 import { ApiConfig, GraphEdge, GraphNode, LoggerCallback, NodeType } from '../types.js';
-import { fetchEntityDetails, fetchRolesByEntityName } from './apiService.js';
+import { fetchEntityDetails, fetchRolesByEntityName, resolveEntityNzbn } from './apiService.js';
 import { searchByPersonName } from './directorSearchService.js';
 import { personId, displayPersonName } from '../utils/personId.js';
 
@@ -233,8 +233,24 @@ export async function findConnection(
             if (!fullName.trim()) continue;
             const node = makePersonNode(fullName);
             neighbors.push({ node, edge: makeEdge(node.id, nzbn, edgeLabel, 'parent', false, 'shareholder') });
-          } else if (holder.otherShareholder?.nzbn) {
-            const parentNzbn = holder.otherShareholder.nzbn;
+          } else if (holder.otherShareholder) {
+            // A corporate holder with no `nzbn` on the shareholding record is
+            // not necessarily overseas or unregistered — the register simply did
+            // not link it. Recover the NZBN (one cached search) so the BFS can
+            // walk through it; a holder that stays unresolved is still skipped,
+            // because there is nothing to expand without an NZBN.
+            let parentNzbn = holder.otherShareholder.nzbn || '';
+            if (!parentNzbn) {
+              apiCalls++;
+              parentNzbn = await resolveEntityNzbn(
+                holder.otherShareholder.companyNumber,
+                holder.otherShareholder.currentEntityName,
+                config,
+                '/api/proxy',
+                onLog
+              );
+            }
+            if (!parentNzbn) continue;
             const node = makeCompanyNode(
               parentNzbn,
               holder.otherShareholder.currentEntityName || 'Unknown Company'
@@ -261,10 +277,19 @@ export async function findConnection(
         if (!fullName.trim()) continue;
         const node = makePersonNode(fullName);
         neighbors.push({ node, edge: makeEdge(node.id, nzbn, '▼ Director', 'parent', false, 'director') });
-      } else if (role.roleEntity?.nzbn) {
-        // Non-person roles (e.g. General Partner of a Limited Partnership)
+      } else if (role.roleEntity?.entityName || role.roleEntity?.name || role.roleEntity?.nzbn) {
+        // Non-person roles (e.g. General Partner of a Limited Partnership).
+        // roleEntity.nzbn is documented as "currently not populated", so these
+        // only ever link up by resolving the name.
         if (!isActive) continue;
-        const node = makeCompanyNode(role.roleEntity.nzbn, role.roleEntity.name || 'Unknown Entity');
+        const roleEntityName = role.roleEntity.entityName || role.roleEntity.name || '';
+        let roleEntityNzbn = role.roleEntity.nzbn || '';
+        if (!roleEntityNzbn && roleEntityName) {
+          apiCalls++;
+          roleEntityNzbn = await resolveEntityNzbn(undefined, roleEntityName, config, '/api/proxy', onLog);
+        }
+        if (!roleEntityNzbn) continue;
+        const node = makeCompanyNode(roleEntityNzbn, roleEntityName || 'Unknown Entity');
         neighbors.push({ node, edge: makeEdge(node.id, nzbn, `▼ ${role.roleType}`, 'parent') });
       }
     }
