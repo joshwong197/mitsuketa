@@ -28,6 +28,7 @@ import { TabBar } from './components/TabBar';
 import { CasePanel } from './components/CasePanel';
 import { enrichCompanyResults, enrichGraphNodes } from './src/api/companyStatusApi';
 import { enrichPersonNodes } from './src/api/personStatusApi';
+import { displaySubjectName } from './utils/personName';
 import { markDirectLineage, calculateHiddenDescendants, expandNodeSubtree, collapseNodeSubtree } from './utils/graphVisibility';
 import { getLayoutedElements } from './services/layoutService';
 import { tidyUpLayout } from './services/layoutOptimizer';
@@ -1227,36 +1228,6 @@ function App() {
     }
   };
 
-  const exportAsPNG = async () => {
-    let element: HTMLElement | null = null;
-    let filename = 'mitsuketa';
-
-    if (activeMainTab === 'individual' && personSearchResults.length > 0) {
-      element = document.getElementById('person-search-results');
-      filename = `person-results-${personSearchName.replace(/[^a-z0-9]/gi, '_')}`;
-    } else if (nodes.length > 0) {
-      element = document.querySelector('.react-flow') as HTMLElement;
-      filename = `mitsuketa-${new Date().toISOString().split('T')[0]}`;
-    }
-
-    if (!element) return;
-
-    try {
-      const { toPng } = await import('html-to-image');
-      const dataUrl = await toPng(element, {
-        backgroundColor: theme === 'dark' ? '#020617' : '#f8fafc',
-        quality: 1.0,
-      });
-
-      const link = document.createElement('a');
-      link.download = `${filename}.png`;
-      link.href = dataUrl;
-      link.click();
-    } catch (err) {
-      console.error('Failed to export PNG:', err);
-      setError('Failed to export as PNG');
-    }
-  };
 
   const [isExportingHtml, setIsExportingHtml] = useState(false);
 
@@ -1979,6 +1950,18 @@ function App() {
   // keyed by nzbn ?? personId(label) (the one person-identity normalization).
   // No consumer yet — Stage B's CustomNodes dog-ear renders these. Kept cheap:
   // identity when there are no notes, untouched node objects when unannotated.
+  // Role filter (left panel) — view-only, never persisted.
+  //
+  // Directors only, deliberately. A "hide shareholders" companion was built and
+  // removed: it appeared to work on the searched company and do nothing further
+  // out, which is not a bug in the filter but in what there is to filter —
+  // individual shareholders are only ever parsed by crawlUpstream (the root and
+  // its parents). crawlDownstream never creates a person node for a subsidiary's
+  // shareholders, so there was nothing out there to hide. A control that behaves
+  // differently depending on where you look is worse than no control, and hiding
+  // directors is what makes the corporate structure readable anyway.
+  const [hideDirectors, setHideDirectors] = useState(false);
+
   const nodesWithAnnotations = useMemo(() => {
     if (caseNotes.length === 0) return nodes;
     const flagByKey = new Map<string, boolean>();
@@ -1992,6 +1975,43 @@ function App() {
       return { ...n, data: { ...data, hasNote: true, noteFlagged: !!flagByKey.get(key) } as any };
     });
   }, [nodes, caseNotes]);
+
+  /**
+   * Role filter — hides person nodes so a prolific chart can be read.
+   *
+   * Someone who is BOTH a director and a shareholder is only hidden when both
+   * filters are on: they are genuinely part of the ownership structure, so
+   * "hide directors" must not remove them from it. Edges are filtered to match,
+   * because React Flow warns and misroutes when an edge names a node that is
+   * no longer in the list.
+   *
+   * Purely a view over the same data — nothing is refetched, and allNodesInMemory
+   * is untouched, so exports and save points still carry the whole chart.
+   */
+  const hidePerson = useCallback((data: NodeData): boolean => {
+    if (data.type !== NodeType.PERSON) return false;
+    // Only a director-ONLY person is hidden. Someone who also holds shares is
+    // part of the ownership structure, which is the thing being looked at.
+    return hideDirectors && data.roleKind === 'director';
+  }, [hideDirectors]);
+
+  const visibleNodes = useMemo(() => {
+    if (!hideDirectors) return nodesWithAnnotations;
+    return nodesWithAnnotations.filter(n => !hidePerson(n.data as unknown as NodeData));
+  }, [nodesWithAnnotations, hideDirectors, hidePerson]);
+
+  const visibleEdges = useMemo(() => {
+    if (!hideDirectors) return edges;
+    const ids = new Set(visibleNodes.map(n => n.id));
+    return edges.filter(e => ids.has(e.source) && ids.has(e.target));
+  }, [edges, visibleNodes, hideDirectors]);
+
+  // How many the filter would remove, for the panel's count. Counts only
+  // director-ONLY people, matching what hidePerson actually hides, so the number
+  // on the button is the number that disappears.
+  const hideableDirectors = useMemo(
+    () => nodes.filter(n => (n.data as unknown as NodeData).roleKind === 'director').length,
+    [nodes]);
 
   // Case-file derived values
   const graphLoaded = allNodesInMemory.length > 0;
@@ -2101,11 +2121,14 @@ function App() {
             caseDepth={caseDepth}
             caseFlags={caseFlags}
             caseOpened={caseOpened}
-            personSearchName={personSearchName}
+            personSearchName={displaySubjectName(personSearchName, personSearchResults)}
             personResultsCount={personSearchResults.length}
             personActiveCount={personActiveCount}
             personFlagsCount={personFlagsCount}
             personSearchOpened={personSearchOpened}
+            hideDirectors={hideDirectors}
+            onToggleHideDirectors={() => setHideDirectors(v => !v)}
+            hideableDirectors={hideableDirectors}
             trail={trail}
             caseNotes={caseNotes}
             noteTabLabels={Object.fromEntries(graphTabs.map(t => [t.id, t.label]))}
@@ -2136,7 +2159,6 @@ function App() {
             onImportSavePoint={handleImportSnapshot}
             onCheckChanges={handleCheckChanges}
             onExportHtml={exportAsHtml}
-            onExportPng={exportAsPNG}
             isExportingHtml={isExportingHtml}
             canExport={nodes.length > 0 || personSearchResults.length > 0}
           />
@@ -2242,8 +2264,8 @@ function App() {
               />
             ) : (
               <ReactFlow
-                nodes={nodesWithAnnotations}
-                edges={edges}
+                nodes={visibleNodes}
+                edges={visibleEdges}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onNodeClick={handleNodeClick}
