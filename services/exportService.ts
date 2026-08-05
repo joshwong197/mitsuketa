@@ -3,7 +3,7 @@
 
 import { GraphNode, GraphEdge, PersonCompanyResult, CaseNote } from '../types';
 import { DisqualifiedDirector } from '../src/api/disqualifiedDirectorsApi';
-import { InsolvencyRecord, isInsolvencyRecordCurrent } from '../src/api/insolvencyApi';
+import { InsolvencyRecord, isInsolvencyRecordCurrent, formatBirth } from '../src/api/insolvencyApi';
 import { heldFor, type MemorialEvent } from '../utils/memorials';
 import {
     buildTitleView, closedVerb, formatDate, markFor, yearOf,
@@ -219,7 +219,7 @@ export function buildPersonReportHtml(opts: {
              <table class="kv">
                  <tr><td>Estate</td><td>${esc(r.estateName)} — ${esc(r.insolvencyStatus)}${r.dischargeSuspended ? ' (discharge suspended)' : ''}</td></tr>
                  <tr><td>Type</td><td>${esc(r.insolvencyTypeDescription)}</td></tr>
-                 ${r.yearOfBirth ? `<tr><td>Born</td><td>${esc([r.monthOfBirth, r.yearOfBirth].filter(Boolean).join(' '))}</td></tr>` : ''}
+                 ${formatBirth(r.monthOfBirth, r.yearOfBirth) ? `<tr><td>Born</td><td>${esc(formatBirth(r.monthOfBirth, r.yearOfBirth)!)}</td></tr>` : ''}
                  ${r.occupationAtAdjudicationOrIndustryAtLiquidation ? `<tr><td>Occupation</td><td>${esc(r.occupationAtAdjudicationOrIndustryAtLiquidation)}</td></tr>` : ''}
                  <tr><td>Adjudication</td><td>${esc(r.adjudicationOrLiquidationDate)}</td></tr>
                  <tr><td>Discharge</td><td>${r.dischargeOrCompletionDate ? esc(r.dischargeOrCompletionDate) : 'not recorded on the register'}</td></tr>

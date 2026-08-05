@@ -3,7 +3,7 @@ import { Building2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { PersonCompanyResult } from '../types';
 import { KydVerificationPanel } from './KydVerificationPanel';
 import { DisqualifiedDirector } from '../src/api/disqualifiedDirectorsApi';
-import { InsolvencyRecord, isInsolvencyRecordCurrent } from '../src/api/insolvencyApi';
+import { InsolvencyRecord, isInsolvencyRecordCurrent, formatBirth } from '../src/api/insolvencyApi';
 import { summariseAddresses } from '../utils/addressSummary';
 import { displaySubjectName } from '../utils/personName';
 import { usePrimarySignature } from '../hooks/usePrimarySignature';
@@ -21,19 +21,6 @@ const formatDate = (dateString: string): string => {
     } catch (e) {
         return dateString;
     }
-};
-
-const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'];
-
-// The register returns monthOfBirth as a bare number ("1"), which rendered as
-// "Born 1 1976". Map it to a name; pass anything non-numeric straight through in
-// case the field ever arrives already spelled out.
-const formatBirth = (month?: string, year?: string): string | null => {
-    if (!year) return null;
-    if (!month) return year;
-    const n = parseInt(month, 10);
-    return `${Number.isInteger(n) && n >= 1 && n <= 12 ? MONTH_NAMES[n - 1] : month} ${year}`;
 };
 
 // Epoch ms for an API date string, or undefined if it can't be parsed.
