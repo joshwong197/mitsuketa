@@ -37,6 +37,10 @@ export interface TitleSummary {
     status?: string | null;
     land_district?: string | null;
     owners?: string | null;
+    /** Derived by intersecting the title polygon with the address layer — LINZ
+     *  ownership data carries no address. Null where the title has no geometry,
+     *  or no addressed point falls inside it (bare land, some cross-leases). */
+    address?: string | null;
 }
 
 export interface AddressResult {

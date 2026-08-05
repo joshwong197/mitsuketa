@@ -354,12 +354,19 @@ const Search: React.FC<{
         onOpenReport(await fetchTitleReport(titleNo), titleNo);
     };
 
+    // The address leads. On an owner search you already know whose titles these
+    // are — what you cannot tell from a title number is WHICH property it is, so
+    // the address earns the prominent line and the owner variant drops to the
+    // detail line, where it still distinguishes one namesake from another.
     const titleRow = (t: TitleSummary) => (
         <ResultRow
             key={t.title_no}
             left={t.title_no}
-            main={t.owners || [t.type, t.status].filter(Boolean).join(' · ')}
-            meta={t.owners ? [t.type, t.status, t.land_district].filter(Boolean).join(' · ') : (t.land_district ?? undefined)}
+            main={t.address || t.owners || [t.type, t.status].filter(Boolean).join(' · ')}
+            meta={[
+                t.address ? t.owners : null,
+                t.type, t.status, t.land_district,
+            ].filter(Boolean).join(' · ') || undefined}
             onClick={() => run(() => openTitle(t.title_no))}
         />
     );

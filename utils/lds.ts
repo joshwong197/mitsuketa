@@ -468,6 +468,27 @@ export async function searchAddress(client: LDSClient, query = '',
 
 const OWNER_RESULT_CAP = 50;
 
+// Addresses are derived one title at a time (see addressOf), so an owner with
+// many titles means many requests. Bounded rather than fired all at once, and
+// deliberately NOT combined into a single bbox query: an owner's titles can sit
+// in different land districts — Canterbury and North Auckland in one real
+// search — and a bbox spanning both covers most of the country, so the address
+// layer would return a capped slab of mostly irrelevant points.
+const ADDRESS_LOOKUP_CONCURRENCY = 6;
+
+/** Runs `fn` over `items` with at most `limit` in flight, preserving order. */
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+    const out = new Array<R>(items.length);
+    let next = 0;
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+        while (next < items.length) {
+            const i = next++;
+            out[i] = await fn(items[i]);
+        }
+    }));
+    return out;
+}
+
 /**
  * Match a person or company name against the owners table.
  *
@@ -512,10 +533,17 @@ export async function searchOwner(client: LDSClient, name: string): Promise<Owne
     const titleIds = [...new Set(rows.map(r => r.title_no).filter(Boolean))] as string[];
     const byNo = new Map<string, Record<string, any>>();
     if (titleIds.length > 0) {
-        for (const f of await client.getFeaturesForIds(TITLES_OWNERS_LAYER, 'title_no', titleIds)) {
+        const feats = await client.getFeaturesForIds(TITLES_OWNERS_LAYER, 'title_no', titleIds);
+        // The title features already carry their polygons, so the address costs a
+        // lookup rather than a refetch. A failure leaves that one row without an
+        // address instead of failing the whole search — "no address" is a normal
+        // outcome anyway, for a title with no geometry or no addressed point in it.
+        const summaries = await mapLimit(feats, ADDRESS_LOOKUP_CONCURRENCY, async (f) => {
             const s = titleSummary(f);
-            if (s.title_no) byNo.set(s.title_no, s);
-        }
+            s.address = await addressOf(client, f).catch(() => null);
+            return s;
+        });
+        for (const s of summaries) if (s.title_no) byNo.set(s.title_no, s);
     }
     for (const r of rows) r.title = byNo.get(r.title_no) ?? null;
     return { query: name, results: rows, truncated };
