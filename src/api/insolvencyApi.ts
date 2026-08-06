@@ -126,6 +126,27 @@ const COMPANY_INSOLVENCY_TYPES = [
     'liquidation agency',
 ];
 
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'];
+
+/**
+ * Formats a record's date of birth for display: "January 1976".
+ *
+ * The register returns `monthOfBirth` as a bare number ("1"), which reads as
+ * "1 1976" if you simply join the fields. Lives here, beside the field, because
+ * this was fixed once in the on-screen panel and then re-broken in the HTML
+ * export, which had its own copy of the join. Anything non-numeric passes
+ * straight through, in case the field ever arrives already spelled out.
+ *
+ * Returns null when there is no year — a month alone identifies nobody.
+ */
+export function formatBirth(month?: string, year?: string): string | null {
+    if (!year) return null;
+    if (!month) return year;
+    const n = parseInt(month, 10);
+    return `${Number.isInteger(n) && n >= 1 && n <= 12 ? MONTH_NAMES[n - 1] : month} ${year}`;
+}
+
 /**
  * Whether a record represents a CURRENT bankruptcy — either the register says so
  * outright, or the discharge has been suspended, which per the register schema

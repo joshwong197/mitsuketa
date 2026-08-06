@@ -98,6 +98,32 @@ const Stat: React.FC<{ value: number; label: string; crit?: boolean; last?: bool
   </div>
 );
 
+
+/** Role-filter row. Reads as pressed when the role is hidden. */
+const RoleToggle: React.FC<{
+  on: boolean; onClick: () => void; kanji: string; label: string; count: number;
+}> = ({ on, onClick, kanji, label, count }) => (
+  <button
+    onClick={onClick}
+    aria-pressed={on}
+    className={`w-full flex items-center gap-2 px-2.5 py-1.5 border transition-colors ${
+      on ? 'border-ink bg-ink text-paper' : 'border-rule text-ink-mid hover:border-ink-mid hover:text-ink'
+    }`}
+    style={{ fontSize: 12 }}
+  >
+    <span aria-hidden="true" style={{ fontFamily: 'var(--serif)', fontSize: 13, opacity: on ? 1 : 0.75 }}>
+      {kanji}
+    </span>
+    <span className="flex-1 text-left">{label}</span>
+    <span
+      className={on ? '' : 'text-ink-pale'}
+      style={{ fontFamily: 'var(--mono)', fontSize: 10.5, fontVariantNumeric: 'tabular-nums' }}
+    >
+      {count}
+    </span>
+  </button>
+);
+
 export interface CasePanelProps {
   // Include-inactive graph option
 
@@ -116,6 +142,12 @@ export interface CasePanelProps {
   personActiveCount: number;
   personFlagsCount: number;
   personSearchOpened?: string;
+
+  // Role filter — hides director-only people so a prolific chart reads.
+  // View-only: nothing is refetched and exports still carry the whole chart.
+  hideDirectors: boolean;
+  onToggleHideDirectors: () => void;
+  hideableDirectors: number;
 
   trail: { time: string; text: string }[];
 
@@ -149,7 +181,6 @@ export interface CasePanelProps {
 
   // Exports footer
   onExportHtml: () => void;
-  onExportPng: () => void;
   isExportingHtml: boolean;
   canExport: boolean;
 }
@@ -167,6 +198,9 @@ export const CasePanel: React.FC<CasePanelProps> = ({
   personActiveCount,
   personFlagsCount,
   personSearchOpened,
+  hideDirectors,
+  onToggleHideDirectors,
+  hideableDirectors,
   trail,
   caseNotes,
   noteTabLabels,
@@ -188,7 +222,6 @@ export const CasePanel: React.FC<CasePanelProps> = ({
   onImportSavePoint,
   onCheckChanges,
   onExportHtml,
-  onExportPng,
   isExportingHtml,
   canExport,
 }) => {
@@ -261,6 +294,31 @@ export const CasePanel: React.FC<CasePanelProps> = ({
               <Stat value={personFlagsCount} label="Flags" crit={personFlagsCount > 0} last />
             </div>
             <Trail trail={trail} />
+          </Section>
+        )}
+
+        {/* VIEW — role filter. A prolific parent brings hundreds of director
+               people and the chart becomes unreadable long before it becomes
+               wrong. Hiding them is a view over the same data: nothing is
+               refetched, and exports and save points still carry the whole
+               chart. Directors only — see the note in App.tsx on why the
+               shareholder companion was removed. */}
+        {showCompanyFile && graphLoaded && hideableDirectors > 0 && (
+          <Section title="View">
+            <div className="px-[18px] pb-3 flex flex-col gap-1.5">
+              <RoleToggle
+                on={hideDirectors}
+                onClick={onToggleHideDirectors}
+                kanji="締"
+                label="Hide directors"
+                count={hideableDirectors}
+              />
+              {hideDirectors && (
+                <p className="text-ink-pale" style={{ fontSize: 10.5, marginTop: 2 }}>
+                  Ownership structure only. Anyone who also holds shares stays on the chart.
+                </p>
+              )}
+            </div>
           </Section>
         )}
 
@@ -412,29 +470,19 @@ export const CasePanel: React.FC<CasePanelProps> = ({
           <button
             onClick={onExportHtml}
             disabled={isExportingHtml || !canExport}
-            className="block w-full text-center px-3 py-2.5 mb-2 bg-ink text-paper hover:bg-accent hover:text-accent-ink transition-colors disabled:opacity-50"
-            style={{ fontSize: 12.5 }}
+            className="block w-full text-center px-3 py-3 mb-2 bg-ink text-paper hover:bg-accent hover:text-accent-ink transition-colors disabled:opacity-50"
+            style={{ fontSize: 13, fontWeight: 600, letterSpacing: '.01em' }}
           >
             {isExportingHtml ? 'Exporting…' : 'Export interactive chart'}
           </button>
-          <div className="flex gap-2">
-            <button
-              onClick={onExportPng}
-              disabled={!canExport}
-              className="flex-1 text-center px-3 py-2 border border-rule text-ink hover:border-ink-mid transition-colors disabled:opacity-50"
-              style={{ fontSize: 12.5 }}
-            >
-              PNG
-            </button>
-            <button
-              onClick={onTakeSavePoint}
-              disabled={!canExport}
-              className="flex-1 text-center px-3 py-2 text-ink-mid hover:text-ink transition-colors disabled:opacity-50"
-              style={{ fontSize: 12.5 }}
-            >
-              Save point · JSON
-            </button>
-          </div>
+          <button
+            onClick={onTakeSavePoint}
+            disabled={!canExport}
+            className="w-full text-center px-3 py-2 text-ink-mid hover:text-ink transition-colors disabled:opacity-50"
+            style={{ fontSize: 12.5 }}
+          >
+            Save point · JSON
+          </button>
         </div>
       )}
       {showPersonFile && (
@@ -442,17 +490,10 @@ export const CasePanel: React.FC<CasePanelProps> = ({
           <button
             onClick={onExportHtml}
             disabled={isExportingHtml}
-            className="block w-full text-center px-3 py-2.5 mb-2 bg-ink text-paper hover:bg-accent hover:text-accent-ink transition-colors disabled:opacity-50"
-            style={{ fontSize: 12.5 }}
+            className="block w-full text-center px-3 py-3 bg-ink text-paper hover:bg-accent hover:text-accent-ink transition-colors disabled:opacity-50"
+            style={{ fontSize: 13, fontWeight: 600, letterSpacing: '.01em' }}
           >
             {isExportingHtml ? 'Exporting…' : 'Export report · HTML'}
-          </button>
-          <button
-            onClick={onExportPng}
-            className="w-full text-center px-3 py-2 border border-rule text-ink hover:border-ink-mid transition-colors"
-            style={{ fontSize: 12.5 }}
-          >
-            PNG
           </button>
         </div>
       )}

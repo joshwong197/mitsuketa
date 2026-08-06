@@ -3,8 +3,9 @@ import { Building2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { PersonCompanyResult } from '../types';
 import { KydVerificationPanel } from './KydVerificationPanel';
 import { DisqualifiedDirector } from '../src/api/disqualifiedDirectorsApi';
-import { InsolvencyRecord, isInsolvencyRecordCurrent } from '../src/api/insolvencyApi';
+import { InsolvencyRecord, isInsolvencyRecordCurrent, formatBirth } from '../src/api/insolvencyApi';
 import { summariseAddresses } from '../utils/addressSummary';
+import { displaySubjectName } from '../utils/personName';
 import { usePrimarySignature } from '../hooks/usePrimarySignature';
 
 // Nicely formats an API date string (drops timezone offset, e.g. "+1200").
@@ -20,42 +21,6 @@ const formatDate = (dateString: string): string => {
     } catch (e) {
         return dateString;
     }
-};
-
-/**
- * The name to show for the subject. Prefers the register's own spelling — the
- * role records carry firstName/lastName as filed — so a search typed as
- * "julie jang" displays as the registered "Julie Jang" rather than being
- * guessed at. Falls back to title-casing the query when the register gives us
- * nothing, and leaves an already mixed-case string alone (it either came from
- * the register or the user capitalised it deliberately).
- */
-const displayPersonName = (query: string, results: PersonCompanyResult[]): string => {
-    const first = results.find(r => r.firstName)?.firstName?.trim();
-    const last = results.find(r => r.lastName)?.lastName?.trim();
-    if (first && last) return `${first} ${last}`;
-
-    const s = query.trim();
-    if (!s || (s !== s.toLowerCase() && s !== s.toUpperCase())) return s;
-    return s
-        .toLowerCase()
-        .replace(/(^|[\s,'’-])([a-z])/g, (_m, sep, c) => sep + c.toUpperCase())
-        // "mcgill" → "Mcgill" above, then → "McGill". Mac- is left alone on
-        // purpose: Mackenzie takes it, Macey does not, and we can't tell which.
-        .replace(/\bMc([a-z])/g, (_m, c) => 'Mc' + c.toUpperCase());
-};
-
-const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December'];
-
-// The register returns monthOfBirth as a bare number ("1"), which rendered as
-// "Born 1 1976". Map it to a name; pass anything non-numeric straight through in
-// case the field ever arrives already spelled out.
-const formatBirth = (month?: string, year?: string): string | null => {
-    if (!year) return null;
-    if (!month) return year;
-    const n = parseInt(month, 10);
-    return `${Number.isInteger(n) && n >= 1 && n <= 12 ? MONTH_NAMES[n - 1] : month} ${year}`;
 };
 
 // Epoch ms for an API date string, or undefined if it can't be parsed.
@@ -563,7 +528,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
     const multipleInsolvencies = !!insolvencyRecords?.some(r => r.multipleInsolvencies);
 
     // Prefer the register's spelling of the name over whatever was typed.
-    const subjectName = displayPersonName(personName, results);
+    const subjectName = displaySubjectName(personName, results);
 
     const sortOptions: { value: SortMode; label: string }[] = [
         { value: 'default', label: 'Directors first' },
@@ -652,11 +617,13 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                                         </span>
                                     </p>
                                 </span>
+                                {/* Names the register: "No current" on its own reads as a
+                                    fragment, and the reader has to guess what is not current. */}
                                 <span
-                                    className={`uppercase font-bold whitespace-nowrap ${disqualifiedCurrent ? 'text-crit' : 'text-ink-pale'}`}
+                                    className={`uppercase font-bold text-right ${disqualifiedCurrent ? 'text-crit' : 'text-ink-pale'}`}
                                     style={{ fontSize: '10px', letterSpacing: '.04em' }}
                                 >
-                                    {disqualifiedCurrent ? 'Current' : 'No current'}
+                                    {disqualifiedCurrent ? 'Current disqualification' : 'No current disqualification'}
                                 </span>
                                 <span
                                     className="text-ink-pale"
@@ -726,10 +693,10 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                                     )}
                                 </span>
                                 <span
-                                    className={`uppercase font-bold whitespace-nowrap ${insolvencyCurrent ? 'text-crit' : 'text-ink-pale'}`}
+                                    className={`uppercase font-bold text-right ${insolvencyCurrent ? 'text-crit' : 'text-ink-pale'}`}
                                     style={{ fontSize: '10px', letterSpacing: '.04em' }}
                                 >
-                                    {insolvencyCurrent ? 'Current' : 'No current'}
+                                    {insolvencyCurrent ? 'Current insolvency' : 'No current insolvency'}
                                 </span>
                                 <span
                                     className="text-ink-pale"

@@ -213,7 +213,11 @@ export const AboutPage: React.FC<Props> = ({ onClose }) => {
                                 },
                                 {
                                     title: 'Maps and exports',
-                                    body: 'Pan, zoom, and expand branches. Save snapshots of an investigation, or export the chart as an interactive page, PNG, or JSON.',
+                                    body: 'Pan, zoom, and expand branches. Hide directors to read a crowded chart. Save a point to compare against later, or export the chart as an interactive page or JSON.',
+                                },
+                                {
+                                    title: 'Property titles (restricted)',
+                                    body: 'Searches the LINZ Record of Title register by address, registered owner, or title reference. Access is granted to named individuals only — if you have not been given an account, you do not have access, and there is no way to request one from inside the app.',
                                 },
                             ].map((f) => (
                                 <div key={f.title} className="bg-paper p-3.5">
@@ -316,6 +320,62 @@ export const AboutPage: React.FC<Props> = ({ onClose }) => {
                             One caveat: people are matched by name, because the registers do not publish
                             unique identifiers for individuals. Two different people with the same name
                             cannot be told apart.
+                        </p>
+                    </section>
+
+                    {/* Property titles — restricted */}
+                    <section className="mb-7">
+                        <SectionHeader>Property titles — restricted access</SectionHeader>
+                        <div
+                            className="mb-3 p-3 flex items-start gap-3"
+                            style={{ border: '1px solid var(--crit)', background: 'var(--paper)' }}
+                        >
+                            <span
+                                aria-hidden="true"
+                                className="shrink-0 grid place-items-center bg-crit"
+                                style={{ width: 26, height: 26, fontFamily: 'var(--serif)', fontSize: 14, color: 'var(--paper)' }}
+                            >
+                                限
+                            </span>
+                            <p className="text-ink-mid" style={BODY}>
+                                <strong className="font-bold text-ink">This function is restricted to named
+                                individuals.</strong> Accounts are issued directly; there is no sign-up, and no
+                                way to request access from inside the app. If you have not been given an
+                                account, you do not have access — the tab will simply refuse to unlock.
+                            </p>
+                        </div>
+                        <p className="mb-2 text-ink-mid" style={BODY}>
+                            The third tab, marked{' '}
+                            <span className="text-ink" style={{ ...SERIF, fontSize: 14 }}>地</span>, searches the
+                            LINZ Record of Title register. It takes three kinds of query:
+                        </p>
+                        <ul className="mb-2 text-ink-mid" style={{ ...BODY, paddingLeft: 0, listStyle: 'none' }}>
+                            {[
+                                ['住', 'Address', 'A street address. Where more than one address matches, you are asked which you meant before anything is searched.'],
+                                ['名', 'Owner', 'A registered owner — person or company. Results lead with the property address, so you can tell which title is which, with the owner name as filed beneath it.'],
+                                ['番', 'Title ref', 'A record of title reference, e.g. NA123A/456. This identifies exactly one record, so it opens the report directly.'],
+                            ].map(([kanji, label, body]) => (
+                                <li key={label} className="flex items-start gap-2.5 mb-1.5">
+                                    <span className="text-accent shrink-0" style={{ ...SERIF, fontSize: 14 }}>{kanji}</span>
+                                    <span>
+                                        <strong className="font-bold text-ink">{label}</strong> — {body}
+                                    </span>
+                                </li>
+                            ))}
+                        </ul>
+                        <p className="mb-2 text-ink-mid" style={BODY}>
+                            A report covers the owners, the estate, the full memorial history — mortgages,
+                            transfers, caveats, leases, easements — and an aerial map of the parcel. It exports
+                            as a standalone HTML file whose history can be reordered and filtered by dealing
+                            type, and which prints without the background tints.
+                        </p>
+                        <p className="text-ink-pale" style={{ fontSize: 12, lineHeight: 1.6 }}>
+                            Two things to know. The data is a reference copy, not a title search: it can lag
+                            the register, and a formal search from LINZ is what you rely on. And every search
+                            is logged against the account that ran it, because the owner, mortgagee and
+                            caveator names are restricted personal data supplied under the LINZ Licence for
+                            Personal Data — which also forbids using it for marketing or any unsolicited
+                            approach.
                         </p>
                     </section>
 
