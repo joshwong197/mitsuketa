@@ -1,6 +1,7 @@
 import { ApiConfig, GraphEdge, GraphNode, NodeType, NZBNFullEntity, EntitySearchResultItem, EntitySearchResponse, CompaniesRoleSearchResult, DebugCallback, LoggerCallback } from '../types.js';
 import { BASE_API_URL, API_PATHS } from '../constants.js';
 import { personId } from '../utils/personId.js';
+import { unlinkedCompanyId, normaliseEntityName } from '../utils/entityId.js';
 import { computePersonRoleFlags } from '../utils/personRoles.js';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -120,6 +121,13 @@ class OrgSpider {
         const result = await fetchRolesByEntityName(name, this.config, this.companiesBaseUrl, this.logger);
         this.rolesCache.set(cacheKey, result);
         return result;
+    }
+
+    // Recover the NZBN of a holder the register left unlinked (see
+    // resolveEntityNzbn). Rate-limited with the rest of the crawl.
+    private async resolveNzbn(companyNumber?: string, name?: string): Promise<string> {
+        await this.smartDelay();
+        return await resolveEntityNzbn(companyNumber, name, this.config, this.nzbnBaseUrl, this.logger);
     }
 
     // --- Core Graph Building Logic ---
@@ -265,6 +273,10 @@ class OrgSpider {
                     let holderLabel = '';
                     let isPerson = false;
                     let parentNzbn = '';
+                    // Declared per iteration on purpose: this was a `var`, which
+                    // is function-scoped, so a holder that never reached the
+                    // fetch below inherited the previous holder's number.
+                    let parentSourceRegisterUniqueId: string | undefined;
 
                     if (holder.individualShareholder) {
                         holderLabel = holder.individualShareholder.fullName ||
@@ -275,10 +287,27 @@ class OrgSpider {
                         holderId = personId(holderLabel);
                         isPerson = true;
                     } else if (holder.otherShareholder) {
-                        holderLabel = holder.otherShareholder.currentEntityName || 'Unknown Company';
-                        holderId = holder.otherShareholder.nzbn || `ORG-${Math.random().toString(36).substr(2, 5)}`;
+                        const holderName = holder.otherShareholder.currentEntityName;
+                        const holderCompanyNumber = (holder.otherShareholder.companyNumber || '').trim() || undefined;
+                        holderLabel = holderName || 'Unknown Company';
                         parentNzbn = holder.otherShareholder.nzbn || '';
                         isPerson = false;
+
+                        // The shareholding record often carries only a name and a
+                        // register number. Recover the NZBN so an unlinked NZ
+                        // parent is crawled, deduped, status-checked and labelled
+                        // exactly like a linked one.
+                        if (!parentNzbn) {
+                            parentNzbn = await this.resolveNzbn(holderCompanyNumber, holderName);
+                            if (parentNzbn) {
+                                console.log(`[Parent: ${holderLabel}] 🔗 Register left this shareholder unlinked — resolved to NZBN ${parentNzbn}`);
+                            } else {
+                                console.log(`[Parent: ${holderLabel}] 🔗 No NZBN on the shareholding record and none resolvable${holderCompanyNumber ? ` (company no. ${holderCompanyNumber})` : ''}`);
+                            }
+                        }
+
+                        holderId = parentNzbn || unlinkedCompanyId(holderLabel, holderCompanyNumber);
+                        parentSourceRegisterUniqueId = holderCompanyNumber;
 
                         // FILTER: Check if parent is removed before adding (OPTIMIZED)
                         if (parentNzbn) {
@@ -298,8 +327,12 @@ class OrgSpider {
                                     continue; // Skip BEFORE marking as visited
                                 }
 
+                                // A resolved holder gets its name from the register
+                                // rather than the shareholding record's copy of it.
+                                if (!holderName && parentData.entityName) holderLabel = parentData.entityName;
+
                                 // Store the sourceRegisterUniqueId for later use
-                                var parentSourceRegisterUniqueId = parentData.sourceRegisterUniqueId;
+                                parentSourceRegisterUniqueId = parentData.sourceRegisterUniqueId || holderCompanyNumber;
                             } catch (e) {
                                 // If we can't fetch, skip
                                 console.warn(`Failed to verify parent status for ${parentNzbn}`, e);
@@ -374,11 +407,26 @@ class OrgSpider {
                     holderLabel = role.rolePerson.fullName || `${role.rolePerson.firstName} ${role.rolePerson.lastName}`;
                     holderId = personId(holderLabel);
                     isPerson = true;
-                } else if (role.roleEntity?.name || role.roleEntity?.nzbn) {
-                    holderLabel = role.roleEntity.name || 'Unknown Entity';
+                } else if (role.roleEntity?.entityName || role.roleEntity?.name || role.roleEntity?.nzbn) {
+                    // The NZBN payload names this field entityName (App.tsx and
+                    // directorService read that); reading only `name` dropped
+                    // every corporate role holder — a corporate trustee or
+                    // general partner never reached the graph at all.
+                    const roleEntityName = role.roleEntity.entityName || role.roleEntity.name || '';
+                    holderLabel = roleEntityName || 'Unknown Entity';
                     parentNzbn = role.roleEntity.nzbn || '';
-                    holderId = parentNzbn || `ORG-${Math.random().toString(36).substr(2, 5)}`;
                     isPerson = false;
+
+                    // roleEntity.nzbn is documented as "currently not populated",
+                    // so resolution by name is the only way these holders link up.
+                    if (!parentNzbn && roleEntityName) {
+                        parentNzbn = await this.resolveNzbn(undefined, roleEntityName);
+                        if (parentNzbn) {
+                            console.log(`[Role Entity: ${holderLabel}] 🔗 Resolved to NZBN ${parentNzbn}`);
+                        }
+                    }
+
+                    holderId = parentNzbn || unlinkedCompanyId(holderLabel);
 
                     if (parentNzbn) {
                         try {
@@ -1101,6 +1149,75 @@ export const searchEntities = async (term: string, config: ApiConfig, logger?: L
         items: data.items || [],
     };
 };
+
+// Corporate holders that the register did not link to an NZBN.
+//
+// `otherShareholder` frequently arrives as a name plus a `companyNumber` with no
+// `nzbn` (MBIE only fills `nzbn` where it has matched the shareholding to a
+// register record), and `roleEntity.nzbn` is documented in the NZBN spec as
+// "currently not populated". A holder that reached the graph without an NZBN got
+// a throwaway `ORG-${Math.random()}` id, was never crawled upstream, never
+// re-status-checked by the diff, and rendered as "Overseas / Unreg" — an
+// inference the payload never made. J SWAP CONTRACTORS LIMITED (NZBN
+// 9429040142548, company 178106), 100% shareholder of SWAP STOCKFOODS LIMITED,
+// is exactly this case: an NZ company shown as overseas/unregistered.
+//
+// So recover the NZBN ourselves. Free-text search matches "NZBN and legacy
+// numbers (eg company number)" as well as names, and one search per unlinked
+// holder is cheap next to the crawl that follows it. Cached per process because
+// the same parent recurs across a group.
+const nzbnResolutionCache = new Map<string, string>();
+
+export async function resolveEntityNzbn(
+    companyNumber: string | undefined,
+    name: string | undefined,
+    config: ApiConfig,
+    baseUrl: string = '/api/proxy',
+    logger?: LoggerCallback
+): Promise<string> {
+    const number = (companyNumber || '').trim();
+    const wanted = normaliseEntityName(name || '');
+    if (!number && !wanted) return '';
+
+    const cacheKey = `${number}|${wanted}`;
+    const cached = nzbnResolutionCache.get(cacheKey);
+    if (cached !== undefined) return cached;
+
+    // Register number first — it identifies one record, so a hit is unambiguous.
+    // Name is the fallback, and every candidate is still verified below.
+    const terms: string[] = [];
+    if (number) terms.push(number);
+    if (wanted && name) terms.push(name.trim());
+
+    let resolved = '';
+    for (const term of terms) {
+        try {
+            const { items } = await searchEntities(term, config, logger, 0, baseUrl);
+            const matches = (items || []).filter(item => {
+                if (!item.nzbn) return false;
+                const numberMatches = !!number && String(item.sourceRegisterUniqueId || '').trim() === number;
+                const nameMatches = !!wanted && normaliseEntityName(item.entityName || '') === wanted;
+                return numberMatches || nameMatches;
+            });
+
+            // Exactly one verified match, or nothing. An ambiguous set is left
+            // unlinked rather than guessed: attaching the wrong parent to a
+            // group chart is worse than a node with no NZBN on it.
+            if (matches.length === 1) {
+                resolved = matches[0].nzbn;
+                break;
+            }
+            if (matches.length > 1) {
+                console.warn(`🔗 "${term}" matched ${matches.length} register records — left unlinked`);
+            }
+        } catch (e) {
+            console.warn(`🔗 NZBN resolution failed for "${term}"`, e);
+        }
+    }
+
+    nzbnResolutionCache.set(cacheKey, resolved);
+    return resolved;
+}
 
 export const generateOrgChart = async (rootNzbn: string, config: ApiConfig, onDebug?: DebugCallback, onLog?: LoggerCallback, baseUrls?: { nzbn?: string; companies?: string }) => {
     const spider = new OrgSpider(config, onLog, baseUrls);

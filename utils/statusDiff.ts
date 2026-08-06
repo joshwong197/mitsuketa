@@ -42,8 +42,8 @@ export function diffStatuses(savedNodes: GraphNode[], freshNodes: GraphNode[]): 
     const key = prev.nzbn || personId(prev.label || '');
 
     if (prev.type === 'company') {
-      // Only registered companies can be re-checked (one cached NZBN call
-      // each); overseas/unregistered nodes have nothing to compare against.
+      // Only NZBN-linked companies can be re-checked (one cached NZBN call
+      // each); a node the register never linked has nothing to look up.
       if (!prev.nzbn) continue;
       const prevStatus = norm(prev.status);
       const newStatus = norm(next.status);

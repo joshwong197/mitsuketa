@@ -168,8 +168,20 @@ export const CompanyNode = memo(({ data, selected }: NodeProps<NodeData>) => {
             <span className="text-ink-pale font-normal" style={{ marginLeft: 6 }} aria-hidden="true" title="Amalgamated into successor entity">→</span>
           )}
         </h3>
-        <p className={`font-mono text-[10.5px] tabular-nums ${idColorClass}`}>
-          {data.nzbn ? `NZBN: ${data.nzbn}` : 'Overseas / Unreg'}
+        {/* A missing NZBN means the register did not link this holder to a
+            register record — NOT that the company is overseas or unregistered,
+            which is what this line used to assert (an NZ company shown as
+            "Overseas / Unreg"). Show the register number where we have one, and
+            otherwise say only what is true: no NZBN on the record. */}
+        <p
+          className={`font-mono text-[10.5px] tabular-nums ${idColorClass}`}
+          title={data.nzbn ? undefined : 'No NZBN on the register record for this relationship — the entity may still be NZ-registered'}
+        >
+          {data.nzbn
+            ? `NZBN: ${data.nzbn}`
+            : data.sourceRegisterUniqueId
+              ? `Company no. ${data.sourceRegisterUniqueId}`
+              : 'NZBN not linked'}
         </p>
 
         {showStatus && (

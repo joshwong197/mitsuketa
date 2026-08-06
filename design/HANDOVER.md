@@ -288,6 +288,43 @@ with one collapsed-by-default strip per register (disqualified / insolvency), ma
 (indefinite disqualification, or `isInsolvencyRecordCurrent()`) — deterministic height, no
 nested scroll, and the one fact that matters isn't hidden behind a click.
 
+### 3f. NZ parents mislabelled "Overseas / Unreg" — FIXED
+
+Reported from a live search: SWAP STOCKFOODS LIMITED's 100% shareholder, J SWAP CONTRACTORS
+LIMITED (an NZ Limited Company, NZBN 9429040142548, company 178106), drew as
+`Overseas / Unreg`.
+
+Nothing in the crawl ever decided the company was overseas. `CustomNodes.tsx` printed that
+string whenever `data.nzbn` was empty, and `data.nzbn` came straight off
+`otherShareholder.nzbn` — a field MBIE fills only where it has matched the shareholding to a
+register record. The register's own page for the same relationship shows the NZBN because the
+*ultimate holding company* block carries it; the *shareholding* block need not. So a missing
+field was being rendered as a positive claim about the entity.
+
+Three consequences beyond the label, all from the same missing NZBN: the holder got a
+`ORG-${Math.random()}` id (so the same parent under two subsidiaries drew twice, and notes
+could not key to it), it was never crawled upstream (its own parents and directors never
+appeared — visible in the report screenshot as a `PARENT` box with nothing above it), and
+`statusDiff` skipped it on re-check.
+
+Fixed by recovering the NZBN instead of guessing at its absence: `resolveEntityNzbn()`
+(`services/apiService.ts`) searches the register by company number, then by exact name — free
+text search matches "NZBN and legacy numbers (eg company number)" — and accepts only a single
+verified match, because binding a chart to the wrong parent is worse than an unlinked node.
+Unresolved holders now get a deterministic `unlinkedCompanyId()` (`utils/entityId.ts`) and a
+node line that states what is true: the register number where we have one, otherwise
+"NZBN not linked". Mirrored in `compareService.ts`, which parses the same payload.
+
+Found in the same payload and fixed alongside: `roleEntity` is `entityName` in the NZBN spec
+(`App.tsx` and `directorService.ts` read that), but `apiService`/`compareService` read `.name`,
+so **every corporate role holder — corporate trustee, general partner — was dropped from the
+graph entirely**. Both fields are now read, and since `roleEntity.nzbn` is documented as
+"currently not populated", these link up only via name resolution. Also fixed: the
+`sourceRegisterUniqueId` in the shareholder loop was declared with `var`, so a holder that
+skipped the fetch inherited the previous holder's company number.
+
+Offline check: `npm run check:nzbn-link`.
+
 ---
 
 ## 4. Decisions still open
