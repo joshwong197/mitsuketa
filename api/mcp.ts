@@ -57,16 +57,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ({ StreamableHTTPServerTransport } = await import('@modelcontextprotocol/sdk/server/streamableHttp.js'));
         ({ createMcpServer } = await import('../mcp/server.js'));
     } catch (err: any) {
+        // Full detail (stack included) goes to the server log only — stack
+        // traces leak filesystem paths and dependency layout to the caller.
         console.error('MCP import error:', err);
         return res.status(500).json({
             jsonrpc: '2.0',
-            error: { code: -32000, message: `MCP import failed: ${err?.message || String(err)}`, data: { stack: err?.stack } },
+            error: { code: -32000, message: `MCP import failed: ${err?.message || String(err)}` },
             id: null,
         });
     }
 
     const clientIp = (req.headers['x-forwarded-for'] as string) || 'anonymous';
-    const rl = checkRateLimit(clientIp);
+    const rl = checkRateLimit(clientIp, 'mcp');
     if (!rl.allowed) {
         return res.status(429).json({
             jsonrpc: '2.0',
@@ -86,11 +88,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await server.connect(transport);
         await transport.handleRequest(req as any, res as any, req.body);
     } catch (err: any) {
+        // Stack stays in the server log; the client gets the message only.
         console.error('MCP runtime error:', err);
         if (!res.headersSent) {
             res.status(500).json({
                 jsonrpc: '2.0',
-                error: { code: -32000, message: err?.message || 'Internal MCP error', data: { stack: err?.stack } },
+                error: { code: -32000, message: err?.message || 'Internal MCP error' },
                 id: null,
             });
         }

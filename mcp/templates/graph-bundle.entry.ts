@@ -105,12 +105,12 @@ function buildDetailHtml(data: MitsuketaNode, palette: typeof COLORS.light): str
         ['Appointed', data.appointmentDate],
         ['Vacated', data.vacationDate],
     ];
-    const badges: string[] = [];
-    if (data.isInExternalAdmin) badges.push(`<span class="badge badge-admin">${data.externalAdminType || 'In external administration'}</span>`);
-    if (data.removalCommenced) badges.push('<span class="badge badge-removed">Removal commenced</span>');
-    if (data.hasHistoricInsolvency) badges.push(`<span class="badge badge-history">Historic: ${data.historicInsolvencyType || 'insolvency'}</span>`);
-
     const escape = (v: string) => v.replace(/[<>&"]/g, (c) => `&#${c.charCodeAt(0)};`);
+
+    const badges: string[] = [];
+    if (data.isInExternalAdmin) badges.push(`<span class="badge badge-admin">${escape(data.externalAdminType || 'In external administration')}</span>`);
+    if (data.removalCommenced) badges.push('<span class="badge badge-removed">Removal commenced</span>');
+    if (data.hasHistoricInsolvency) badges.push(`<span class="badge badge-history">Historic: ${escape(data.historicInsolvencyType || 'insolvency')}</span>`);
 
     const tableRows = rows
         .filter(([, v]) => v && String(v).trim() !== '')
