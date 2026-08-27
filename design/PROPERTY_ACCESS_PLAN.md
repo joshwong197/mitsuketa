@@ -7,8 +7,8 @@ Status: **phase 1 built.** Phase 2 (OIDC) still open. Read this before touching
 email, holding that person's password:
 
 ```
-PROPERTY_PW_YONA_LI_FBU_COM = china_swimming_3
-PROPERTY_PW_JOSHWONG197     = <admin account, a bare username rather than an email>
+PROPERTY_PW_JANE_DOE_FBU_COM = <that person's password — real values live ONLY in Vercel env vars, never in the repo>
+PROPERTY_PW_JOSHWONG197      = <admin account, a bare username rather than an email>
 ```
 
 Sign in with the address. `npm run property:user -- <email>` prints the variable
@@ -132,7 +132,8 @@ usually the slow part — not the code.
 ## 4. Testing locally
 
 1. `.env`: `LINZ_API_KEY=...` plus one line per account, e.g.
-   `PROPERTY_PW_YONA_LI_FBU_COM=china_swimming_3`.
+   `PROPERTY_PW_JANE_DOE_FBU_COM=not-a-real-password` (the untracked local
+   `.env` is the only file a real password may ever be typed into).
 2. `npm run dev` → localhost:3000 → property tab. The dev API plugin matches
    `PROPERTY_PW_*` by prefix, so new accounts need no plugin change — but note
    it reads `.env` once at startup, so adding an account means a restart.

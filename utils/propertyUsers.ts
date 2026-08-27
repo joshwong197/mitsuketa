@@ -1,6 +1,7 @@
 // Per-user credentials for the property feature, held one-per-environment-variable.
+// (Fictional example — real values live only in the deployment environment.)
 //
-//   PROPERTY_PW_NITESHNI_SWAMI_FBU_COM = fiji_lobster_2
+//   PROPERTY_PW_JANE_DOE_FBU_COM = not-a-real-password
 //
 // ONE VARIABLE PER USER, deliberately. The obvious alternative — a single
 // PROPERTY_USERS="a:pw,b:pw" blob — fails the requirement that resetting one
@@ -34,7 +35,7 @@ const SCRYPT_P = 1;
  * which contain characters no env var name may hold, so every run of
  * non-alphanumerics collapses to one underscore:
  *
- *   niteshni.swami@fbu.com -> PROPERTY_PW_NITESHNI_SWAMI_FBU_COM
+ *   jane.doe@fbu.com -> PROPERTY_PW_JANE_DOE_FBU_COM
  *
  * Forward-only by design — nothing ever needs to turn a variable name back into
  * an address, because login slugs what the user typed and looks that up. Two

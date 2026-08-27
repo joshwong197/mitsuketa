@@ -1,10 +1,10 @@
 // Works out the environment variable name for a property-search account.
 //
-//   npm run property:user -- yona.li@fbu.com
+//   npm run property:user -- jane.doe@fbu.com
 //
 // The slug is the only non-obvious part of adding someone: the address is
 // uppercased and every run of non-alphanumerics becomes one underscore, so
-// yona.li@fbu.com lives in PROPERTY_PW_YONA_LI_FBU_COM. The VALUE is simply the
+// jane.doe@fbu.com lives in PROPERTY_PW_JANE_DOE_FBU_COM. The VALUE is simply the
 // password — set it and change it straight in the Vercel dashboard, no tooling
 // in the loop.
 //

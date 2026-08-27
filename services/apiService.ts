@@ -26,6 +26,22 @@ const ENABLE_SMART_DELAYS = true;         // Smart rate limiting instead of fixe
 const ENABLE_ENTITY_CACHE = true;         // Cache entity lookups to avoid duplicates
 const ENABLE_PARALLEL_ROLE_SEARCHES = false; // DISABLED: Made things slower (more total API calls)
 
+// --- Mega-node capping thresholds (see crawlDownstream) ---
+// A corporate SHAREHOLDER that itself holds shares in many companies is capped
+// during the automatic crawl: its children aren't fetched, the node gets a
+// "N capped" badge, and the user can right-click "Fetch & Expand" to load them.
+//
+// Two tiers, because "holds lots of companies" means different things:
+//   • Lawyer/accountant TRUSTEE & NOMINEE shells hold dozens of UNRELATED client
+//     companies (e.g. the Turner Hopkins trustee companies behind Ze Build). Their
+//     other holdings are noise on the chart, so we cap them aggressively.
+//   • Ordinary holding companies (e.g. "Fletcher Building Holdings") legitimately
+//     own many RELATED subsidiaries we DO want to see, so they only cap at a much
+//     higher count. Note: "HOLDINGS" is deliberately NOT a trustee keyword.
+const TRUSTEE_NAME_KEYWORDS = ['TRUSTEE', 'NOMINEE', 'CUSTODIAN'];
+const TRUSTEE_HOLDINGS_CAP = 5;   // trustee/nominee shell: cap once it holds > this many
+const GENERIC_HOLDINGS_CAP = 50;  // any other entity: only cap a genuine mega-node
+
 class OrgSpider {
     private config: ApiConfig;
     private visited: Set<string>;
@@ -534,7 +550,7 @@ class OrgSpider {
     }
 
     // --- Downstream: Find who the target owns ---
-    private async crawlDownstream(ownerNzbn: string, ownerName: string, depth: number = 0, onDebug?: DebugCallback, maxDepth: number = 2) {
+    private async crawlDownstream(ownerNzbn: string, ownerName: string, depth: number = 0, onDebug?: DebugCallback, maxDepth: number = 2, bypassCap: boolean = false) {
         if (depth > maxDepth) return;
         // OPTIMIZATION: Use smart rate limiting instead of hardcoded 150ms delay.
         // Since Roles API takes ~11s per call, we never hit 10 req/s — this becomes a no-op.
@@ -583,8 +599,11 @@ class OrgSpider {
             });
         }
 
-        // --- Mega-node detection: cap ANY entity with too many subsidiaries ---
-        // Not restricted to trustee/nominee names — holding companies, capital firms, etc. can be just as explosive
+        // --- Mega-node detection (two-tier; see TRUSTEE_* / GENERIC_HOLDINGS_CAP) ---
+        // Count how many companies this entity holds shares in. A trustee/nominee
+        // shell is capped aggressively (its holdings are unrelated client companies);
+        // any other entity only caps at a much higher count so legitimate holding
+        // companies with many real subsidiaries still expand.
         let totalHoldings = 0;
         for (const r of results.roles) {
             const isOrg = r.roleType?.includes('Shareholder') && !r.roleType?.includes('Individual') && !r.roleType?.includes('Director');
@@ -592,9 +611,16 @@ class OrgSpider {
                 totalHoldings += r.shareholdings.length;
             }
         }
-        const isMegaNode = totalHoldings > 50;
-        if (isMegaNode) {
-            console.log(`%c[Mega-Node] ${ownerName} detected as mega-node with ${totalHoldings} subsidiaries — skipped entirely`, "color: #ff6600; font-weight: bold");
+
+        const isTrusteeEntity = TRUSTEE_NAME_KEYWORDS.some(kw => ownerName.toUpperCase().includes(kw));
+        const holdingsCap = isTrusteeEntity ? TRUSTEE_HOLDINGS_CAP : GENERIC_HOLDINGS_CAP;
+        const isMegaNode = totalHoldings > holdingsCap;
+
+        // Cap only during the automatic crawl. An explicit user expansion passes
+        // bypassCap=true, so "Fetch & Expand Structure" always runs the API calls the
+        // crawl skipped — the on-demand escape hatch the cap is designed around.
+        if (isMegaNode && !bypassCap) {
+            console.log(`%c[Mega-Node] ${ownerName} capped: holds ${totalHoldings} (limit ${holdingsCap}${isTrusteeEntity ? ', trustee/nominee' : ''}) — children skipped, expand on demand`, "color: #ff6600; font-weight: bold");
             // Mark the owner node as capped
             const ownerNode = this.nodes.get(ownerNzbn);
             if (ownerNode) {
@@ -733,10 +759,12 @@ class OrgSpider {
                     // in hand at no extra API cost (see drawDirectorsFromRoles).
                     this.drawDirectorsFromRoles(childSummary.roles, childNzbn);
 
-                    // Recurse downstream (skip for mega-node trustees to avoid 900+ API calls)
-                    if (!isMegaNode) {
-                        await this.crawlDownstream(childNzbn, childLabel, depth + 1, onDebug, maxDepth);
-                    }
+                    // Recurse downstream. A child that is itself a bulk trustee/mega-node
+                    // caps itself on its own call above, so recursing here is safe — the
+                    // explosion is stopped one level down, not by skipping this branch.
+                    // bypassCap is deliberately NOT propagated: an explicit expansion
+                    // un-caps only the node the user clicked, not every node beneath it.
+                    await this.crawlDownstream(childNzbn, childLabel, depth + 1, onDebug, maxDepth);
 
                 } catch (e) {
                     console.warn(`Failed to fetch details for subsidiary ${childNzbn}`, e);
@@ -851,7 +879,9 @@ class OrgSpider {
         // Remove the target itself so its children can be discovered
         this.visited.delete(targetNzbn);
 
-        await this.crawlDownstream(targetNzbn, targetName, 0, undefined, maxDepth);
+        // bypassCap=true: the user explicitly asked to expand this node, so run the
+        // API calls the automatic crawl skipped even though it is a capped mega-node.
+        await this.crawlDownstream(targetNzbn, targetName, 0, undefined, maxDepth, true);
 
         return {
             nodes: Array.from(this.nodes.values()),
