@@ -1,0 +1,17 @@
+# Mitsuketa surfaces personal information — including registered property
+# owner, mortgagee and caveator names sourced under the LINZ Licence for
+# Personal Data. That licence requires an active positive step (it names a
+# robots.txt file specifically) to keep the data from being indexed by any
+# public internet web search engine.
+#
+# The application is a private investigation tool, not published content, so
+# there is nothing here that benefits from indexing. All crawling is
+# disallowed. This is backed up by an `X-Robots-Tag: noindex` response header
+# (see vercel.json) for crawlers that ignore this file.
+#
+# If a public marketing page is ever added that SHOULD be indexed, carve it
+# out with an explicit `Allow:` line here and drop the noindex header on that
+# path only — never on any route that can serve owner/personal data.
+
+User-agent: *
+Disallow: /
