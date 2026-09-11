@@ -1,0 +1,4 @@
+# Only needed once billing/DB are switched on. The site runs on fixtures
+# without either of these installed.
+psycopg[binary]>=3.1
+stripe>=9
