@@ -81,7 +81,7 @@ const CSS = `
   .hint{font-size:12px;color:var(--ink-pale);margin-top:18px}
   .hint b{color:var(--ink-mid);font-weight:500}
 
-  .canvas{position:relative;height:440px;border:1px solid var(--rule);background:var(--paper2);overflow:hidden;
+  .canvas{position:relative;height:480px;border:1px solid var(--rule);background:var(--paper2);overflow:hidden;
     cursor:grab;touch-action:none;
     background-image:radial-gradient(var(--rule) 1px,transparent 1px);background-size:22px 22px;background-position:-1px -1px}
   .canvas.grabbing{cursor:grabbing}
@@ -248,7 +248,7 @@ const CSS = `
 
   @media (max-width:900px){
     .hero{grid-template-columns:1fr;gap:34px;padding:44px 0 56px}
-    .canvas{order:2;height:400px}
+    .canvas{order:2;height:470px}
     .pbody{grid-template-columns:1fr}
     .spine{border-right:0;border-bottom:1px solid var(--rule)}
     .steps{grid-template-columns:1fr 1fr}
