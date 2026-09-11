@@ -62,6 +62,9 @@ function App() {
     } else {
       root.classList.remove('dark');
     }
+    // Sumi tokens in index.css switch on [data-theme] (light-dark()); the .dark
+    // class alone only drives the CDN-Tailwind utilities, so set both.
+    root.setAttribute('data-theme', theme);
     localStorage.setItem('mitsuketa_theme', theme);
   }, [theme]);
 
