@@ -1,14 +1,36 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import Landing from './components/Landing';
+import About from './components/About';
+import Terms from './components/Terms';
 
-// Landing gate: the public homepage shows first; "Start searching" enters the
-// app. State-only (a reload returns to the landing), which is what we want while
-// this is in review.
+// Marketing pages route off the URL hash (#/about, #/terms); everything else is
+// Home. "Start searching" leaves the marketing site and mounts the app.
+type Page = 'home' | 'about' | 'terms';
+function pageFromHash(): Page {
+  const h = window.location.hash;
+  if (h.indexOf('#/about') === 0) return 'about';
+  if (h.indexOf('#/terms') === 0) return 'terms';
+  return 'home';
+}
+
 function Root() {
   const [entered, setEntered] = useState(false);
-  return entered ? <App /> : <Landing onEnter={() => setEntered(true)} />;
+  const [page, setPage] = useState<Page>(pageFromHash);
+
+  useEffect(() => {
+    const onHash = () => setPage(pageFromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+  useEffect(() => { window.scrollTo(0, 0); }, [page]);
+
+  if (entered) return <App />;
+  const onEnter = () => setEntered(true);
+  if (page === 'about') return <About onEnter={onEnter} />;
+  if (page === 'terms') return <Terms onEnter={onEnter} />;
+  return <Landing onEnter={onEnter} />;
 }
 
 const rootElement = document.getElementById('root');
