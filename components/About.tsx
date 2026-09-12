@@ -77,7 +77,7 @@ const ABOUT = `
   </details>
   <details>
     <summary>Do you store my searches, or the results?<span class="plus" aria-hidden="true">+</span></summary>
-    <div class="ans"><p>We keep a record of what was searched, the input, because the LINZ licence expects it and it lets us honour amend and delete requests. We do not store the owner, mortgagee or caveator names a title search returns. Those come back to you and are not kept.</p></div>
+    <div class="ans"><p>Property-search attempts record your account, time, search mode, search text or title number, required matter reference, audit ID and IP address where available. Authorised administrators can review this log. Returned title-report contents are not stored in the audit. See the <a href="#/privacy">privacy notice</a> for details.</p></div>
   </details>
   <details>
     <summary>Is this legal or financial advice?<span class="plus" aria-hidden="true">+</span></summary>
@@ -93,7 +93,7 @@ const ABOUT = `
   </details>
   <details>
     <summary>Who can see what I search?<span class="plus" aria-hidden="true">+</span></summary>
-    <div class="ans"><p>Your searches are yours. We do not sell them or pass them on, and title results are not stored. The search-input record exists only to meet the LINZ licence and to action a correction or deletion if one is asked for.</p></div>
+    <div class="ans"><p>Authorised administrators can view the property-search audit for accountability, investigating misuse, troubleshooting and responding to enquiries. LINZ receives the search inputs needed to retrieve data; hosting and database providers process information needed to operate the service. We do not sell the audit or use it for advertising. See the <a href="#/privacy">privacy notice</a>.</p></div>
   </details>
 </div></section>
 

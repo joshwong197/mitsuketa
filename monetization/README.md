@@ -88,8 +88,8 @@ python -m unittest discover -s monetization -p 'test_*.py' -v
 
 The React property screen and `api/property.ts` use `utils/propertyAudit.ts` to
 write to this same Neon `search_audit` table. The existing per-user credential
-is recorded as `password:<username>`, alongside the optional matter reference.
-Searches and report opens return a durable `AUD-<id>`; database failure blocks
+is recorded as `password:<username>`, alongside the required matter reference.
+New searches and report opens return a random UUID (historical IDs remain valid); database failure blocks
 the LINZ request. `PROPERTY_AUDIT_ADMINS` gates the in-app read-only viewer.
 
 See `design/MONETIZATION_PREVIEW.md` for setup and local/preview acceptance
@@ -113,3 +113,7 @@ permission separate from purchased entitlements.
 - **Stripe Price IDs and secrets.** Deliberately not created or configured yet.
 - **GST.** Off below $60k turnover; `billing.py` charges GST-exclusive. Revisit
   at the threshold.
+
+## React sandbox integration (2026-09-12)
+
+The TypeScript app now has optional Clerk account mapping, administrator vetting and Stripe sandbox report passes. The Python billing prototype above is separate and is not the Vercel payment implementation. Read `design/PROPERTY_SANDBOX_SETUP.md` for the active configuration contract, migration and test limitations. Default preview remains password login with billing off until provider setup is complete. Sandbox balances are isolated from the existing live ledger and annual entitlements.

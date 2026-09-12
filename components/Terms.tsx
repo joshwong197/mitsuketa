@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import { MARKETING_CSS, navHTML, FOOTER_HTML, useMarketingChrome } from './marketing';
+import { PROPERTY_PRIVACY_HTML } from './Privacy';
 
 /**
  * Terms page: a WORKING DRAFT scaffolded from the Relab clause map in
@@ -26,7 +27,7 @@ const TERMS = `
     <div class="cn">1</div>
     <div>
       <h3>Definitions</h3>
-      <p><strong>Information</strong> means the data Mitsuketa returns from the New Zealand registers. <strong>Ownership Information</strong> means the LINZ title data specifically: owner, mortgagee and caveator names. <strong>Credits</strong> are the prepaid units a title search draws on. <strong>Fees</strong> are what you pay for Credits.</p>
+      <p><strong>Information</strong> means the data Mitsuketa returns from the New Zealand registers. <strong>Ownership Information</strong> means the LINZ title data specifically: owner, mortgagee and caveator names. <strong>Report passes</strong> are the planned prepaid units used to generate property reports. <strong>Fees</strong> are amounts charged for paid access; sandbox test payments are not real fees.</p>
       <p class="src">Draft. Definitions to be completed alongside the operative clauses.</p>
     </div>
   </div>
@@ -71,17 +72,16 @@ const TERMS = `
     <div class="cn">5</div>
     <div>
       <h3>Privacy</h3>
-      <p>For information you enter into Mitsuketa, we act as your agent under the Privacy Act 2020. We keep a record of searches run, as the LINZ licence requires and to action correction or deletion requests. We do not store the results of a title search.</p>
-      <p class="src">Adapted from Relab clause 10.4. The analytics resale clause (10.3) is dropped.</p>
+      ${PROPERTY_PRIVACY_HTML}
+      <p>Read the <a href="#/privacy">privacy notice</a> before submitting a property search.</p>
     </div>
   </div>
 
   <div class="clause">
     <div class="cn">6</div>
     <div>
-      <h3>Fees and credits</h3>
-      <p>The property layer is paid with prepaid Credits, bought through Stripe. Credits may carry an expiry. Fees exclude GST, which you must pay on any taxable supply. Credits are not refundable.</p>
-      <p class="src">Adapted from Relab clause 11, with prepaid credits in place of subscription rollover.</p>
+      <h3>Report passes and access approval</h3>
+      <p>Property access is restricted to individually approved users. Do not share your account. Approval is separate from payment and may be suspended or withdrawn. During sandbox testing, checkout uses test payments only and does not purchase live service. Final paid offers, tax treatment, expiry and refund terms will be settled before real payments are enabled.</p>
     </div>
   </div>
 

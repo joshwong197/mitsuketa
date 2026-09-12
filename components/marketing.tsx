@@ -336,7 +336,7 @@ export function navHTML(current: 'home' | 'about' | 'terms'): string {
 export const FOOTER_HTML = `
 <div class="wrap"><footer>
   <span class="fb">Mitsuketa<span class="jp">&#35211;&#12388;&#12369;&#12383;</span></span>
-  <span class="fnav"><a href="#/about">About</a> &#183; <a href="#/terms">Terms</a></span>
+  <span class="fnav"><a href="#/about">About</a> &#183; <a href="#/terms">Terms</a> &#183; <a href="#/privacy">Privacy</a></span>
   <span>&#169; 2026 Mitsuketa &#183; Aotearoa NZ</span>
 </footer></div>`;
 

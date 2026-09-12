@@ -8,14 +8,14 @@ const sql = async (text: string, params: unknown[]) => {
 };
 assert.equal(await recordSearch({ mode: 'address', query: 'Example road', searcher: 'operator',
     reference: "CASE-'123", ip: '127.0.0.1, 10.0.0.1', owners: ['must never be stored'] } as any, sql), '18ae328b-966c-4371-aa48-ad5c73694462');
-assert.deepEqual(calls[0].params, ['address', 'Example road', null, 'password:operator', "CASE-'123", '127.0.0.1']);
+assert.deepEqual(calls[0].params, ['address', 'Example road', null, 'password:operator', "CASE-'123", '127.0.0.1', null]);
 assert.ok(!calls[0].sql.includes("CASE-'123"));
 assert.equal(normalizeIp('testclient'), null);
 assert.equal(normalizeIp('::1'), '::1');
 await assert.rejects(recordSearch({ mode: 'title', query: 'EXAMPLE', searcher: 'operator' },
     async () => { throw new Error('sensitive database detail'); }), AuditUnavailableError);
 await recentSearches(' Operator ', sql);
-assert.deepEqual(calls[1].params, ['password:operator']);
+assert.deepEqual(calls[1].params, ['password:operator', 'operator']);
 assert.match(calls[1].sql, /LIMIT 200/);
 
 process.env.PROPERTY_PW_OPERATOR = 'test-only-operator';

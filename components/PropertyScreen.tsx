@@ -3,6 +3,8 @@ import { ArrowRight, Loader2, Lock, Search as SearchIcon } from 'lucide-react';
 import { PropertyStyles } from './PropertyStyles';
 import { PropertyAudit } from './PropertyAudit';
 import { MatterReference } from './MatterReference';
+import { usesClerk } from '../utils/propertyAuthClient';
+const ClerkPropertyAccess = React.lazy(() => import('./ClerkPropertyAccess'));
 import {
     fetchTitleReport, login, logout, searchAddress, searchOwner,
     PropertyError,
@@ -236,8 +238,13 @@ const Notice: React.FC<{ searcher: string }> = ({ searcher }) => {
                     <>The data is a <strong className="text-ink">reference copy, not a title search</strong>.
                         It may lag the register and is not legal advice. Obtain a formal search from
                         LINZ before relying on it.</>,
-                    <><strong className="text-ink">Every search you run is logged</strong> — your account,
-                        the time, and what you typed. The log is visible to the administrator.</>,
+                    <><strong className="text-ink">Every search attempt is logged</strong> — your account,
+                        time, search mode, search text or title number, matter reference, audit ID and IP address
+                        where available. Authorised administrators can view the log in Neon. Returned report
+                        contents are not stored in the audit.</>,
+                    <>Use a case or file code as your required matter reference. Saved references stay in this
+                        browser. Read the <a href="/#/privacy" target="_blank" rel="noreferrer" className="text-accent underline">privacy notice</a> and{' '}
+                        <a href="/#/terms" target="_blank" rel="noreferrer" className="text-accent underline">terms</a>.</>,
                 ].map((item, i) => (
                     <li key={i} style={{ display: 'flex', gap: 10, marginBottom: 9 }}>
                         <span className="text-accent" style={{ fontFamily: 'var(--serif)', flexShrink: 0 }}>—</span>
@@ -584,7 +591,7 @@ export interface PropertyScreenProps {
     onOpenReport: (report: TitleReport, titleNo: string) => void;
 }
 
-export const PropertyScreen: React.FC<PropertyScreenProps> = ({ onOpenReport }) => {
+const PropertyContent: React.FC<PropertyScreenProps> = ({ onOpenReport }) => {
     const session = useSyncExternalStore(subscribe, getSession, () => null);
 
     const face = !session
@@ -603,4 +610,12 @@ export const PropertyScreen: React.FC<PropertyScreenProps> = ({ onOpenReport }) 
             <PropertyStyles />
         </>
     );
+};
+
+export const PropertyScreen: React.FC<PropertyScreenProps> = props => {
+    if (!usesClerk()) return <PropertyContent {...props} />;
+    if (!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY) return <p>Property sign-in is not configured on this deployment.</p>;
+    return <React.Suspense fallback={<p>Loading your account…</p>}>
+        <ClerkPropertyAccess><PropertyContent {...props} /></ClerkPropertyAccess>
+    </React.Suspense>;
 };

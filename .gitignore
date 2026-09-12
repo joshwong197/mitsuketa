@@ -58,6 +58,7 @@ yarn-error.log*
 .neon
 .worktrees/
 CODEX_HANDOFF.md
+MIDORI_HANDOFF.md
 MONETIZATION_HANDOFF.md
 LINZ_EMAIL_DRAFT.md
 monetization/LIVE_AUDIT_CHECK.md

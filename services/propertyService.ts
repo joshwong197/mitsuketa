@@ -1,5 +1,6 @@
 import type { MemorialRow } from '../utils/memorials.js';
-import { signOut } from '../utils/propertySession.js';
+import { signOut, sessionGeneration } from '../utils/propertySession.js';
+import { propertyAuthHeaders, exitPropertyAuth, usesClerk } from '../utils/propertyAuthClient';
 
 /**
  * Client for /api/property — the LINZ Title Register feature (家族).
@@ -87,9 +88,15 @@ export function tileUrl(z: number, x: number, y: number): string {
 
 
 async function request<T>(params: Record<string, string>): Promise<T> {
+    const generation = sessionGeneration();
     const url = `${ENDPOINT}?${new URLSearchParams(params)}`;
-    const resp = await fetch(url, { credentials: 'same-origin' });
-    if (resp.ok) return resp.json() as Promise<T>;
+    const resp = await fetch(url, { credentials: 'same-origin', headers: await propertyAuthHeaders() });
+    if (generation !== sessionGeneration()) throw new SessionExpiredError('Your account changed. Run the search again.', 'session_changed', 401);
+    if (resp.ok) {
+        const data = await resp.json() as T;
+        if (generation !== sessionGeneration()) throw new SessionExpiredError('Your account changed. Run the search again.', 'session_changed', 401);
+        return data;
+    }
 
     let code = 'request_failed';
     let message = `Request failed (${resp.status}).`;
@@ -143,6 +150,7 @@ export async function login(searcher: string, password: string): Promise<{ searc
 
 export async function logout(): Promise<void> {
     try {
+        if (usesClerk()) { await exitPropertyAuth(); return; }
         await fetch(`${ENDPOINT}?mode=logout`, {
             method: 'POST', credentials: 'same-origin',
         });

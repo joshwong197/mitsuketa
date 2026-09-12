@@ -27,13 +27,15 @@ const SERVER_ENV_KEYS = [
 // Per-user property credentials are one variable each and their names are not
 // known up front (PROPERTY_PW_<slugged email>), so they are matched by prefix
 // rather than listed. Local and Vercel handlers use the same per-user gate.
-const SERVER_ENV_PREFIXES = ['PROPERTY_PW_'] as const;
+const SERVER_ENV_PREFIXES = ['PROPERTY_', 'CLERK_', 'STRIPE_'] as const;
 
 const API_ROUTES: Record<string, string> = {
     '/api/proxy': '/api/proxy.ts',
     '/api/consent-forms': '/api/consent-forms.ts',
     '/api/documents': '/api/documents.ts',
     '/api/property': '/api/property.ts',
+    '/api/property-account': '/api/property-account.ts',
+    '/api/stripe-webhook': '/api/stripe-webhook.ts',
 };
 
 // Vercel parses cookies onto req.cookies; Node's http server does not.
@@ -139,7 +141,7 @@ export default function apiPlugin(): Plugin {
                     req.headers['x-forwarded-proto'] = 'http';
                     req.headers['x-forwarded-for'] = req.socket.remoteAddress;
 
-                    if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
+                    if (pathname !== '/api/stripe-webhook' && (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH')) {
                         (req as any).body = await readJsonBody(req);
                     }
 

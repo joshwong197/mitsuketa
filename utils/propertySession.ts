@@ -24,6 +24,8 @@ export interface PropertySession {
 }
 
 let current: PropertySession | null = null;
+let generation = 0;
+export function sessionGeneration() { return generation; }
 const listeners = new Set<() => void>();
 
 function emit() {
@@ -35,6 +37,7 @@ export function getSession(): PropertySession | null {
 }
 
 export function signIn(searcher: string, canAudit = false): void {
+    generation++;
     current = { searcher, acknowledged: false, canAudit };
     emit();
 }
@@ -47,6 +50,7 @@ export function acknowledge(): void {
 
 /** Called on sign-out and whenever the API reports the session is gone (401). */
 export function signOut(): void {
+    generation++;
     current = null;
     emit();
 }

@@ -12,6 +12,8 @@ export interface SearchAuditInput {
     searcher: string;
     reference?: string;
     ip?: string;
+    accountId?: string;
+    actor?: string;
 }
 
 type Query = (sql: string, params: unknown[]) => Promise<Record<string, any>[]>;
@@ -37,10 +39,10 @@ export async function recordSearch(input: SearchAuditInput, execute: Query = que
         // Explicit allowlist: returned report objects can never be spread into
         // the stored record. A credential name is not verified mailbox ownership.
         const rows = await execute(
-            'INSERT INTO search_audit (mode, query, title_no, actor, matter_ref, ip) '
-            + 'VALUES ($1,$2,$3,$4,$5,$6) RETURNING audit_reference',
+            'INSERT INTO search_audit (mode, query, title_no, actor, matter_ref, ip, account_id) '
+            + 'VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING audit_reference',
             [input.mode, input.query, input.mode === 'title' ? input.query : null,
-                `password:${input.searcher}`, input.reference || null, normalizeIp(input.ip)],
+                input.actor || `password:${input.searcher}`, input.reference || null, normalizeIp(input.ip), input.accountId || null],
         );
         if (!rows[0]?.audit_reference) throw new AuditUnavailableError();
         return String(rows[0].audit_reference);
@@ -55,9 +57,9 @@ export async function recentSearches(searcher?: string, execute: Query = query) 
         return await execute(
             "SELECT COALESCE(audit_reference::text, 'AUD-' || id) AS audit_reference, created_at, mode, query, "
             + 'title_no, actor, matter_ref, ip FROM search_audit '
-            + 'WHERE ($1::text IS NULL OR actor=$1) '
+            + 'WHERE ($1::text IS NULL OR actor=$1 OR account_id IN (SELECT id FROM account WHERE email=$2)) '
             + 'ORDER BY created_at DESC, id DESC LIMIT 200',
-            [searcher ? `password:${searcher.trim().toLowerCase()}` : null],
+            [searcher ? `password:${searcher.trim().toLowerCase()}` : null, searcher?.trim().toLowerCase() || null],
         );
     } catch {
         throw new AuditUnavailableError();

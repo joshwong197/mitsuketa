@@ -39,6 +39,8 @@ import { createHmac, createHash, timingSafeEqual } from 'node:crypto';
 import { add as addAudit } from '../utils/audit.js';
 import { AuditUnavailableError, canReadAudit, recentSearches as listAudit } from '../utils/propertyAudit.js';
 import { authenticate, configuredUserKeys, envKeyFor, hasUsers, storedCredential, userSessionSecret } from '../utils/propertyUsers.js';
+import { AccessError, authMode, getMember, requireApproved, sendAccessError, passBalance, accountQuery, NOTICE_VERSION, type Member } from '../utils/propertyAccount.js';
+import { billingEnabled } from '../utils/propertyBilling.js';
 import {
     LDSClient, searchAddress as lookupAddress, searchOwner as lookupOwner, titleReport as lookupTitle,
 } from '../utils/lds.js';
@@ -193,16 +195,24 @@ export function createPropertyHandler(overrides: {
     searchAddress?: typeof lookupAddress;
     searchOwner?: typeof lookupOwner;
     titleReport?: typeof lookupTitle;
+    member?: typeof getMember;
+    balance?: typeof passBalance;
+    consume?: (id: string, reference: string) => Promise<boolean>;
 } = {}) {
 const add = overrides.add || addAudit;
 const recentSearches = overrides.recentSearches || listAudit;
 const searchAddress = overrides.searchAddress || lookupAddress;
 const searchOwner = overrides.searchOwner || lookupOwner;
 const titleReport = overrides.titleReport || lookupTitle;
+const resolveMember = overrides.member || getMember;
+const balance = overrides.balance || passBalance;
+const consume = overrides.consume || (async (id, reference) => Boolean((await accountQuery('SELECT sandbox_consume_pass($1,$2) AS ok', [id, reference]))[0].ok));
 return async function handler(req: VercelRequest, res: VercelResponse) {
     res.setHeader('Cache-Control', 'no-store');
     const mode = str(req.query.mode);
     const ip = (req.headers['x-forwarded-for'] as string) || undefined;
+    let useClerk: boolean;
+    try { useClerk = authMode() === 'clerk'; } catch (error) { return sendAccessError(res, error); }
 
     // Fail closed: an unconfigured feature is an unreachable one.
     //
@@ -211,7 +221,7 @@ return async function handler(req: VercelRequest, res: VercelResponse) {
     // vars at BUILD time, so a deployment built before a variable was added
     // will land here until it is redeployed. Check `vercel logs <url>`.
     const missing = [
-        !hasUsers() && 'at least one PROPERTY_PW_* credential',
+        !useClerk && !hasUsers() && 'at least one PROPERTY_PW_* credential',
         !process.env.LINZ_API_KEY && 'LINZ_API_KEY',
         !process.env.DATABASE_URL && 'DATABASE_URL',
     ].filter(Boolean);
@@ -227,6 +237,7 @@ return async function handler(req: VercelRequest, res: VercelResponse) {
     const secure = (req.headers['x-forwarded-proto'] as string) !== 'http';
 
     if (mode === 'login') {
+        if (useClerk) return res.status(400).json({ error: 'use_clerk', message: 'Use Mitsuketa sign-in.' });
         if (req.method !== 'POST') return res.status(405).json({ error: 'POST required' });
 
         // Which mode is live, and which accounts exist. Without this, "the
@@ -291,7 +302,11 @@ return async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json({ ok: true });
     }
 
-    const session = readSession(req);
+    let member: Member | undefined;
+    if (useClerk) {
+        try { member = await resolveMember(req); } catch (error) { return sendAccessError(res, error); }
+    }
+    const session = member || readSession(req);
     if (!session) {
         await add({ action: 'refused', query: mode, ip });
         return res.status(401).json({ error: 'unauthorised' });
@@ -301,12 +316,19 @@ return async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (mode === 'audit') {
         // Read from server configuration on every request, never the client.
-        if (!canReadAudit(session.searcher)) return res.status(403).json({ error: 'forbidden' });
+        if (!(member ? member.canAudit : canReadAudit(session.searcher))) return res.status(403).json({ error: 'forbidden' });
         try {
             return res.status(200).json({ rows: await recentSearches(str(req.query.searcher)) });
         } catch {
             return res.status(503).json({ error: 'audit_unavailable', message: 'The search log is temporarily unavailable.' });
         }
+    }
+
+    if (member) {
+        try {
+            requireApproved(member);
+            if (member.accepted_notice_version !== NOTICE_VERSION) throw new AccessError(403, 'notice_required', 'Accept the current privacy notice before searching.');
+        } catch (error) { return sendAccessError(res, error); }
     }
 
     // Aerial tiles sit above the reference gate on purpose. A tile is imagery,
@@ -366,7 +388,8 @@ return async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const query = str(req.query.q).slice(0, MAX_QUERY);
-    const base = { reference, searcher: session.searcher, ip };
+    const base = { reference, searcher: session.searcher, ip,
+        ...(member ? { accountId: member.id, actor: `clerk:${member.issuer}#${member.subject}`, verified: true } : {}) };
 
     try {
         const client = new LDSClient();
@@ -401,14 +424,23 @@ return async function handler(req: VercelRequest, res: VercelResponse) {
         if (mode === 'title') {
             const titleNo = str(req.query.title_no).slice(0, MAX_QUERY);
             if (!titleNo) return res.status(400).json({ error: 'title_no_required' });
+            const metered = !!member && billingEnabled();
+            if (metered && await balance(member!.id) < 1) throw new AccessError(402, 'passes_required', 'Add sandbox report passes from your account panel.');
             const auditReference = await add({ ...base, action: 'report-opened', query: titleNo });
             res.setHeader('X-Search-Reference', auditReference!);
-            return res.status(200).json({ ...await titleReport(client, titleNo),
+            const report = await titleReport(client, titleNo);
+            // No debit for upstream failure or a missing title. Recheck approval
+            // and the last pass atomically before returning a successful report.
+            if (metered && report.title && !await consume(member!.id, auditReference!)) {
+                throw new AccessError(402, 'passes_required', 'Access or your pass balance changed. Refresh your account panel.');
+            }
+            return res.status(200).json({ ...report,
                 audit_reference: auditReference, matter_reference: reference });
         }
 
         return res.status(400).json({ error: 'unknown_mode' });
     } catch (err: any) {
+        if (err instanceof AccessError) return sendAccessError(res, err);
         if (err instanceof AuditUnavailableError) {
             console.error('[property] audit write unavailable; search blocked');
             return res.status(503).json({ error: 'audit_unavailable',

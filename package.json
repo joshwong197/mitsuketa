@@ -14,12 +14,15 @@
     "check:property-audit": "tsx utils/propertyAudit.check.ts",
     "check:browser": "playwright test",
     "check:nzbn-link": "esbuild services/resolveEntityNzbn.selftest.ts --bundle --format=cjs --platform=node --log-level=warning | node",
-    "check": "npm run check:memorials && npm run check:lds && npm run check:nzbn-link && npm run check:property-audit",
+    "check": "npm run check:memorials && npm run check:lds && npm run check:nzbn-link && npm run check:property-audit && npm run check:property-access",
     "build:graph-bundle": "esbuild mcp/templates/graph-bundle.entry.ts --bundle --format=iife --minify --target=es2020 --outfile=mcp/templates/graph-bundle.js --log-level=info",
     "build:export-viewer": "esbuild export-viewer.entry.tsx --bundle --format=iife --minify --target=es2020 --outfile=public/export-viewer.js --log-level=info && tailwindcss -i export-viewer.css -o public/export-viewer.css --minify",
-    "property:user": "node utils/property.pw.ts"
+    "property:user": "node utils/property.pw.ts",
+    "check:property-access": "tsx utils/propertyAccess.check.ts && tsx utils/stripeWebhook.check.ts"
   },
   "dependencies": {
+    "@clerk/backend": "^3.17.2",
+    "@clerk/react": "^6.15.2",
     "@dagrejs/dagre": "^1.1.8",
     "@fontsource/shippori-mincho": "^5.2.8",
     "@fontsource/zen-kaku-gothic-new": "^5.2.7",
@@ -35,6 +38,7 @@
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "reactflow": "^11.11.4",
+    "stripe": "^22.6.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {

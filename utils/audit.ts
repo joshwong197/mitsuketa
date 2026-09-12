@@ -28,6 +28,8 @@ export interface AuditEvent {
      */
     verified?: boolean;
     ip?: string;
+    accountId?: string;
+    actor?: string;
 }
 
 import { recordSearch } from './propertyAudit.js';
@@ -39,7 +41,7 @@ export async function add(event: Omit<AuditEvent, 'at'>): Promise<string | undef
     if (mode) {
         if (!event.searcher || !event.query) throw new Error('Search audit input is incomplete');
         return recordSearch({ mode, query: event.query, searcher: event.searcher,
-            reference: event.reference, ip: event.ip });
+            reference: event.reference, ip: event.ip, accountId: event.accountId, actor: event.actor });
     }
     const record: AuditEvent = { at: new Date().toISOString(), verified: false, ...event };
     // Access events remain platform logs. Searches above must reach Neon before

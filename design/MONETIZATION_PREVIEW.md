@@ -67,5 +67,4 @@ The browser test does not use real secrets, call LINZ or write Neon.
 typecheck currently has pre-existing GraphEdge/KYD/shareholding errors also
 reproduced on `main`; those are separate from this integration.
 
-No payment routes are enabled, no report passes are charged, and the LINZ
-commercial-approval and Clerk work remain deferred.
+The default password preview has billing disabled. Optional Clerk vetting and Stripe sandbox routes are now implemented behind configuration switches; see `PROPERTY_SANDBOX_SETUP.md`. Hosted provider testing still needs development/test keys. Live payments and the LINZ commercial release remain deferred.

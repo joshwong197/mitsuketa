@@ -15,6 +15,7 @@ import { FindScreen } from './components/FindScreen';
 import { PropertyReport } from './components/PropertyReport';
 import type { MainTab } from './components/TabBar';
 import type { TitleReport as PropertyTitleReport } from './services/propertyService';
+import { getSession as getPropertySession, subscribe as subscribePropertySession } from './utils/propertySession';
 import { IntroAnimation, INTRO_SEEN_KEY } from './components/IntroAnimation';
 import { assignDepths } from './utils/graphDepth';
 import { CompanyNode, PersonNode, SummaryNode } from './components/CustomNodes';
@@ -309,6 +310,17 @@ function App() {
   // sign-in is deliberately memory-only, so caseStore must not see these.
   const [propertyTabs, setPropertyTabs] = useState<PropertyTab[]>([]);
   const [activePropertyTabId, setActivePropertyTabId] = useState<string | null>(null);
+  useEffect(() => {
+    let searcher = getPropertySession()?.searcher;
+    return subscribePropertySession(() => {
+      const next = getPropertySession()?.searcher;
+      if (searcher && next !== searcher) {
+        setPropertyTabs([]);
+        setActivePropertyTabId(null);
+      }
+      searcher = next;
+    });
+  }, []);
   // Mirror of activeCompanyTabId for async graph loads: when a fetch resolves
   // after the user has switched tabs, results must go to the tab that started
   // the load — not clobber the live state of whichever tab is now active.
