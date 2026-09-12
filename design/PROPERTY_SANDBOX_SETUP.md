@@ -48,7 +48,11 @@ One pass is consumed only after a title report is retrieved successfully and bef
 
 Clerk development application `Mitsuketa` has now been created under the owner's Clerk account and its keys configured locally and for the monetisation preview. Email-code sign-in and signup email verification are enabled. Use the hosted app to create the owner's Mitsuketa user before assigning its immutable `user_...` ID to `PROPERTY_CLERK_ADMINS`. The Clerk dashboard account is separate from the application's user accounts. Stripe remains off.
 
+Signup asks for a password: minimum 8 characters with uppercase, lowercase and a special character; numbers are not required. Email codes remain available for passwordless sign-in. These are Clerk development-instance settings shared by localhost and this preview. `ClerkRoot` supplies hash-route navigation so completing either authentication method can activate the session without waiting for a document unload.
+
 `node scripts/check-clerk-live.mjs [app-origin]` is an opt-in hosted sign-in test. It uses Clerk's official development testing helper, creates a synthetic test user, verifies the real Clerk-to-Neon account path and pending approval gate, submits a test application, then removes that exact test user and account. It does not test human CAPTCHA completion or send real email.
+
+`node scripts/check-clerk-ui.mjs [app-origin]` exercises the actual signup and sign-in modals with a synthetic email: eight-character password signup, email verification, password and email-code sign-in, and session persistence after reloading. The synthetic Clerk and Neon accounts are removed afterward. Unlike the direct sign-in helper, this covers the UI navigation/session handoff; human CAPTCHA and real email delivery remain outside this automated test.
 
 - `npm run check`: includes identity/approval/admin/origin boundaries, no-debit-on-failure, missing-pass handling, webhook signature/tamper tests and test/live separation.
 - `npm run check:browser`: full existing password property flow, privacy notice and a synthetic application → review → sandbox-checkout panel journey. The account-panel test does not prove real Clerk sign-in or real Stripe checkout.
