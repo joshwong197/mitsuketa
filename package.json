@@ -42,6 +42,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@clerk/testing": "^2.2.34",
     "@playwright/test": "^1.63.0",
     "@tailwindcss/cli": "^4.3.2",
     "@types/node": "^22.14.0",

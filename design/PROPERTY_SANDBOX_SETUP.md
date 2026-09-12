@@ -1,6 +1,6 @@
 # Property access and sandbox billing
 
-Implemented on `feature/monetization`; do not merge the entire monetisation branch into production as an audit-only change. Clerk and billing are opt-in. The existing preview uses password mode until the owner supplies development configuration.
+Implemented on `feature/monetization`; do not merge the entire monetisation branch into production as an audit-only change. Clerk development sign-in is configured for local and monetisation preview use. Other deployments retain their explicitly configured authentication mode. Stripe billing remains off until sandbox keys and its webhook are connected.
 
 ## One Mitsuketa account
 
@@ -45,6 +45,10 @@ One pass is consumed only after a title report is retrieved successfully and bef
 `sk_live_` keys and checkout on `VERCEL_ENV=production` are refused. Sandbox passes are in separate tables from existing `credit_ledger`/annual entitlements. Annual subscriptions, real-payment tax/refund terms, chargeback handling and production migration are **not enabled** by this slice.
 
 ## Verification
+
+Clerk development application `Mitsuketa` has now been created under the owner's Clerk account and its keys configured locally and for the monetisation preview. Email-code sign-in and signup email verification are enabled. Use the hosted app to create the owner's Mitsuketa user before assigning its immutable `user_...` ID to `PROPERTY_CLERK_ADMINS`. The Clerk dashboard account is separate from the application's user accounts. Stripe remains off.
+
+`node scripts/check-clerk-live.mjs [app-origin]` is an opt-in hosted sign-in test. It uses Clerk's official development testing helper, creates a synthetic test user, verifies the real Clerk-to-Neon account path and pending approval gate, submits a test application, then removes that exact test user and account. It does not test human CAPTCHA completion or send real email.
 
 - `npm run check`: includes identity/approval/admin/origin boundaries, no-debit-on-failure, missing-pass handling, webhook signature/tamper tests and test/live separation.
 - `npm run check:browser`: full existing password property flow, privacy notice and a synthetic application → review → sandbox-checkout panel journey. The account-panel test does not prove real Clerk sign-in or real Stripe checkout.
