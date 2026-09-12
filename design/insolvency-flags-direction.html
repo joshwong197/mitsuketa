@@ -1,0 +1,333 @@
+<title>Mitsuketa — individual insolvency flags on the chart</title>
+<style>
+:root{
+  color-scheme: light dark;
+  --acc-l: oklch(0.40 0.095 265); --acc-d: oklch(0.72 0.085 260);
+  --paper: light-dark(oklch(0.952 0.007 85), oklch(0.185 0.008 75));
+  --paper2: light-dark(oklch(0.930 0.008 85), oklch(0.225 0.009 75));
+  --ink: light-dark(oklch(0.235 0.014 65), oklch(0.905 0.012 85));
+  --ink-mid: light-dark(oklch(0.44 0.012 65), oklch(0.68 0.012 85));
+  --ink-pale: light-dark(oklch(0.62 0.010 70), oklch(0.50 0.010 80));
+  --ink-wash: light-dark(oklch(0.78 0.009 75), oklch(0.35 0.009 75));
+  --rule: light-dark(oklch(0.855 0.008 80), oklch(0.30 0.010 75));
+  --accent: light-dark(var(--acc-l), var(--acc-d));
+  --accent-ink: light-dark(oklch(0.965 0.006 85), oklch(0.185 0.008 75));
+  --crit: light-dark(oklch(0.55 0.17 30), oklch(0.66 0.17 30));
+  --amber: light-dark(oklch(0.60 0.10 78), oklch(0.72 0.10 78));
+  --green: light-dark(oklch(0.50 0.08 150), oklch(0.68 0.09 150));
+  --serif:"Shippori Mincho","Yu Mincho","Hiragino Mincho ProN","Noto Serif JP",serif;
+  --gothic:"Zen Kaku Gothic New","Yu Gothic UI","Hiragino Sans","Noto Sans JP","Segoe UI",system-ui,sans-serif;
+  --mono:"Cascadia Mono",Consolas,ui-monospace,monospace;
+  --grain-op:.16;
+}
+:root[data-theme="light"]{color-scheme:light;--grain-op:.16}
+:root[data-theme="dark"]{color-scheme:dark;--grain-op:.09}
+@media (prefers-color-scheme: dark){:root{--grain-op:.09}}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--gothic);font-size:14px;line-height:1.6}
+body::before{content:"";position:fixed;inset:0;z-index:9999;pointer-events:none;opacity:var(--grain-op);
+background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.45 0 0 0 0 0.42 0 0 0 0 0.38 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E")}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.wrap{max-width:920px;margin:0 auto;padding:0 26px 90px}
+.mast{border-bottom:1px solid var(--rule);padding:46px 0 26px;margin-bottom:14px}
+.eyebrow{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.14em;color:var(--ink-pale)}
+h1{font-family:var(--serif);font-weight:600;font-size:clamp(26px,3.6vw,35px);margin:9px 0 0;line-height:1.18;text-wrap:balance}
+.lede{color:var(--ink-mid);font-size:13.5px;max-width:70ch;margin:13px 0 0}
+h2{font-family:var(--serif);font-weight:600;font-size:20px;margin:44px 0 6px;
+   padding-bottom:7px;border-bottom:1px solid var(--ink);display:flex;align-items:baseline;gap:12px}
+h2 .k{font-size:15px;color:var(--accent);letter-spacing:.1em}
+h3{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;
+   color:var(--ink-pale);margin:26px 0 9px}
+p{margin:0 0 13px;max-width:74ch}
+strong{font-weight:600}
+code{font-family:var(--mono);font-size:.88em;background:var(--paper2);border:1px solid var(--rule);padding:1px 5px}
+
+.q{border-left:2px solid var(--accent);background:var(--paper2);padding:14px 17px;margin:20px 0;font-size:13px;max-width:78ch}
+.q.warn{border-left-color:var(--crit)}
+.q p:last-child{margin-bottom:0}
+
+/* ── person node, as CustomNodes draws it ─────────────────────── */
+.canvas{border:1px solid var(--rule);background:var(--paper2);padding:26px 22px;margin:16px 0 6px;
+  display:flex;flex-wrap:wrap;gap:26px}
+.inkan{display:inline-flex;align-items:center;gap:11px;background:var(--paper);
+  border:1px solid var(--ink-mid);border-radius:999px;padding:6px 18px 6px 6px;position:relative}
+.inkan .seal{width:30px;height:30px;border-radius:999px;border:1px solid var(--accent);
+  display:grid;place-items:center;position:relative;flex:none}
+.inkan .seal::after{content:"";position:absolute;inset:2px;border-radius:999px;
+  border:1px solid oklch(from var(--accent) l c h / .35)}
+.inkan .seal span{font-family:var(--serif);font-size:12px;color:var(--accent)}
+.inkan .nm{font-size:12.5px;font-weight:500;line-height:1.25;display:block}
+.inkan .role{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--ink-pale)}
+.inkan.crit{border-color:var(--crit);border-width:2px;padding:5px 17px 5px 5px}
+.inkan.crit .seal{border-color:var(--crit)}
+.inkan.crit .seal::after{border-color:oklch(from var(--crit) l c h / .35)}
+.inkan.crit .seal span{color:var(--crit)}
+.inkan.amber{border-color:var(--amber)}
+.inkan.amber .seal{border-color:var(--amber)}
+.inkan.amber .seal::after{border-color:oklch(from var(--amber) l c h / .35)}
+.inkan.amber .seal span{color:var(--amber)}
+.chip{display:inline-grid;place-items:center;width:15px;height:15px;flex:none;
+  font-family:var(--serif);font-size:11px;line-height:1;color:var(--accent-ink)}
+.chip.c{background:var(--crit)} .chip.a{background:var(--amber)}
+.flagline{display:flex;align-items:center;gap:5px;margin-top:2px}
+.flagline .t{font-size:10px;text-transform:uppercase;letter-spacing:.05em;white-space:nowrap}
+.flagline .t.c{color:var(--crit)} .flagline .t.a{color:var(--amber)}
+.cap{font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.1em;
+  color:var(--ink-pale);margin-top:2px}
+
+/* ── evidence panel ───────────────────────────────────────────── */
+.ev{border:1px solid var(--rule);background:var(--paper);max-width:520px;margin:14px 0}
+.ev-h{display:flex;align-items:center;gap:10px;padding:11px 14px;border-bottom:1px solid var(--rule)}
+.ev-h b{font-size:13.5px}
+.ev-b{padding:12px 14px}
+.ev dl{display:grid;grid-template-columns:132px minmax(0,1fr);margin:0}
+.ev dt,.ev dd{margin:0;padding:5px 0;border-top:1px solid var(--rule);font-size:12.5px}
+.ev dt{color:var(--ink-pale);text-align:right;padding-right:16px;font-size:11.5px}
+.ev dt:first-of-type,.ev dt:first-of-type + dd{border-top:none}
+.ev .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.ev-f{border-top:1px solid var(--rule);padding:10px 14px;display:flex;gap:16px;flex-wrap:wrap;
+  font-size:11.5px}
+.ev-f a{color:var(--accent);text-underline-offset:3px}
+.match{display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);font-size:10px;
+  text-transform:uppercase;letter-spacing:.06em}
+.dot{width:7px;height:7px;flex:none}
+.dot.g{background:var(--green)} .dot.a{background:var(--amber)} .dot.p{background:var(--ink-wash)}
+
+/* ── tier table ───────────────────────────────────────────────── */
+.tbl{overflow-x:auto;border:1px solid var(--rule);margin:16px 0}
+table{border-collapse:collapse;width:100%;min-width:620px;font-size:12.5px}
+th,td{text-align:left;padding:9px 13px;border-top:1px solid var(--rule);vertical-align:top}
+thead th{border-top:0;font-family:var(--mono);font-size:9.5px;text-transform:uppercase;
+  letter-spacing:.09em;color:var(--ink-pale);font-weight:400;background:var(--paper2)}
+td .k{font-family:var(--serif);font-size:15px}
+
+/* ── case-file summary ────────────────────────────────────────── */
+.panel{border:1px solid var(--rule);background:var(--paper);max-width:330px;margin:14px 0}
+.panel-h{font-family:var(--mono);font-size:9.5px;text-transform:uppercase;letter-spacing:.1em;
+  color:var(--ink-pale);padding:10px 14px;border-bottom:1px solid var(--rule)}
+.panel-r{display:flex;align-items:center;gap:10px;padding:9px 14px;border-top:1px solid var(--rule);
+  font-size:12.5px}
+.panel-r:first-of-type{border-top:none}
+.panel-r .g{flex:1;min-width:0}
+.panel-r .s{display:block;font-family:var(--mono);font-size:10px;color:var(--ink-pale);margin-top:1px}
+
+ul.dash{list-style:none;margin:0 0 14px;padding:0;max-width:74ch}
+ul.dash li{display:flex;gap:10px;margin-bottom:8px;color:var(--ink-mid);font-size:13.5px}
+ul.dash li::before{content:"—";color:var(--accent);flex:none;font-family:var(--serif)}
+ul.dash li b{color:var(--ink)}
+ol.dec{margin:0;padding-left:20px;max-width:74ch}
+ol.dec li{margin-bottom:12px;font-size:13.5px}
+ol.dec li b{font-weight:600}
+</style>
+
+<div class="wrap">
+
+<header class="mast">
+  <div class="eyebrow">Design direction · insolvency flags on the company chart</div>
+  <h1>Surfacing an individual's insolvency history without leaving the chart</h1>
+  <p class="lede">You pushed back on my false-positive concern and you were mostly right. This is
+  the revised proposal: flag everything, show the evidence with the flag, and let the tier say how
+  the match was made rather than hiding matches behind caution.</p>
+</header>
+
+<h2><span class="k">前</span>Where I was wrong, and what actually differs</h2>
+
+<p>My worry was that auto-matching "John ABC" against the insolvency register would flag the wrong
+person. Your answer: the individual search <em>already</em> does exactly that, with the same API and
+the same name matching, and you read it fine. That's correct, and it makes most of my caution
+inconsistent — I was proposing to suppress on the chart what we already show without hesitation one
+screen over.</p>
+
+<p>Two things do genuinely differ, and they're narrower than what I originally said:</p>
+
+<ul class="dash">
+  <li><b>Solicited versus unsolicited.</b> When you type "John ABC" you know who you're looking for
+  and you're making the identification yourself. On a chart the app goes and looks without being
+  asked, then puts a mark on a person. That's a different act, even with identical data behind it.</li>
+  <li><b>Volume changes how carefully you read.</b> One search is one conscious judgement. Forty
+  directors is forty judgements you'll make while skimming, and common names mean at least one will
+  be wrong on a decent-sized chart.</li>
+</ul>
+
+<div class="q">
+  <p><strong>So the fix isn't to suppress — it's to make the chart flag carry the same evidence
+  the person search gives you.</strong> A bare red badge is a verdict. A badge that opens the estate
+  name, type, adjudication date, status and address is the same judgement call you already make,
+  just surfaced earlier. That's the whole redesign.</p>
+</div>
+
+<h2><span class="k">証</span>And we can corroborate better than name alone</h2>
+
+<p>Digging through this I found something that raises the ceiling. Director records from the
+companies register carry <code>physicalAddress</code>, and insolvency records carry
+<code>addressAtAdjudication</code>. <code>KydVerificationPanel</code> already does address comparison
+for a related purpose, so the machinery exists.</p>
+
+<p>That means a name match backed by a matching address is materially stronger than a name match
+alone — and we can say which one we have, rather than treating every match as equally uncertain.
+The tier isn't a caution level. It's a statement of <em>how the match was made</em>.</p>
+
+<div class="tbl">
+  <table>
+    <thead><tr><th>Mark</th><th>Tier</th><th>How it's established</th><th>Cost</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span class="chip c">紅</span></td>
+        <td><b>Linked</b></td>
+        <td>Director or shareholder of a company on this chart that is in liquidation,
+            receivership or voluntary administration. A structural fact from the register —
+            no name matching involved at all.</td>
+        <td class="mono">free</td>
+      </tr>
+      <tr>
+        <td><span class="chip c">紅</span></td>
+        <td><b>Corroborated</b></td>
+        <td>Personal insolvency or disqualification where the name matches <em>and</em> the
+            director's registered address matches the address at adjudication.</td>
+        <td class="mono">2 calls / person</td>
+      </tr>
+      <tr>
+        <td><span class="chip a">琥</span></td>
+        <td><b>Name match</b></td>
+        <td>Personal insolvency or disqualification on name alone — address absent or different.
+            Shown, labelled, and one click from the full record.</td>
+        <td class="mono">2 calls / person</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<p class="lede" style="font-size:13px">Red stays reserved for what we can stand behind, which is
+what the sumi spec already says it's for. Amber isn't "probably wrong" — it's "matched on name,
+here's the record, you decide", which is precisely the standard the individual search already
+holds itself to.</p>
+
+<h2><span class="k">印</span>On the chart</h2>
+
+<p>The person node is already an inkan pill and <code>CustomNodes</code> already renders a crit
+variant — the field it reads, <code>isDisqualified</code>, is simply never set by anything. The flag
+below is that same treatment, extended.</p>
+
+<div class="canvas">
+  <div>
+    <div class="inkan">
+      <span class="seal"><span>印</span></span>
+      <span><span class="nm">Margaret Hale</span><span class="role">Individual</span></span>
+    </div>
+    <div class="cap">No records</div>
+  </div>
+
+  <div>
+    <div class="inkan crit">
+      <span class="seal"><span>印</span></span>
+      <span>
+        <span class="nm">John Abercrombie</span>
+        <span class="flagline"><span class="chip c">紅</span><span class="t c">2 insolvent companies</span></span>
+      </span>
+    </div>
+    <div class="cap">Linked · free</div>
+  </div>
+
+  <div>
+    <div class="inkan crit">
+      <span class="seal"><span>印</span></span>
+      <span>
+        <span class="nm">Peter Rawiri</span>
+        <span class="flagline"><span class="chip c">紅</span><span class="t c">Bankrupt · address matched</span></span>
+      </span>
+    </div>
+    <div class="cap">Corroborated</div>
+  </div>
+
+  <div>
+    <div class="inkan amber">
+      <span class="seal"><span>印</span></span>
+      <span>
+        <span class="nm">John Smith</span>
+        <span class="flagline"><span class="chip a">琥</span><span class="t a">Name match · verify</span></span>
+      </span>
+    </div>
+    <div class="cap">Name match</div>
+  </div>
+</div>
+
+<h2><span class="k">拠</span>Clicking a flag shows the evidence</h2>
+
+<p>Not a tooltip with a warning in it — the actual register record, the same fields the individual
+search puts in front of you. This is the part that answers your objection properly.</p>
+
+<div class="ev">
+  <div class="ev-h">
+    <span class="chip a">琥</span>
+    <b>John Smith</b>
+    <span style="margin-left:auto" class="match"><span class="dot a"></span>Name match</span>
+  </div>
+  <div class="ev-b">
+    <dl>
+      <dt>Estate name</dt><dd>SMITH, John Andrew</dd>
+      <dt>Type</dt><dd>No Asset Procedure</dd>
+      <dt>Status</dt><dd>Discharged</dd>
+      <dt>Adjudicated</dt><dd class="mono">14 Mar 2019</dd>
+      <dt>Discharged</dt><dd class="mono">14 Mar 2020</dd>
+      <dt>Estate address</dt><dd>12 Kowhai Street, Hamilton</dd>
+      <dt>Director address</dt><dd>88 Great South Road, Auckland</dd>
+    </dl>
+  </div>
+  <div class="ev-f">
+    <span class="match"><span class="dot g"></span>Name matches</span>
+    <span class="match"><span class="dot p"></span>Address differs</span>
+    <a href="#" onclick="return false">Open individual search ↗</a>
+  </div>
+</div>
+
+<p class="lede" style="font-size:13px">Everything on that card comes from the register. The two
+match indicators at the foot are the only derived content, and they're mechanical comparisons, not
+judgements — the app never says "this is probably him."</p>
+
+<h2><span class="k">件</span>A count in the case file</h2>
+
+<p>So you don't have to hunt a sixty-node chart looking for coloured pips.</p>
+
+<div class="panel">
+  <div class="panel-h">Individuals · flags</div>
+  <div class="panel-r"><span class="chip c">紅</span>
+    <span class="g">John Abercrombie<span class="s">Director · 2 insolvent companies</span></span></div>
+  <div class="panel-r"><span class="chip c">紅</span>
+    <span class="g">Peter Rawiri<span class="s">Bankrupt · address matched</span></span></div>
+  <div class="panel-r"><span class="chip a">琥</span>
+    <span class="g">John Smith<span class="s">NAP · name match only</span></span></div>
+</div>
+
+<h2><span class="k">術</span>How it runs</h2>
+
+<ul class="dash">
+  <li><b>Linked flags are computed on graph build.</b> Zero new requests — the chart already knows
+  which companies are insolvent and which people are attached to them. This half ships regardless.</li>
+  <li><b>Personal checks run in the background after the chart renders</b>, deduped by normalised
+  name (charts repeat directors constantly), concurrency-limited, and cached for the session. The
+  chart appears immediately and flags develop over a few seconds — the same progressive pattern
+  <code>App</code> already uses when it enriches person results.</li>
+  <li><b>Nothing blocks.</b> A failed check leaves the person unflagged rather than erroring the
+  chart, and the case file says how many are still pending.</li>
+</ul>
+
+<h2><span class="k">決</span>Three things I need from you</h2>
+
+<ol class="dec">
+  <li><b>Automatic, or a button?</b> Automatic is the better experience and is what you asked for.
+  It costs two API calls per unique individual — a forty-director chart is roughly eighty extra
+  calls per search. If that's fine on your quota, automatic. If not, a "check individuals" action
+  makes the cost a deliberate choice.</li>
+  <li><b>Does amber go into the exported chart?</b> My instinct is that <em>linked</em> and
+  <em>corroborated</em> export, and <em>name match</em> stays in the app — a bare unverified badge
+  in a document someone else reads is the one place a false positive does real damage, because the
+  evidence card doesn't travel with it. But you know your readers; if the export carries the
+  evidence card too, I'd happily export all three.</li>
+  <li><b>Discharged records — flag or not?</b> A bankruptcy discharged in 2009 is a different signal
+  from a current one. I'd show both but render discharged ones in amber regardless of corroboration,
+  since currency matters more than confidence there. Say if you'd rather they were identical.</li>
+</ol>
+
+</div>

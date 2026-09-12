@@ -1,28 +1,23 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { resolveApiKey } from '../mcp/lib/keys.js';
+import { checkRateLimit } from '../mcp/lib/rateLimit.js';
 
-// Simple in-memory rate limiting (Soft limit)
-const rateLimit = new Map<string, { count: number; reset: number }>();
-const MAX_REQUESTS_PER_MINUTE = 200;
+// Generous by design: a whole team can sit behind one office IP, and one
+// full graph build fans out to hundreds of proxy calls (the crawler's own
+// smartDelay tops out around 600/min). 1200 leaves room for two builds at
+// full tilt plus UI chatter, while a scripted harvester doing thousands a
+// minute still hits the wall. The registers behind this are free — the
+// limit is anti-abuse, not cost control.
+const PROXY_LIMIT_PER_MINUTE = 1200;
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
     // 0. Rate limiting check
     const clientIp = (req.headers['x-forwarded-for'] as string) || 'anonymous';
-    const now = Date.now();
-    const windowMs = 60 * 1000;
-
-    let userLimit = rateLimit.get(clientIp);
-
-    if (!userLimit || now > userLimit.reset) {
-        userLimit = { count: 0, reset: now + windowMs };
-    }
-
-    userLimit.count++;
-    rateLimit.set(clientIp, userLimit);
-
-    if (userLimit.count > MAX_REQUESTS_PER_MINUTE) {
+    const rl = checkRateLimit(clientIp, 'proxy', PROXY_LIMIT_PER_MINUTE);
+    if (!rl.allowed) {
         return res.status(429).json({
             error: 'Rate limit exceeded',
-            message: 'You have exceeded the request limit of 200 per minute. This is a security measure to protect the API keys. Please wait a moment and try again.'
+            message: `You have exceeded the request limit of ${rl.limit} per minute. This is an anti-abuse measure. Please wait a moment and try again.`
         });
     }
 
@@ -38,17 +33,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 2. Determine which key to use
     // Priority: User Provided Key > Your Secret Org Key
-    let finalKey = userKey;
-
-    if (!finalKey || finalKey.trim() === '') {
-        const secrets: Record<string, string | undefined> = {
-            'nzbn': process.env.ORG_NZBN_KEY,
-            'companies': process.env.ORG_COMPANIES_KEY,
-            'disqualified': process.env.ORG_DISQUALIFIED_KEY,
-            'insolvency': process.env.ORG_INSOLVENCY_KEY
-        };
-        finalKey = secrets[apiType] || '';
-    }
+    const finalKey = resolveApiKey(apiType, userKey);
 
     // 3. Construct target Government API URL
     // We enforce the production gateway URL here

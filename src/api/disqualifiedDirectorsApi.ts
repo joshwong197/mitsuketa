@@ -1,5 +1,5 @@
-import { ApiConfig, LoggerCallback } from '../../types';
-import { BASE_API_URL } from '../../constants';
+import { ApiConfig, LoggerCallback } from '../../types.js';
+import { BASE_API_URL } from '../../constants.js';
 
 const DISQUALIFIED_DIRECTORS_PATH = '/companies-office/companies-register/disqualified-directors/v3';
 
@@ -105,9 +105,9 @@ export async function searchDisqualifiedDirectors(
     config: ApiConfig,
     logger?: LoggerCallback,
     pageSize: number = 10,
-    page: number = 0
+    page: number = 0,
+    baseUrl: string = '/api/proxy'
 ): Promise<DisqualifiedDirectorSearchResult> {
-    const baseUrl = `/api/proxy`;
     const proxyPath = `${DISQUALIFIED_DIRECTORS_PATH}/search?name=${encodeURIComponent(name)}&page=${page}&page-size=${pageSize}`;
     const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
 

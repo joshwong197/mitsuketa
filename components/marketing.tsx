@@ -374,7 +374,7 @@ export function useMarketingChrome(rootRef: RefObject<HTMLElement>, onEnter: () 
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'auto';
 
-    const enterEls = Array.from(container.querySelectorAll<HTMLElement>('.js-enter'));
+    const enterEls = Array.from(container.querySelectorAll('.js-enter')) as HTMLElement[];
     const onEnterClick = (e: Event) => { e.preventDefault(); onEnter(); };
     enterEls.forEach(el => el.addEventListener('click', onEnterClick));
 

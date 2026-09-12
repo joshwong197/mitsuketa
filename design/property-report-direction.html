@@ -1,0 +1,376 @@
+<title>Mitsuketa — record of title, redesigned</title>
+<style>
+:root{
+  color-scheme: light dark;
+  --acc-l: oklch(0.40 0.095 265); --acc-d: oklch(0.72 0.085 260);
+  --paper: light-dark(oklch(0.952 0.007 85), oklch(0.185 0.008 75));
+  --paper2: light-dark(oklch(0.930 0.008 85), oklch(0.225 0.009 75));
+  --ink: light-dark(oklch(0.235 0.014 65), oklch(0.905 0.012 85));
+  --ink-mid: light-dark(oklch(0.44 0.012 65), oklch(0.68 0.012 85));
+  --ink-pale: light-dark(oklch(0.62 0.010 70), oklch(0.50 0.010 80));
+  --ink-wash: light-dark(oklch(0.78 0.009 75), oklch(0.35 0.009 75));
+  --rule: light-dark(oklch(0.855 0.008 80), oklch(0.30 0.010 75));
+  --accent: light-dark(var(--acc-l), var(--acc-d));
+  --accent-ink: light-dark(oklch(0.965 0.006 85), oklch(0.185 0.008 75));
+  --crit: light-dark(oklch(0.55 0.17 30), oklch(0.66 0.17 30));
+  --amber: light-dark(oklch(0.60 0.10 78), oklch(0.72 0.10 78));
+  --green: light-dark(oklch(0.50 0.08 150), oklch(0.68 0.09 150));
+  --serif:"Shippori Mincho","Yu Mincho","Hiragino Mincho ProN","Noto Serif JP",serif;
+  --gothic:"Zen Kaku Gothic New","Yu Gothic UI","Hiragino Sans","Noto Sans JP","Segoe UI",system-ui,sans-serif;
+  --mono:"Cascadia Mono",Consolas,ui-monospace,monospace;
+  --grain-op:.16;
+}
+:root[data-theme="light"]{color-scheme:light;--grain-op:.16}
+:root[data-theme="dark"]{color-scheme:dark;--grain-op:.09}
+@media (prefers-color-scheme: dark){:root{--grain-op:.09}}
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--gothic);font-size:14px;line-height:1.6}
+body::before{content:"";position:fixed;inset:0;z-index:9999;pointer-events:none;opacity:var(--grain-op);
+background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.45 0 0 0 0 0.42 0 0 0 0 0.38 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E")}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.text-ink-pale{color:var(--ink-pale)}.text-ink-mid{color:var(--ink-mid)}.text-ink-wash{color:var(--ink-wash)}
+.flex{display:flex}.inline-grid{display:inline-grid}.place-items-center{place-items:center}
+.items-start{align-items:flex-start}.items-baseline{align-items:baseline}.items-center{align-items:center}
+.flex-wrap{flex-wrap:wrap}.flex-col{flex-direction:column}.flex-shrink-0{flex-shrink:0}
+.justify-between{justify-content:space-between}.text-left{text-align:left}
+
+/* ── artifact chrome ─────────────────────────────────────────── */
+.wrap{max-width:900px;margin:0 auto;padding:0 26px 40px}
+.intro{border-bottom:1px solid var(--rule);padding:44px 0 26px;margin-bottom:34px}
+.eyebrow{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.14em;color:var(--ink-pale)}
+.intro h1{font-family:var(--serif);font-weight:600;font-size:clamp(26px,3.6vw,34px);margin:8px 0 0;line-height:1.2;text-wrap:balance}
+.intro p{color:var(--ink-mid);font-size:13.5px;max-width:68ch;margin:12px 0 0}
+h2{font-family:var(--serif);font-weight:600;font-size:19px;margin:36px 0 12px;
+ padding-bottom:7px;border-bottom:1px solid var(--ink)}
+.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:0 30px}
+.cols h3{font-family:var(--mono);font-size:10px;text-transform:uppercase;letter-spacing:.1em;
+ color:var(--ink-pale);margin:14px 0 8px}
+.cols ul{list-style:none;margin:0;padding:0}
+.cols li{display:flex;gap:9px;margin-bottom:8px;font-size:13px;color:var(--ink-mid);line-height:1.55}
+.cols li b{color:var(--ink);font-weight:600}
+.was li::before{content:"\00d7";color:var(--crit);flex:none;font-family:var(--mono)}
+.now li::before{content:"\2014";color:var(--accent);flex:none;font-family:var(--serif)}
+.sheet{border:1px solid var(--rule);background:var(--paper);margin-top:14px}
+.sheet-cap{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--rule);
+ padding:8px 14px;font-family:var(--mono);font-size:9.5px;text-transform:uppercase;
+ letter-spacing:.1em;color:var(--ink-pale)}
+.sheet .doc{padding:26px 22px 40px}
+.q{border-left:2px solid var(--accent);background:var(--paper2);padding:13px 16px;margin:20px 0;
+ font-size:13px;max-width:74ch}
+.q b{font-weight:600}
+@media (max-width:640px){.sheet .doc{padding:20px 14px 30px}}
+
+/* ── the report's own stylesheet, verbatim from components/PropertyStyles.tsx ── */
+
+.property-btn:hover:not(:disabled) { background: var(--accent); color: var(--accent-ink); }
+.property-row:hover, .property-row:focus-visible {
+  background: oklch(from var(--accent) l c h / .10);
+}
+.property-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.property-quiet:hover, .property-quiet:focus-visible { color: var(--ink); }
+.property-bigsearch:focus-within { border-color: var(--accent); }
+.property-ref:focus { outline: none; border-bottom-color: var(--accent); }
+
+/* ── The document ────────────────────────────────────────────────────────
+   MARGIN is the width of the left column that carries section kanji and
+   lodgement dates; the spine rule sits at its right edge. Every offset below
+   is derived from these two numbers, so the whole page moves together. */
+.doc {
+  --margin: 84px;
+  --gap: 22px;
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 30px 26px 72px;
+}
+.doc-body { position: relative; padding-left: calc(var(--margin) + var(--gap)); }
+.doc-body::before {
+  content: "";
+  position: absolute;
+  left: var(--margin);
+  top: 4px;
+  bottom: 0;
+  width: 1px;
+  background: var(--rule);
+}
+
+/* Section marker: kanji hanging in the margin, on the spine. */
+.sec { position: relative; margin-top: 34px; }
+.sec:first-child { margin-top: 0; }
+.sec-mark {
+  position: absolute;
+  left: calc((var(--margin) + var(--gap)) * -1);
+  top: 0;
+  width: var(--margin);
+  text-align: right;
+  font-family: var(--serif);
+  font-size: 15px;
+  line-height: 1.45;
+  letter-spacing: .12em;
+  color: var(--accent);
+}
+.sec-head {
+  font-family: var(--serif);
+  font-size: 16.5px;
+  font-weight: 600;
+  margin: 0 0 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--ink-wash);
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.sec-head .count {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-pale);
+  letter-spacing: 0;
+}
+
+/* ── Ledger: label column, value column, hairline between rows ──────────── */
+.ledger { display: grid; grid-template-columns: 152px minmax(0, 1fr); }
+.ledger dt, .ledger dd {
+  margin: 0;
+  padding: 7px 0;
+  border-top: 1px solid var(--rule);
+  font-size: 13px;
+}
+.ledger dt {
+  color: var(--ink-pale);
+  padding-right: 18px;
+  text-align: right;
+  font-size: 12px;
+}
+.ledger dt:first-of-type, .ledger dt:first-of-type + dd { border-top: none; }
+
+/* ── Ledger rows for owners, live interests, burdens ────────────────────── */
+.entry {
+  display: flex;
+  align-items: baseline;
+  gap: 13px;
+  padding: 10px 0;
+  border-top: 1px solid var(--rule);
+}
+.entry:first-child { border-top: none; }
+.entry-main { flex: 1; min-width: 0 }
+.entry-name { display: block; font-size: 13.5px; font-weight: 600; }
+.entry-sub {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-pale);
+  margin-top: 2px;
+}
+
+/* ── Hanko: the one stamp on the page, and the one shadow the spec allows ─ */
+.hanko {
+  display: inline-grid;
+  place-items: center;
+  width: 46px;
+  height: 46px;
+  flex: none;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--serif);
+  font-size: 25px;
+  line-height: 1;
+  box-shadow: inset 0 0 14px oklch(0 0 0 / .22);
+}
+.hanko-stamp {
+  transform: rotate(-7deg);
+  width: 42px;
+  height: 42px;
+  font-size: 21px;
+  letter-spacing: 0;
+}
+
+/* ── Filters: a ruled row of words, not a tray of buttons ───────────────── */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 4px;
+  font-size: 12.5px;
+  margin-bottom: 4px;
+}
+.filters button {
+  padding: 2px 1px;
+  margin: 0 7px;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-mid);
+  transition: color .15s, border-color .15s;
+}
+.filters button:hover { color: var(--ink); }
+.filters button[aria-pressed="true"] { border-bottom-color: var(--accent); color: var(--ink); }
+.filters .n {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-pale);
+  margin-left: 5px;
+}
+.filters .sep { color: var(--ink-wash); }
+
+/* ── Chronology: dates hang in the same margin as the section kanji ─────── */
+.ev { position: relative; border-top: 1px solid var(--rule); padding: 12px 0; }
+.ev:first-child { border-top: none; }
+.ev-when {
+  position: absolute;
+  left: calc((var(--margin) + var(--gap)) * -1);
+  top: 13px;
+  width: var(--margin);
+  /* Stops the right-aligned date short of the category mark, which straddles
+     the spine and would otherwise sit on top of the last few characters. */
+  padding-right: 18px;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-pale);
+}
+/* The category mark straddles the spine — half in the margin, half out. */
+.ev-pip { position: absolute; left: calc(var(--gap) * -1 - 8px); top: 12px; }
+.ev-head { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; margin: 0; font-size: 13.5px; }
+.ev-note { font-size: 12px; color: var(--ink-mid); margin: 4px 0 0; max-width: 64ch; }
+.ev-memo {
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  color: var(--ink-mid);
+  border-left: 2px solid var(--rule);
+  padding-left: 12px;
+  margin: 8px 0 0;
+}
+
+/* A year sets a rule across the spine — the register's own chapter break. */
+.ev-year {
+  position: relative;
+  margin: 26px 0 0;
+  font-family: var(--serif);
+  font-size: 13px;
+  letter-spacing: .1em;
+  color: var(--ink-mid);
+}
+.ev-year::before {
+  content: "";
+  position: absolute;
+  left: calc((var(--margin) + var(--gap)) * -1);
+  right: 0;
+  top: 50%;
+  height: 1px;
+  background: var(--ink-wash);
+}
+.ev-year span { position: relative; background: var(--paper); padding-right: 12px; }
+.ev-year:first-child { margin-top: 0; }
+.ev-year + .ev { border-top: none; }
+
+.property-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid var(--rule);
+  padding: 1px 0;
+  font-size: 11px;
+  transition: border-color .15s, color .15s;
+}
+.property-link:hover, .property-link:focus-visible { border-bottom-color: var(--accent); color: var(--ink); }
+
+/* Jump target highlight — the associated-instrument links land here. */
+.ev-flash::after {
+  content: "";
+  position: absolute;
+  inset: 2px -12px;
+  background: oklch(from var(--accent) l c h / .14);
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .property-loadbar { animation: property-loadbar-sweep 1.1s cubic-bezier(.4,0,.2,1) infinite; }
+  @keyframes property-loadbar-sweep {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(350%); }
+  }
+  .ev-flash::after { animation: property-flash 1.4s ease-out; }
+  @keyframes property-flash { from { opacity: 1 } to { opacity: 0 } }
+}
+@media (prefers-reduced-motion: reduce) { .property-loadbar { transform: none } }
+
+/* ── Narrow: the margin collapses, the spine goes, dates lead their row ─── */
+@media (max-width: 700px) {
+  .doc { padding: 24px 18px 60px }
+  .doc-body { padding-left: 0 }
+  .doc-body::before { display: none }
+  .sec-mark { position: static; width: auto; text-align: left; display: block; margin-bottom: 2px }
+  .ledger { grid-template-columns: minmax(0, 1fr) }
+  .ledger dt { text-align: left; padding: 8px 0 0; border-top: 1px solid var(--rule) }
+  .ledger dd { padding: 1px 0 8px; border-top: none }
+  .ledger dt:first-of-type + dd { border-top: none }
+  .ev-when { position: static; display: block; width: auto; padding-right: 0; text-align: left; margin-bottom: 3px }
+  .ev-pip { position: static; display: inline-block; vertical-align: middle; margin-right: 8px }
+  .ev-year::before { left: 0 }
+}
+    
+</style>
+<div class="wrap">
+<header class="intro">
+  <div class="eyebrow">Design direction · 地 record of title</div>
+  <h1>Typeset as a register, not assembled as a dashboard</h1>
+  <p>You were right that the last one still read as generated, and the tell is nameable. I had
+  built every section the same way — a bordered card with an uppercase mono label on top — which
+  is the generic documentation pattern, repeated six times. Mitsuketa's identity is a document
+  tradition. This is the report rebuilt as one. Nothing is committed; this is for your call.</p>
+</header>
+
+<h2>What changed</h2>
+<div class="cols">
+  <div class="was">
+    <h3>The tells I removed</h3>
+    <ul>
+      <li>Six <b>bordered cards</b> stacked at identical width and weight, so nothing led.</li>
+      <li>An <b>uppercase mono eyebrow</b> over every one — the single loudest generated-doc tic, and I used it everywhere.</li>
+      <li>A <b>three-column stat grid</b> and a <b>row of pill buttons</b>, both straight out of dashboard boilerplate.</li>
+      <li><b>Badges on every row</b>, which spent the emphasis budget evenly and therefore spent it on nothing.</li>
+    </ul>
+  </div>
+  <div class="now">
+    <h3>What replaces them</h3>
+    <ul>
+      <li>One <b>spine rule</b> down the full page with <b>kanji section markers</b> hanging in the margin — the register's own vocabulary: 登記 register, 所有 ownership, 現況 current state, 履歴 history, 負担 burdens.</li>
+      <li><b>Ruled ledger rows</b> instead of boxes. Labels right-aligned against a hairline, the way a printed spec table sets.</li>
+      <li>A <b>double rule</b> under the masthead and <b>year rules</b> knocked out across the spine — printing conventions, not borders.</li>
+      <li><b>One stamp on the page:</b> the status hanko, rotated, carrying the only shadow the sumi spec allows. Boldness spent in a single place.</li>
+      <li>Filters became <b>a ruled line of words</b>, matching the app's own mode line.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="q">
+  <b>現況 now shows live dealings only</b> — mortgages, caveats, leases, encumbrances. I excluded
+  standing burdens rather than whitelisting mortgages and caveats, so a live lease on a commercial
+  title still surfaces, while easements and covenants drop to 負担 below in full. On the specimen
+  that takes the section from five rows to two.
+</div>
+
+<div class="q">
+  <b>Readability was the constraint, so two things are deliberate:</b> body text stays at 13–13.5px
+  gothic with commentary capped near 64 characters, and mono is now reserved for identifiers and
+  dates only — previously it carried every section label, which flattened the hierarchy. Kanji are
+  decoration in the margin, never load-bearing: every section also carries its English name.
+</div>
+
+<h2>Specimen</h2>
+<p class="text-ink-mid" style="font-size:13px;margin:0 0 4px;max-width:70ch">Live markup from the
+built component, on a real title's memorial shapes. Filters, the sort toggle and the register-text
+expanders are inert here — the working versions are on the branch.</p>
+<div class="sheet">
+  <div class="sheet-cap"><span>components/PropertyReport.tsx</span><span>NA118D/477</span></div>
+<div class="doc text-left"><header class="flex items-start justify-between flex-wrap" style="gap: 20px; border-bottom: 2px solid var(--ink); padding-bottom: 14px; margin-bottom: 4px;"><div style="min-width: 0px; flex: 1 1 0%;"><p class="text-ink-pale" style="font-size: 11.5px; letter-spacing: 0.02em; margin: 0px 0px 4px;"><span style="font-family: var(--serif); letter-spacing: 0.2em; margin-right: 8px; color: var(--ink-mid);">登記簿</span>Record of title · LINZ Title Register</p><h3 style="font-family: var(--serif); font-size: clamp(30px, 5vw, 42px); font-weight: 600; margin: 0px; line-height: 1.05; letter-spacing: 0.01em; font-variant-numeric: tabular-nums;">NA118D/477</h3><p style="font-size: 14px; margin: 8px 0px 0px;">810 Great South Road, Penrose, Auckland</p><p class="text-ink-mid" style="font-size: 12.5px; margin: 3px 0px 0px;">Freehold · Live · North Auckland</p></div><div class="flex flex-col items-center" style="gap: 7px; padding-top: 4px;"><span class="hanko hanko-stamp" aria-hidden="true">現</span><span style="font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent);">Live</span></div></header><div style="border-top: 1px solid var(--ink); margin-bottom: 30px;"></div><div class="doc-body"><section class="sec"><span class="sec-mark" aria-hidden="true">登記</span><h4 class="sec-head"><span>Register detail</span></h4><dl class="ledger"><dt>Street address</dt><dd>810 Great South Road, Penrose, Auckland</dd><dt>Title number</dt><dd style="font-family: var(--mono); font-variant-numeric: tabular-nums;">NA118D/477</dd><dt>Title type</dt><dd>Freehold</dd><dt>Status</dt><dd>Live</dd><dt>Land district</dt><dd>North Auckland</dd><dt>Legal description</dt><dd>Fee Simple, 1/1, Lot 1 DP 160855, 8,377 m²</dd><dt>Area</dt><dd>8,377 m²</dd><dt>Guarantee status</dt><dd>Guarantee</dd><dt>Issue date</dt><dd style="font-family: var(--mono); font-variant-numeric: tabular-nums;">13 Sep 1999</dd></dl></section><section class="sec"><span class="sec-mark" aria-hidden="true">所有</span><h4 class="sec-head"><span>Registered owners</span><span class="count">2</span></h4><div class="entry"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 30px; height: 30px; border: 1px solid var(--accent); font-family: var(--mono); font-size: 11px; color: var(--accent); align-self: flex-start;">NP</span><span class="entry-main"><span class="entry-name">Norak Properties Limited</span><span class="entry-sub">Share 1/2 · Fee Simple, 1/1, Lot 1 DP 160855, 8,377 m²</span></span><span style="font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; color: var(--ink-pale);">Corporation</span></div><div class="entry"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 30px; height: 30px; border: 1px solid var(--accent); font-family: var(--mono); font-size: 11px; color: var(--accent); align-self: flex-start;">AP</span><span class="entry-main"><span class="entry-name">Alan Peter Rewa</span><span class="entry-sub">Share 1/2 · Fee Simple, 1/1, Lot 1 DP 160855, 8,377 m²</span></span><span style="font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; color: var(--ink-pale);">Individual</span></div></section><section class="sec"><span class="sec-mark" aria-hidden="true">現況</span><h4 class="sec-head"><span>Currently registered</span><span class="count">2</span></h4><div class="entry"><span style="align-self: flex-start; margin-top: 2px;"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 19px; height: 19px; background: var(--accent); color: var(--accent-ink); font-family: var(--serif); font-size: 12px; line-height: 1;">抵</span></span><span class="entry-main"><span class="entry-name">ASB Bank Limited — Mortgage</span><span class="entry-sub">12870399.2 · 4 Aug 2021</span></span><button type="button" class="property-quiet text-ink-pale flex-shrink-0 transition-colors duration-150" aria-label="Show ASB Bank Limited — Mortgage in the history" style="font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em;">In history ↓</button></div><div class="entry"><span style="align-self: flex-start; margin-top: 2px;"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 19px; height: 19px; background: var(--amber); color: var(--accent-ink); font-family: var(--serif); font-size: 12px; line-height: 1;">警</span></span><span class="entry-main"><span class="entry-name">MEI HUA LI — Caveat</span><span class="entry-sub">13374411.1 · 13 Aug 2025</span></span><button type="button" class="property-quiet text-ink-pale flex-shrink-0 transition-colors duration-150" aria-label="Show MEI HUA LI — Caveat in the history" style="font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em;">In history ↓</button></div></section><section class="sec"><span class="sec-mark" aria-hidden="true">履歴</span><h4 class="sec-head"><span>History</span><span class="flex items-baseline text-ink-mid" style="gap: 2px; font-size: 11.5px;"><button type="button" aria-pressed="true" class="transition-colors duration-150" style="border-bottom: 1px solid var(--accent); padding: 2px 1px; margin: 0px 6px; color: var(--ink);">Oldest first</button><span class="text-ink-wash">·</span><button type="button" aria-pressed="false" class="transition-colors duration-150" style="border-bottom: 1px solid var(--rule); padding: 2px 1px; margin: 0px 6px; color: var(--ink-mid);">Newest first</button></span></h4><div class="filters" style="margin-bottom: 10px;"><button type="button" aria-pressed="true">All<span class="n">12</span></button><span class="sep" aria-hidden="true">·</span><button type="button" aria-pressed="false">Live<span class="n">5</span></button><span class="sep" aria-hidden="true">·</span><button type="button" aria-pressed="false">Mortgages<span class="n">3</span></button><span class="sep" aria-hidden="true">·</span><button type="button" aria-pressed="false">Discharges<span class="n">3</span></button><span class="sep" aria-hidden="true">·</span><button type="button" aria-pressed="false">Transfers<span class="n">1</span></button><span class="sep" aria-hidden="true">·</span><button type="button" aria-pressed="false">Caveats<span class="n">1</span></button><span class="sep" aria-hidden="true">·</span><button type="button" aria-pressed="false">Leases<span class="n">1</span></button><span class="sep" aria-hidden="true">·</span><button type="button" aria-pressed="false">Burdens<span class="n">3</span></button></div><div class="ev-year"><span>1994</span></div><article id="ev-ev-8" class="ev"><span class="ev-when">14 Jul 1994</span><span class="ev-pip"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 16px; height: 16px; background: var(--ink-wash); color: var(--ink); font-family: var(--serif); font-size: 10px; line-height: 1;">借</span></span><h5 class="ev-head" style="font-weight: 500; color: var(--ink-mid);"><span>Fletcher Building Limited — Lease</span><span style="font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; color: var(--ink-pale);">Surrendered · ~12 yr 10 mo</span><span class="text-ink-pale" style="font-family: var(--mono); font-size: 10.5px; font-variant-numeric: tabular-nums;">C626345.4</span></h5><p class="ev-note">Lease to Fletcher Building Limited. Surrendered after ~12 yr 10 mo.</p><div class="flex flex-wrap items-center" style="gap: 4px 14px; margin-top: 7px;"><button aria-expanded="false" class="property-quiet text-ink-pale transition-colors duration-150" style="font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em;">+ Register text</button><button type="button" class="property-link text-ink-mid"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 12px; height: 12px; background: var(--green); color: var(--accent-ink); font-family: var(--serif); font-size: 7px; line-height: 1;">済</span>Surrendered<span class="text-ink-pale" style="font-family: var(--mono); font-size: 10.5px;">7387285.1</span></button></div></article><div class="ev-year"><span>2001</span></div><article id="ev-ev-1" class="ev"><span class="ev-when">29 Oct 2001</span><span class="ev-pip"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 16px; height: 16px; background: var(--ink-wash); color: var(--ink); font-family: var(--serif); font-size: 10px; line-height: 1;">抵</span></span><h5 class="ev-head" style="font-weight: 500; color: var(--ink-mid);"><span>ASB Bank Limited — Mortgage</span><span style="font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; color: var(--ink-pale);">Discharged · ~2 yr 1 mo</span><span class="text-ink-pale" style="font-family: var(--mono); font-size: 10.5px; font-variant-numeric: tabular-nums;">D651878.3</span></h5><p class="ev-note">Mortgage to ASB Bank Limited (institutional lender). Discharged after ~2 yr 1 mo.</p><div class="flex flex-wrap items-center" style="gap: 4px 14px; margin-top: 7px;"><button aria-expanded="false" class="property-quiet text-ink-pale transition-colors duration-150" style="font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em;">+ Register text</button><button type="button" class="property-link text-ink-mid"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 12px; height: 12px; background: var(--green); color: var(--accent-ink); font-family: var(--serif); font-size: 7px; line-height: 1;">済</span>Discharged<span class="text-ink-pale" style="font-family: var(--mono); font-size: 10.5px;">5829156.1</span></button></div></article><div class="ev-year"><span>2003</span></div><article id="ev-ev-2" class="ev"><span class="ev-when">8 Dec 2003</span><span class="ev-pip"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 16px; height: 16px; background: var(--green); color: var(--accent-ink); font-family: var(--serif); font-size: 10px; line-height: 1;">済</span></span><h5 class="ev-head" style="font-weight: 600; color: var(--ink);"><span>ASB Bank Limited — Discharge of Mortgage</span><span class="text-ink-pale" style="font-family: var(--mono); font-size: 10.5px; font-variant-numeric: tabular-nums;">5829156.1</span></h5><p class="ev-note">Discharges the mortgage D651878.3 to ASB Bank Limited, held ~2 yr 1 mo. Registered alongside 2 other instruments in the same batch.</p><div class="flex flex-wrap items-center" style="gap: 4px 14px; margin-top: 7px;"><button aria-expanded="false" class="property-quiet text-ink-pale transition-colors duration-150" style="font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em;">+ Register text</button><button type="button" class="property-link text-ink-mid"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 12px; height: 12px; background: var(--ink-wash); color: var(--ink); font-family: var(--serif); font-size: 7px; line-height: 1;">抵</span>Original instrument<span class="text-ink-pale" style="font-family: var(--mono); font-size: 10.5px;">D651878.3</span></button><button type="button" class="property-link text-ink-mid"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 12px; height: 12px; background: var(--ink); color: var(--paper); font-family: var(--serif); font-size: 7px; line-height: 1;">譲</span>Same batch<span class="text-ink-pale" style="font-family: var(--mono); font-size: 10.5px;">5829156.2</span></button><button type="button" class="property-link text-ink-mid"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 12px; height: 12px; background: var(--ink-wash); color: var(--ink); font-family: var(--serif); font-size: 7px; line-height: 1;">抵</span>Same batch<span class="text-ink-pale" style="font-family: var(--mono); font-size: 10.5px;">5829156.3</span></button></div></article><article id="ev-ev-3" class="ev"><span class="ev-when">8 Dec 2003</span><span class="ev-pip"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 16px; height: 16px; background: var(--ink); color: var(--paper); font-family: var(--serif); font-size: 10px; line-height: 1;">譲</span></span><h5 class="ev-head" style="font-weight: 600; color: var(--ink);"><span>Norak Properties Limited — Transfer</span><span class="text-ink-pale" style="font-family: var(--mono); font-size: 10.5px; font-variant-numeric: tabular-nums;">5829156.2</span></h5><p class="ev-note">Ownership transferred to Norak Properties Limited. Registered alongside 2 other instruments in the same batch.</p><div class="flex flex-wrap items-center" style="gap: 4px 14px; margin-top: 7px;"><button aria-expanded="false" class="property-quiet text-ink-pale transition-colors duration-150" style="font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em;">+ Register text</button><button type="button" class="property-link text-ink-mid"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 12px; height: 12px; background: var(--green); color: var(--accent-ink); font-family: var(--serif); font-size: 7px; line-height: 1;">済</span>Same batch<span class="text-ink-pale" style="font-family: var(--mono); font-size: 10.5px;">5829156.1</span></button><button type="button" class="property-link text-ink-mid"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 12px; height: 12px; background: var(--ink-wash); color: var(--ink); font-family: var(--serif); font-size: 7px; line-height: 1;">抵</span>Same batch<span class="text-ink-pale" style="font-family: var(--mono); font-size: 10.5px;">5829156.3</span></button></div></article><article id="ev-ev-4" class="ev"><span class="ev-when">8 Dec 2003</span><span class="ev-pip"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 16px; height: 16px; background: var(--ink-wash); color: var(--ink); font-family: var(--serif); font-size: 10px; line-height: 1;">抵</span></span><h5 class="ev-head" style="font-weight: 500; color: var(--ink-mid);"><span>ANZ Bank New Zealand Limited — Mortgage</span><span style="font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; color: var(--ink-pale);">Discharged · ~15 yr 3 mo</span><span class="text-ink-pale" style="font-family: var(--mono); font-size: 10.5px; font-variant-numeric: tabular-nums;">5829156.3</span></h5><p class="ev-note">Mortgage to ANZ Bank New Zealand Limited (institutional lender). Discharged after ~15 yr 3 mo. Registered alongside 2 other instruments in the same batch.</p><div class="flex flex-wrap items-center" style="gap: 4px 14px; margin-top: 7px;"><button aria-expanded="false" class="property-quiet text-ink-pale transition-colors duration-150" style="font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em;">+ Register text</button><button type="button" class="property-link text-ink-mid"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 12px; height: 12px; background: var(--green); color: var(--accent-ink); font-family: var(--serif); font-size: 7px; line-height: 1;">済</span>Discharged<span class="text-ink-pale" style="font-family: var(--mono); font-size: 10.5px;">8065536.2</span></button><button type="button" class="property-link text-ink-mid"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 12px; height: 12px; background: var(--green); color: var(--accent-ink); font-family: var(--serif); font-size: 7px; line-height: 1;">済</span>Same batch<span class="text-ink-pale" style="font-family: var(--mono); font-size: 10.5px;">5829156.1</span></button><button type="button" class="property-link text-ink-mid"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 12px; height: 12px; background: var(--ink); color: var(--paper); font-family: var(--serif); font-size: 7px; line-height: 1;">譲</span>Same batch<span class="text-ink-pale" style="font-family: var(--mono); font-size: 10.5px;">5829156.2</span></button></div></article><div class="ev-year"><span>2007</span></div><article id="ev-ev-9" class="ev"><span class="ev-when">25 May 2007</span><span class="ev-pip"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 16px; height: 16px; background: var(--green); color: var(--accent-ink); font-family: var(--serif); font-size: 10px; line-height: 1;">済</span></span><h5 class="ev-head" style="font-weight: 600; color: var(--ink);"><span>Fletcher Building Limited — Surrender of Lease</span><span class="text-ink-pale" style="font-family: var(--mono); font-size: 10.5px; font-variant-numeric: tabular-nums;">7387285.1</span></h5><p class="ev-note">Surrenders the lease C626345.4 to Fletcher Building Limited, held ~12 yr 10 mo.</p><div class="flex flex-wrap items-center" style="gap: 4px 14px; margin-top: 7px;"><button aria-expanded="false" class="property-quiet text-ink-pale transition-colors duration-150" style="font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em;">+ Register text</button><button type="button" class="property-link text-ink-mid"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 12px; height: 12px; background: var(--ink-wash); color: var(--ink); font-family: var(--serif); font-size: 7px; line-height: 1;">借</span>Original instrument<span class="text-ink-pale" style="font-family: var(--mono); font-size: 10.5px;">C626345.4</span></button></div></article><div class="ev-year"><span>2019</span></div><article id="ev-ev-5" class="ev"><span class="ev-when">12 Mar 2019</span><span class="ev-pip"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 16px; height: 16px; background: var(--green); color: var(--accent-ink); font-family: var(--serif); font-size: 10px; line-height: 1;">済</span></span><h5 class="ev-head" style="font-weight: 600; color: var(--ink);"><span>ANZ Bank New Zealand Limited — Discharge of Mortgage</span><span class="text-ink-pale" style="font-family: var(--mono); font-size: 10.5px; font-variant-numeric: tabular-nums;">8065536.2</span></h5><p class="ev-note">Discharges the mortgage 5829156.3 to ANZ Bank New Zealand Limited, held ~15 yr 3 mo. Registered alongside 2 other instruments in the same batch.</p><div class="flex flex-wrap items-center" style="gap: 4px 14px; margin-top: 7px;"><button aria-expanded="false" class="property-quiet text-ink-pale transition-colors duration-150" style="font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em;">+ Register text</button><button type="button" class="property-link text-ink-mid"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 12px; height: 12px; background: var(--ink-wash); color: var(--ink); font-family: var(--serif); font-size: 7px; line-height: 1;">抵</span>Original instrument<span class="text-ink-pale" style="font-family: var(--mono); font-size: 10.5px;">5829156.3</span></button><button type="button" class="property-link text-ink-mid"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 12px; height: 12px; background: var(--ink-wash); color: var(--ink); font-family: var(--serif); font-size: 7px; line-height: 1;">役</span>Same batch<span class="text-ink-pale" style="font-family: var(--mono); font-size: 10.5px;">8065536.4</span></button><button type="button" class="property-link text-ink-mid"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 12px; height: 12px; background: var(--ink-wash); color: var(--ink); font-family: var(--serif); font-size: 7px; line-height: 1;">約</span>Same batch<span class="text-ink-pale" style="font-family: var(--mono); font-size: 10.5px;">8065536.3</span></button></div></article><div class="ev-year"><span>2021</span></div><article id="ev-ev-6" class="ev"><span class="ev-when">4 Aug 2021</span><span class="ev-pip"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 16px; height: 16px; background: var(--accent); color: var(--accent-ink); font-family: var(--serif); font-size: 10px; line-height: 1;">抵</span></span><h5 class="ev-head" style="font-weight: 600; color: var(--ink);"><span>ASB Bank Limited — Mortgage</span><span style="font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; color: var(--accent);">Live</span><span class="text-ink-pale" style="font-family: var(--mono); font-size: 10.5px; font-variant-numeric: tabular-nums;">12870399.2</span></h5><p class="ev-note">Mortgage to ASB Bank Limited (institutional lender). Still registered against the title.</p><div class="flex flex-wrap items-center" style="gap: 4px 14px; margin-top: 7px;"><button aria-expanded="false" class="property-quiet text-ink-pale transition-colors duration-150" style="font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em;">+ Register text</button></div></article><div class="ev-year"><span>2025</span></div><article id="ev-ev-7" class="ev"><span class="ev-when">13 Aug 2025</span><span class="ev-pip"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 16px; height: 16px; background: var(--amber); color: var(--accent-ink); font-family: var(--serif); font-size: 10px; line-height: 1;">警</span></span><h5 class="ev-head" style="font-weight: 600; color: var(--ink);"><span>MEI HUA LI — Caveat</span><span style="font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; color: var(--accent);">Live</span><span class="text-ink-pale" style="font-family: var(--mono); font-size: 10.5px; font-variant-numeric: tabular-nums;">13374411.1</span></h5><p class="ev-note">Caveat lodged by MEI HUA LI. Still registered.</p><div class="flex flex-wrap items-center" style="gap: 4px 14px; margin-top: 7px;"><button aria-expanded="false" class="property-quiet text-ink-pale transition-colors duration-150" style="font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em;">+ Register text</button></div></article></section><section class="sec"><span class="sec-mark" aria-hidden="true">負担</span><h4 class="sec-head"><span>Standing burdens</span><span class="count">3</span></h4><p class="text-ink-pale" style="font-size: 11.5px; margin: -4px 0px 8px; max-width: 64ch;">Easements, covenants and statutory conditions. These sit on the land indefinitely rather than happening at a moment.</p><div id="ev-ev-11" class="entry"><span style="align-self: flex-start; margin-top: 2px;"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 19px; height: 19px; background: var(--ink-wash); color: var(--ink); font-family: var(--serif); font-size: 12px; line-height: 1;">役</span></span><span class="entry-main"><span class="entry-name" style="font-weight: 500;">Vector Limited — Electricity Easement (benefiting)</span><span class="entry-sub">9112034.1 · 2011</span></span><span style="font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; color: var(--accent);">Live</span></div><div id="ev-ev-10" class="entry"><span style="align-self: flex-start; margin-top: 2px;"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 19px; height: 19px; background: var(--ink-wash); color: var(--ink); font-family: var(--serif); font-size: 12px; line-height: 1;">役</span></span><span class="entry-main"><span class="entry-name" style="font-weight: 500;">Right of Way (burdening)</span><span class="entry-sub">8065536.4 · 2019</span></span><span style="font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; color: var(--accent);">Live</span></div><div id="ev-ev-12" class="entry"><span style="align-self: flex-start; margin-top: 2px;"><span aria-hidden="true" class="inline-grid place-items-center flex-shrink-0" style="width: 19px; height: 19px; background: var(--ink-wash); color: var(--ink); font-family: var(--serif); font-size: 12px; line-height: 1;">約</span></span><span class="entry-main"><span class="entry-name" style="font-weight: 500;">Land Covenant</span><span class="entry-sub">8065536.3 · 2019</span></span><span style="font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; white-space: nowrap; color: var(--accent);">Live</span></div></section></div><p class="text-ink-pale" style="font-size: 11px; line-height: 1.65; margin-top: 40px; border-top: 1px solid var(--ink-wash); padding-top: 14px; max-width: 78ch;"><span style="font-family: var(--serif); letter-spacing: 0.18em; margin-right: 8px; color: var(--ink-mid);">注記</span>Reference copy of the LINZ Title Register, not a title search. It may lag the register and is not legal advice. Every line above is taken from the register's own fields — no interpretation has been added. Obtain a formal search from LINZ before relying on it.</p></div>
+</div>
+</div>

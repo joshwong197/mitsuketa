@@ -1,7 +1,18 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import * as cheerio from 'cheerio';
+import { checkRateLimit } from '../mcp/lib/rateLimit.js';
 
 const COMPANIES_OFFICE_BASE = 'https://app.companiesoffice.govt.nz';
+
+// Each request fans out to one Companies Office page scrape per active
+// directorship, so the guards sit on both axes and both are deliberately
+// roomy: 150 companies covers even a professional director several times
+// over, and 60 requests a minute is a person clicking through people far
+// faster than anyone works — while a script trying to relay thousands of
+// scrapes through this deployment gets stopped.
+const CONSENT_LIMIT_PER_MINUTE = 60;
+const MAX_COMPANIES_PER_REQUEST = 150;
+const SCRAPE_TIMEOUT_MS = 8000;
 
 function directorsPageUrl(companyNumber: string) {
     return `${COMPANIES_OFFICE_BASE}/companies/app/ui/pages/companies/${companyNumber}/directors`;
@@ -121,12 +132,13 @@ function parseDirectorsPage(html: string): ScrapedDirector[] {
     return directors;
 }
 
-async function scrapeDirectorsPage(companyNumber: string): Promise<ScrapedDirector[]> {
+async function scrapeDirectorsPage(companyNumber: string, signal?: AbortSignal): Promise<ScrapedDirector[]> {
     const url = directorsPageUrl(companyNumber);
     const res = await fetch(url, {
         headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         },
+        signal,
     });
 
     if (!res.ok) {
@@ -140,9 +152,10 @@ async function scrapeDirectorsPage(companyNumber: string): Promise<ScrapedDirect
 async function findConsentFormForDirector(
     companyNumber: string,
     directorFirstName: string,
-    directorLastName: string
+    directorLastName: string,
+    signal?: AbortSignal
 ): Promise<ConsentFormLink | null> {
-    const directors = await scrapeDirectorsPage(companyNumber);
+    const directors = await scrapeDirectorsPage(companyNumber, signal);
 
     if (directors.length === 0) return null;
 
@@ -172,21 +185,37 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(405).json({ error: 'Method not allowed' });
     }
 
-    let body: { firstName: string; lastName: string; companies: Array<{ companyNumber: string; status: string }> };
-    try {
-        body = req.body;
-    } catch {
-        return res.status(400).json({ error: 'Invalid JSON body' });
+    const clientIp = (req.headers['x-forwarded-for'] as string) || 'anonymous';
+    const rl = checkRateLimit(clientIp, 'consent-forms', CONSENT_LIMIT_PER_MINUTE);
+    if (!rl.allowed) {
+        return res.status(429).json({
+            error: 'Rate limit exceeded',
+            message: `Request limit of ${rl.limit} per minute exceeded. Please wait a moment and try again.`,
+        });
     }
 
-    const { firstName, lastName, companies } = body;
+    const body = (req.body ?? {}) as { firstName?: unknown; lastName?: unknown; companies?: unknown };
 
+    const firstName = typeof body.firstName === 'string' ? body.firstName : '';
+    const lastName = typeof body.lastName === 'string' ? body.lastName : '';
     if (!lastName) {
         return res.status(400).json({ error: 'lastName is required' });
     }
+    if (!Array.isArray(body.companies)) {
+        return res.status(400).json({ error: 'companies must be an array' });
+    }
 
-    // Only process active directorships
-    const activeCompanies = companies.filter((c) => c.status === 'active');
+    // Only process active directorships, and only well-formed entries — every
+    // companyNumber is interpolated into a Companies Office URL downstream.
+    let activeCompanies = body.companies.filter(
+        (c: any): c is { companyNumber: string; status: string } =>
+            !!c && c.status === 'active' && typeof c.companyNumber === 'string' && /^[A-Za-z0-9]{1,16}$/.test(c.companyNumber)
+    );
+
+    if (activeCompanies.length > MAX_COMPANIES_PER_REQUEST) {
+        console.warn(`[consent-forms] truncating ${activeCompanies.length} companies to ${MAX_COMPANIES_PER_REQUEST}`);
+        activeCompanies = activeCompanies.slice(0, MAX_COMPANIES_PER_REQUEST);
+    }
 
     if (activeCompanies.length === 0) {
         return res.json({ results: {} });
@@ -195,19 +224,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Scrape all directors pages in parallel with per-company timeout
     const entries = await Promise.allSettled(
         activeCompanies.map(async (company) => {
-            const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 8000);
-
-            try {
-                const link = await findConsentFormForDirector(
-                    company.companyNumber,
-                    firstName,
-                    lastName
-                );
-                return { companyNumber: company.companyNumber, link };
-            } finally {
-                clearTimeout(timeout);
-            }
+            const link = await findConsentFormForDirector(
+                company.companyNumber,
+                firstName,
+                lastName,
+                AbortSignal.timeout(SCRAPE_TIMEOUT_MS)
+            );
+            return { companyNumber: company.companyNumber, link };
         })
     );
 

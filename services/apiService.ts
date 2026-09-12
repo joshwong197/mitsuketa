@@ -1,7 +1,19 @@
-import { ApiConfig, GraphEdge, GraphNode, NodeType, NZBNFullEntity, EntitySearchResultItem, EntitySearchResponse, CompaniesRoleSearchResult, DebugCallback, LoggerCallback } from '../types';
-import { BASE_API_URL, API_PATHS } from '../constants';
+import { ApiConfig, GraphEdge, GraphNode, NodeType, NZBNFullEntity, EntitySearchResultItem, EntitySearchResponse, CompaniesRoleSearchResult, DebugCallback, LoggerCallback } from '../types.js';
+import { BASE_API_URL, API_PATHS } from '../constants.js';
+import { personId } from '../utils/personId.js';
+import { unlinkedCompanyId, normaliseEntityName } from '../utils/entityId.js';
+import { computePersonRoleFlags } from '../utils/personRoles.js';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Combines a shareholder edge label and a director edge label for the same
+// person/company pair into one — e.g. "▼ Shareholder (30%)" + "▼ Director" →
+// "▼ Director & Shareholder (30%)". Order-independent; keeps whichever
+// percentage either label carried.
+function mergeRoleEdgeLabels(a: string, b: string): string {
+    const pct = a.match(/\((\d+)%\)/) || b.match(/\((\d+)%\)/);
+    return `▼ Director & Shareholder${pct ? ` (${pct[1]}%)` : ''}`;
+}
 
 // PERFORMANCE OPTIMIZATION FEATURE FLAG
 // Set to false to revert to legacy full endpoint fetching (slower but more data)
@@ -14,6 +26,22 @@ const ENABLE_SMART_DELAYS = true;         // Smart rate limiting instead of fixe
 const ENABLE_ENTITY_CACHE = true;         // Cache entity lookups to avoid duplicates
 const ENABLE_PARALLEL_ROLE_SEARCHES = false; // DISABLED: Made things slower (more total API calls)
 
+// --- Mega-node capping thresholds (see crawlDownstream) ---
+// A corporate SHAREHOLDER that itself holds shares in many companies is capped
+// during the automatic crawl: its children aren't fetched, the node gets a
+// "N capped" badge, and the user can right-click "Fetch & Expand" to load them.
+//
+// Two tiers, because "holds lots of companies" means different things:
+//   • Lawyer/accountant TRUSTEE & NOMINEE shells hold dozens of UNRELATED client
+//     companies (e.g. the Turner Hopkins trustee companies behind Ze Build). Their
+//     other holdings are noise on the chart, so we cap them aggressively.
+//   • Ordinary holding companies (e.g. "Fletcher Building Holdings") legitimately
+//     own many RELATED subsidiaries we DO want to see, so they only cap at a much
+//     higher count. Note: "HOLDINGS" is deliberately NOT a trustee keyword.
+const TRUSTEE_NAME_KEYWORDS = ['TRUSTEE', 'NOMINEE', 'CUSTODIAN'];
+const TRUSTEE_HOLDINGS_CAP = 5;   // trustee/nominee shell: cap once it holds > this many
+const GENERIC_HOLDINGS_CAP = 50;  // any other entity: only cap a genuine mega-node
+
 class OrgSpider {
     private config: ApiConfig;
     private visited: Set<string>;
@@ -25,7 +53,7 @@ class OrgSpider {
     private logger?: LoggerCallback;
 
     // OPTIMIZATION: Entity cache to avoid duplicate fetches
-    private entityCache: Map<string, { name: string, status: string, sourceRegisterUniqueId?: string, timestamp: number }>;
+    private entityCache: Map<string, { name: string, status: string, sourceRegisterUniqueId?: string, roles?: NZBNFullEntity['roles'], timestamp: number }>;
 
     // OPTIMIZATION: Request timing for smart rate limiting
     private requestTimes: number[];
@@ -33,10 +61,10 @@ class OrgSpider {
     // OPTIMIZATION: Roles API response cache (prevents redundant ~11s calls)
     private rolesCache: Map<string, CompaniesRoleSearchResult>;
 
-    constructor(config: ApiConfig, logger?: LoggerCallback) {
+    constructor(config: ApiConfig, logger?: LoggerCallback, baseUrls?: { nzbn?: string; companies?: string }) {
         this.config = config;
-        this.nzbnBaseUrl = `/api/proxy`;
-        this.companiesBaseUrl = `/api/proxy`;
+        this.nzbnBaseUrl = baseUrls?.nzbn ?? `/api/proxy`;
+        this.companiesBaseUrl = baseUrls?.companies ?? `/api/proxy`;
         this.visited = new Set();
         this.nodes = new Map();
         this.edges = [];
@@ -67,7 +95,7 @@ class OrgSpider {
     }
 
     // OPTIMIZATION #3: Entity caching
-    private async getCachedOrFetch(nzbn: string, fetchFn: () => Promise<{ entityName: string, entityStatusDescription: string, sourceRegisterUniqueId?: string }>): Promise<{ entityName: string, entityStatusDescription: string, sourceRegisterUniqueId?: string }> {
+    private async getCachedOrFetch(nzbn: string, fetchFn: () => Promise<{ entityName: string, entityStatusDescription: string, sourceRegisterUniqueId?: string, roles?: NZBNFullEntity['roles'] }>): Promise<{ entityName: string, entityStatusDescription: string, sourceRegisterUniqueId?: string, roles?: NZBNFullEntity['roles'] }> {
         if (!ENABLE_ENTITY_CACHE) {
             // Fallback: Always fetch
             return await fetchFn();
@@ -80,7 +108,8 @@ class OrgSpider {
             return {
                 entityName: cached.name,
                 entityStatusDescription: cached.status,
-                sourceRegisterUniqueId: cached.sourceRegisterUniqueId
+                sourceRegisterUniqueId: cached.sourceRegisterUniqueId,
+                roles: cached.roles
             };
         }
 
@@ -90,6 +119,7 @@ class OrgSpider {
             name: result.entityName,
             status: result.entityStatusDescription,
             sourceRegisterUniqueId: result.sourceRegisterUniqueId,
+            roles: result.roles,
             timestamp: Date.now()
         });
 
@@ -107,6 +137,13 @@ class OrgSpider {
         const result = await fetchRolesByEntityName(name, this.config, this.companiesBaseUrl, this.logger);
         this.rolesCache.set(cacheKey, result);
         return result;
+    }
+
+    // Recover the NZBN of a holder the register left unlinked (see
+    // resolveEntityNzbn). Rate-limited with the rest of the crawl.
+    private async resolveNzbn(companyNumber?: string, name?: string): Promise<string> {
+        await this.smartDelay();
+        return await resolveEntityNzbn(companyNumber, name, this.config, this.nzbnBaseUrl, this.logger);
     }
 
     // --- Core Graph Building Logic ---
@@ -200,7 +237,7 @@ class OrgSpider {
         console.log(`✅ Graph build complete in ${durationSeconds}s (${this.nodes.size} nodes, ${this.edges.length} edges)`);
 
         return {
-            nodes: Array.from(this.nodes.values()),
+            nodes: computePersonRoleFlags(Array.from(this.nodes.values()), this.edges),
             edges: this.edges,
         };
     }
@@ -252,17 +289,41 @@ class OrgSpider {
                     let holderLabel = '';
                     let isPerson = false;
                     let parentNzbn = '';
+                    // Declared per iteration on purpose: this was a `var`, which
+                    // is function-scoped, so a holder that never reached the
+                    // fetch below inherited the previous holder's number.
+                    let parentSourceRegisterUniqueId: string | undefined;
 
                     if (holder.individualShareholder) {
                         holderLabel = holder.individualShareholder.fullName ||
                             `${holder.individualShareholder.firstName} ${holder.individualShareholder.lastName}`;
-                        holderId = `IND-${holderLabel.replace(/\s+/g, '-')}-${Math.random().toString(36).substr(2, 5)}`;
+                        // Stable id (personId, not a random suffix) so the same person
+                        // holding shares in multiple subsidiaries collapses to one node —
+                        // see design/HANDOVER.md §3a.
+                        holderId = personId(holderLabel);
                         isPerson = true;
                     } else if (holder.otherShareholder) {
-                        holderLabel = holder.otherShareholder.currentEntityName || 'Unknown Company';
-                        holderId = holder.otherShareholder.nzbn || `ORG-${Math.random().toString(36).substr(2, 5)}`;
+                        const holderName = holder.otherShareholder.currentEntityName;
+                        const holderCompanyNumber = (holder.otherShareholder.companyNumber || '').trim() || undefined;
+                        holderLabel = holderName || 'Unknown Company';
                         parentNzbn = holder.otherShareholder.nzbn || '';
                         isPerson = false;
+
+                        // The shareholding record often carries only a name and a
+                        // register number. Recover the NZBN so an unlinked NZ
+                        // parent is crawled, deduped, status-checked and labelled
+                        // exactly like a linked one.
+                        if (!parentNzbn) {
+                            parentNzbn = await this.resolveNzbn(holderCompanyNumber, holderName);
+                            if (parentNzbn) {
+                                console.log(`[Parent: ${holderLabel}] 🔗 Register left this shareholder unlinked — resolved to NZBN ${parentNzbn}`);
+                            } else {
+                                console.log(`[Parent: ${holderLabel}] 🔗 No NZBN on the shareholding record and none resolvable${holderCompanyNumber ? ` (company no. ${holderCompanyNumber})` : ''}`);
+                            }
+                        }
+
+                        holderId = parentNzbn || unlinkedCompanyId(holderLabel, holderCompanyNumber);
+                        parentSourceRegisterUniqueId = holderCompanyNumber;
 
                         // FILTER: Check if parent is removed before adding (OPTIMIZED)
                         if (parentNzbn) {
@@ -282,8 +343,12 @@ class OrgSpider {
                                     continue; // Skip BEFORE marking as visited
                                 }
 
+                                // A resolved holder gets its name from the register
+                                // rather than the shareholding record's copy of it.
+                                if (!holderName && parentData.entityName) holderLabel = parentData.entityName;
+
                                 // Store the sourceRegisterUniqueId for later use
-                                var parentSourceRegisterUniqueId = parentData.sourceRegisterUniqueId;
+                                parentSourceRegisterUniqueId = parentData.sourceRegisterUniqueId || holderCompanyNumber;
                             } catch (e) {
                                 // If we can't fetch, skip
                                 console.warn(`Failed to verify parent status for ${parentNzbn}`, e);
@@ -292,9 +357,14 @@ class OrgSpider {
                         }
                     }
 
-                    if (!holderId || this.nodes.has(holderId)) continue;
+                    if (!holderId) continue;
 
-                    // Add Node
+                    // Add Node — addNode() itself no-ops if this id already exists, so a
+                    // person (or company) that recurs across multiple shareholdings still
+                    // gets exactly one node. Do NOT skip the edge below just because the
+                    // node already exists: that would drop this specific relationship
+                    // (see design/HANDOVER.md §3a — one node per person, but every
+                    // shareholding is still its own edge).
                     this.addNode({
                         id: holderId,
                         type: isPerson ? 'personNode' : 'companyNode',
@@ -312,7 +382,7 @@ class OrgSpider {
                     const edgeLabel = sharePercent > 0
                         ? `▼ Shareholder (${sharePercent}%)`
                         : '▼ Shareholder';
-                    this.addEdge(holderId, details.nzbn, edgeLabel, 'parent');
+                    this.addEdge(holderId, details.nzbn, edgeLabel, 'parent', false, isPerson ? 'shareholder' : undefined);
 
                     // Recursive Upstream for Corporate Parents
                     if (!isPerson && parentNzbn && !this.visited.has(parentNzbn)) {
@@ -332,10 +402,16 @@ class OrgSpider {
                 }
             }
         } else if (details.roles && details.roles.length > 0) {
-            // Processing non-company roles (e.g. General Partners of a Limited Partnership)
+            // Processing non-company roles (e.g. General Partners of a Limited Partnership).
+            // Director roles are skipped here — drawDirectorsFromRoles() below handles
+            // every director uniformly, whether or not this entity also has shareholdings.
             for (const role of details.roles) {
-                // Ignore resigned/inactive roles
-                if (role.roleStatus && role.roleStatus.toLowerCase() !== 'active') continue;
+                if ((role.roleType || '').toLowerCase() === 'director') continue;
+
+                // Ceased (resigned/inactive) roles are skipped by default, but kept
+                // as dashed ink-wash edges when includeInactive is on.
+                const roleCeased = !!role.roleStatus && role.roleStatus.toLowerCase() !== 'active';
+                if (roleCeased && !this.config.includeInactive) continue;
 
                 let holderId = '';
                 let holderLabel = '';
@@ -345,13 +421,28 @@ class OrgSpider {
 
                 if (role.rolePerson?.fullName || role.rolePerson?.firstName) {
                     holderLabel = role.rolePerson.fullName || `${role.rolePerson.firstName} ${role.rolePerson.lastName}`;
-                    holderId = `IND-${holderLabel.replace(/\s+/g, '-')}-${Math.random().toString(36).substr(2, 5)}`;
+                    holderId = personId(holderLabel);
                     isPerson = true;
-                } else if (role.roleEntity?.name || role.roleEntity?.nzbn) {
-                    holderLabel = role.roleEntity.name || 'Unknown Entity';
+                } else if (role.roleEntity?.entityName || role.roleEntity?.name || role.roleEntity?.nzbn) {
+                    // The NZBN payload names this field entityName (App.tsx and
+                    // directorService read that); reading only `name` dropped
+                    // every corporate role holder — a corporate trustee or
+                    // general partner never reached the graph at all.
+                    const roleEntityName = role.roleEntity.entityName || role.roleEntity.name || '';
+                    holderLabel = roleEntityName || 'Unknown Entity';
                     parentNzbn = role.roleEntity.nzbn || '';
-                    holderId = parentNzbn || `ORG-${Math.random().toString(36).substr(2, 5)}`;
                     isPerson = false;
+
+                    // roleEntity.nzbn is documented as "currently not populated",
+                    // so resolution by name is the only way these holders link up.
+                    if (!parentNzbn && roleEntityName) {
+                        parentNzbn = await this.resolveNzbn(undefined, roleEntityName);
+                        if (parentNzbn) {
+                            console.log(`[Role Entity: ${holderLabel}] 🔗 Resolved to NZBN ${parentNzbn}`);
+                        }
+                    }
+
+                    holderId = parentNzbn || unlinkedCompanyId(holderLabel);
 
                     if (parentNzbn) {
                         try {
@@ -383,7 +474,7 @@ class OrgSpider {
                     continue; // Skip if no person or entity details
                 }
 
-                if (!holderId || this.nodes.has(holderId)) continue;
+                if (!holderId) continue;
 
                 this.addNode({
                     id: holderId,
@@ -399,7 +490,7 @@ class OrgSpider {
                     position: { x: 0, y: 0 }
                 });
 
-                this.addEdge(holderId, details.nzbn, `▼ ${role.roleType}`, 'parent');
+                this.addEdge(holderId, details.nzbn, `▼ ${role.roleType}`, 'parent', roleCeased);
 
                 if (!isPerson && parentNzbn && !this.visited.has(parentNzbn)) {
                     this.visited.add(parentNzbn);
@@ -413,10 +504,53 @@ class OrgSpider {
                 }
             }
         }
+
+        // Directors are drawn regardless of whether this entity also has
+        // shareholdings — `roles` is already returned by fetchEntityDetailsFull on
+        // every crawl, so this costs no additional API calls (design/HANDOVER.md §3b).
+        this.drawDirectorsFromRoles(details.roles, details.nzbn);
+    }
+
+    // --- Directors: drawn only, never crawled further upstream by default. ---
+    // A director's OTHER directorships/shareholdings are not followed automatically
+    // (that would cost an extra lookup per director and could blow up a complex
+    // chart); a user who wants that picture uses "Search as Individual" on the
+    // node, which runs a full person search on demand.
+    //
+    // Shared by crawlUpstream (root + upstream parents, via the full entity fetch)
+    // AND crawlDownstream (subsidiaries, via fetchEntitySummaryLight) — both hit the
+    // same NZBN entity endpoint, so `roles` is already in hand either way; this never
+    // triggers an extra API call on its own.
+    private drawDirectorsFromRoles(roles: NZBNFullEntity['roles'] | undefined, companyNzbn: string) {
+        for (const role of roles || []) {
+            if ((role.roleType || '').toLowerCase() !== 'director') continue;
+            if (!role.rolePerson?.fullName && !role.rolePerson?.firstName) continue;
+
+            // Ceased (resigned) directorships are skipped by default, kept as
+            // dashed ink-wash edges when includeInactive is on — same rule as
+            // every other role edge.
+            const roleCeased = !!role.roleStatus && role.roleStatus.toLowerCase() !== 'active';
+            if (roleCeased && !this.config.includeInactive) continue;
+
+            const holderLabel = role.rolePerson.fullName || `${role.rolePerson.firstName} ${role.rolePerson.lastName}`;
+            const holderId = personId(holderLabel);
+
+            this.addNode({
+                id: holderId,
+                type: 'personNode',
+                data: {
+                    label: holderLabel,
+                    type: NodeType.PERSON,
+                },
+                position: { x: 0, y: 0 }
+            });
+
+            this.addEdge(holderId, companyNzbn, '▼ Director', 'parent', roleCeased, 'director');
+        }
     }
 
     // --- Downstream: Find who the target owns ---
-    private async crawlDownstream(ownerNzbn: string, ownerName: string, depth: number = 0, onDebug?: DebugCallback, maxDepth: number = 2) {
+    private async crawlDownstream(ownerNzbn: string, ownerName: string, depth: number = 0, onDebug?: DebugCallback, maxDepth: number = 2, bypassCap: boolean = false) {
         if (depth > maxDepth) return;
         // OPTIMIZATION: Use smart rate limiting instead of hardcoded 150ms delay.
         // Since Roles API takes ~11s per call, we never hit 10 req/s — this becomes a no-op.
@@ -465,8 +599,11 @@ class OrgSpider {
             });
         }
 
-        // --- Mega-node detection: cap ANY entity with too many subsidiaries ---
-        // Not restricted to trustee/nominee names — holding companies, capital firms, etc. can be just as explosive
+        // --- Mega-node detection (two-tier; see TRUSTEE_* / GENERIC_HOLDINGS_CAP) ---
+        // Count how many companies this entity holds shares in. A trustee/nominee
+        // shell is capped aggressively (its holdings are unrelated client companies);
+        // any other entity only caps at a much higher count so legitimate holding
+        // companies with many real subsidiaries still expand.
         let totalHoldings = 0;
         for (const r of results.roles) {
             const isOrg = r.roleType?.includes('Shareholder') && !r.roleType?.includes('Individual') && !r.roleType?.includes('Director');
@@ -474,9 +611,16 @@ class OrgSpider {
                 totalHoldings += r.shareholdings.length;
             }
         }
-        const isMegaNode = totalHoldings > 50;
-        if (isMegaNode) {
-            console.log(`%c[Mega-Node] ${ownerName} detected as mega-node with ${totalHoldings} subsidiaries — skipped entirely`, "color: #ff6600; font-weight: bold");
+
+        const isTrusteeEntity = TRUSTEE_NAME_KEYWORDS.some(kw => ownerName.toUpperCase().includes(kw));
+        const holdingsCap = isTrusteeEntity ? TRUSTEE_HOLDINGS_CAP : GENERIC_HOLDINGS_CAP;
+        const isMegaNode = totalHoldings > holdingsCap;
+
+        // Cap only during the automatic crawl. An explicit user expansion passes
+        // bypassCap=true, so "Fetch & Expand Structure" always runs the API calls the
+        // crawl skipped — the on-demand escape hatch the cap is designed around.
+        if (isMegaNode && !bypassCap) {
+            console.log(`%c[Mega-Node] ${ownerName} capped: holds ${totalHoldings} (limit ${holdingsCap}${isTrusteeEntity ? ', trustee/nominee' : ''}) — children skipped, expand on demand`, "color: #ff6600; font-weight: bold");
             // Mark the owner node as capped
             const ownerNode = this.nodes.get(ownerNzbn);
             if (ownerNode) {
@@ -610,10 +754,17 @@ class OrgSpider {
                         position: { x: 0, y: (depth + 1) * 200 }
                     });
 
-                    // Recurse downstream (skip for mega-node trustees to avoid 900+ API calls)
-                    if (!isMegaNode) {
-                        await this.crawlDownstream(childNzbn, childLabel, depth + 1, onDebug, maxDepth);
-                    }
+                    // Directors for this subsidiary too — `childSummary` came from the
+                    // same entity fetch as the status/name above, so `roles` is already
+                    // in hand at no extra API cost (see drawDirectorsFromRoles).
+                    this.drawDirectorsFromRoles(childSummary.roles, childNzbn);
+
+                    // Recurse downstream. A child that is itself a bulk trustee/mega-node
+                    // caps itself on its own call above, so recursing here is safe — the
+                    // explosion is stopped one level down, not by skipping this branch.
+                    // bypassCap is deliberately NOT propagated: an explicit expansion
+                    // un-caps only the node the user clicked, not every node beneath it.
+                    await this.crawlDownstream(childNzbn, childLabel, depth + 1, onDebug, maxDepth);
 
                 } catch (e) {
                     console.warn(`Failed to fetch details for subsidiary ${childNzbn}`, e);
@@ -678,17 +829,43 @@ class OrgSpider {
         }
     }
 
-    private addEdge(source: string, target: string, label: string, type: 'parent' | 'subsidiary' | 'sibling' | 'common') {
+    private addEdge(source: string, target: string, label: string, type: 'parent' | 'subsidiary' | 'sibling' | 'common', isCeased: boolean = false, roleKind?: 'shareholder' | 'director') {
         const id = `e-${source}-${target}`;
-        if (this.edges.some(e => e.id === id)) return;
+        const existing = this.edges.find(e => e.id === id);
+        if (existing) {
+            // Same person, same company, already has an edge from an earlier call
+            // (e.g. shareholder AND director of the one company) — merge into a
+            // single 'both' edge rather than adding a second edge on the exact
+            // same node pair. Both nodes only ever have one handle per side, so a
+            // real layout draws two same-pair edges as coincident lines with
+            // overlapping, illegible labels — confirmed against a live chart.
+            const existingKind = existing.data?.roleKind;
+            if (roleKind && existingKind && existingKind !== roleKind) {
+                existing.data!.roleKind = 'both';
+                existing.data!.label = mergeRoleEdgeLabels(existing.data!.label, label);
+                if (!existing.data!.isCeased && !isCeased) {
+                    existing.style = { stroke: 'var(--ink-mid)', strokeWidth: 1.6, strokeDasharray: '5 4', opacity: 0.8 };
+                }
+            }
+            return;
+        }
 
+        // Status ramp edge dye: current roles solid ink-mid, ceased roles
+        // dashed ink-wash (App.tsx restyles by depth, but exports/snapshots
+        // keep these token-dyed defaults). Directors control rather than own,
+        // so a director edge is dashed even when active — distinct from a
+        // ceased edge, which is also dashed but faded to ink-wash.
         this.edges.push({
             id,
             source,
             target,
-            data: { percentage: 0, label, relationshipType: type },
+            data: { percentage: 0, label, relationshipType: type, isCeased, roleKind },
             animated: type === 'subsidiary',
-            style: { stroke: type === 'sibling' ? '#94a3b8' : '#2563eb' },
+            style: isCeased
+                ? { stroke: 'var(--ink-wash)', strokeWidth: 1.4, strokeDasharray: '6 5', opacity: 0.75 }
+                : roleKind === 'director'
+                    ? { stroke: 'var(--ink-mid)', strokeWidth: 1.6, strokeDasharray: '5 4', opacity: 0.8 }
+                    : { stroke: type === 'sibling' ? 'var(--ink-wash)' : 'var(--ink-mid)' },
             markerEnd: 'arrowclosed' as any // Fix: Use string instead of object
         });
     }
@@ -702,7 +879,9 @@ class OrgSpider {
         // Remove the target itself so its children can be discovered
         this.visited.delete(targetNzbn);
 
-        await this.crawlDownstream(targetNzbn, targetName, 0, undefined, maxDepth);
+        // bypassCap=true: the user explicitly asked to expand this node, so run the
+        // API calls the automatic crawl skipped even though it is a capped mega-node.
+        await this.crawlDownstream(targetNzbn, targetName, 0, undefined, maxDepth, true);
 
         return {
             nodes: Array.from(this.nodes.values()),
@@ -850,9 +1029,11 @@ async function fetchEntityStatusOnly(nzbn: string, config: ApiConfig, baseUrl: s
 }
 
 
-// SELECTIVE OPTIMIZATION: Summary for subsidiaries (name + status only)
+// SELECTIVE OPTIMIZATION: Summary for subsidiaries (name + status — but same
+// endpoint/payload as the full fetch, so `roles` is included at no extra cost;
+// it's what lets crawlDownstream draw directors for subsidiaries for free).
 // Uses direct primary key lookup instead of slow full-text search
-async function fetchEntitySummaryLight(nzbn: string, config: ApiConfig, baseUrl: string, logger?: LoggerCallback): Promise<{ entityName: string, entityStatusDescription: string, sourceRegisterUniqueId?: string }> {
+async function fetchEntitySummaryLight(nzbn: string, config: ApiConfig, baseUrl: string, logger?: LoggerCallback): Promise<{ entityName: string, entityStatusDescription: string, sourceRegisterUniqueId?: string, roles?: NZBNFullEntity['roles'] }> {
     try {
         const proxyPath = `${API_PATHS.nzbn}/entities/${encodeURIComponent(nzbn)}`;
         const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
@@ -869,7 +1050,8 @@ async function fetchEntitySummaryLight(nzbn: string, config: ApiConfig, baseUrl:
         return {
             entityName: data.entityName,
             entityStatusDescription: data.entityStatusDescription || 'Unknown',
-            sourceRegisterUniqueId: data.sourceRegisterUniqueId || data.sourceRegisterUniqueIdentifier
+            sourceRegisterUniqueId: data.sourceRegisterUniqueId || data.sourceRegisterUniqueIdentifier,
+            roles: data.roles
         };
     } catch (e) {
         console.warn(`Summary check failed for ${nzbn}`, e);
@@ -878,7 +1060,7 @@ async function fetchEntitySummaryLight(nzbn: string, config: ApiConfig, baseUrl:
 }
 
 // Smart wrapper: Uses lightweight or full endpoint based on feature flag
-async function fetchEntityDetails(nzbn: string, config: ApiConfig, baseUrl: string, logger?: LoggerCallback): Promise<NZBNFullEntity> {
+export async function fetchEntityDetails(nzbn: string, config: ApiConfig, baseUrl: string = '/api/proxy', logger?: LoggerCallback): Promise<NZBNFullEntity> {
     if (USE_LIGHTWEIGHT_ENDPOINTS) {
         // Fetch lightweight summary
         const summary = await fetchEntitySummary(nzbn, config, baseUrl, logger);
@@ -905,7 +1087,7 @@ async function fetchEntityDetails(nzbn: string, config: ApiConfig, baseUrl: stri
     }
 }
 
-async function fetchRolesByEntityName(name: string, config: ApiConfig, baseUrl: string, logger?: LoggerCallback): Promise<CompaniesRoleSearchResult> {
+export async function fetchRolesByEntityName(name: string, config: ApiConfig, baseUrl: string = '/api/proxy', logger?: LoggerCallback): Promise<CompaniesRoleSearchResult> {
     try {
         // Enclose in double quotes to force exact match and prevent MBIE from doing slow fuzzy searching/OR matching.
         // Without this MBIE will `OR` query every common word across 700k records, taking 30 seconds.
@@ -971,10 +1153,13 @@ async function fetchDirectorsByEntityName(name: string, config: ApiConfig, baseU
     }
 }
 
-export const searchEntities = async (term: string, config: ApiConfig, logger?: LoggerCallback, page: number = 0): Promise<EntitySearchResponse> => {
-    const baseUrl = `/api/proxy`;
-    // Enclose in double quotes to force exact match
-    const encodedTerm = encodeURIComponent(`"${term}"`);
+export const searchEntities = async (term: string, config: ApiConfig, logger?: LoggerCallback, page: number = 0, baseUrl: string = '/api/proxy'): Promise<EntitySearchResponse> => {
+    // Quote name searches for exact-phrase matching, but send NZBN/company
+    // numbers unquoted — the API matches identifiers on raw digits only.
+    const cleaned = term.trim();
+    const digits = cleaned.replace(/[\s-]/g, '');
+    const isNumericId = /^\d{6,13}$/.test(digits);
+    const encodedTerm = encodeURIComponent(isNumericId ? digits : `"${cleaned}"`);
     const proxyPath = `${API_PATHS.nzbn}/entities?search-term=${encodedTerm}&page-size=10&page=${page}`;
     const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
 
@@ -995,8 +1180,77 @@ export const searchEntities = async (term: string, config: ApiConfig, logger?: L
     };
 };
 
-export const generateOrgChart = async (rootNzbn: string, config: ApiConfig, onDebug?: DebugCallback, onLog?: LoggerCallback) => {
-    const spider = new OrgSpider(config, onLog);
+// Corporate holders that the register did not link to an NZBN.
+//
+// `otherShareholder` frequently arrives as a name plus a `companyNumber` with no
+// `nzbn` (MBIE only fills `nzbn` where it has matched the shareholding to a
+// register record), and `roleEntity.nzbn` is documented in the NZBN spec as
+// "currently not populated". A holder that reached the graph without an NZBN got
+// a throwaway `ORG-${Math.random()}` id, was never crawled upstream, never
+// re-status-checked by the diff, and rendered as "Overseas / Unreg" — an
+// inference the payload never made. J SWAP CONTRACTORS LIMITED (NZBN
+// 9429040142548, company 178106), 100% shareholder of SWAP STOCKFOODS LIMITED,
+// is exactly this case: an NZ company shown as overseas/unregistered.
+//
+// So recover the NZBN ourselves. Free-text search matches "NZBN and legacy
+// numbers (eg company number)" as well as names, and one search per unlinked
+// holder is cheap next to the crawl that follows it. Cached per process because
+// the same parent recurs across a group.
+const nzbnResolutionCache = new Map<string, string>();
+
+export async function resolveEntityNzbn(
+    companyNumber: string | undefined,
+    name: string | undefined,
+    config: ApiConfig,
+    baseUrl: string = '/api/proxy',
+    logger?: LoggerCallback
+): Promise<string> {
+    const number = (companyNumber || '').trim();
+    const wanted = normaliseEntityName(name || '');
+    if (!number && !wanted) return '';
+
+    const cacheKey = `${number}|${wanted}`;
+    const cached = nzbnResolutionCache.get(cacheKey);
+    if (cached !== undefined) return cached;
+
+    // Register number first — it identifies one record, so a hit is unambiguous.
+    // Name is the fallback, and every candidate is still verified below.
+    const terms: string[] = [];
+    if (number) terms.push(number);
+    if (wanted && name) terms.push(name.trim());
+
+    let resolved = '';
+    for (const term of terms) {
+        try {
+            const { items } = await searchEntities(term, config, logger, 0, baseUrl);
+            const matches = (items || []).filter(item => {
+                if (!item.nzbn) return false;
+                const numberMatches = !!number && String(item.sourceRegisterUniqueId || '').trim() === number;
+                const nameMatches = !!wanted && normaliseEntityName(item.entityName || '') === wanted;
+                return numberMatches || nameMatches;
+            });
+
+            // Exactly one verified match, or nothing. An ambiguous set is left
+            // unlinked rather than guessed: attaching the wrong parent to a
+            // group chart is worse than a node with no NZBN on it.
+            if (matches.length === 1) {
+                resolved = matches[0].nzbn;
+                break;
+            }
+            if (matches.length > 1) {
+                console.warn(`🔗 "${term}" matched ${matches.length} register records — left unlinked`);
+            }
+        } catch (e) {
+            console.warn(`🔗 NZBN resolution failed for "${term}"`, e);
+        }
+    }
+
+    nzbnResolutionCache.set(cacheKey, resolved);
+    return resolved;
+}
+
+export const generateOrgChart = async (rootNzbn: string, config: ApiConfig, onDebug?: DebugCallback, onLog?: LoggerCallback, baseUrls?: { nzbn?: string; companies?: string }) => {
+    const spider = new OrgSpider(config, onLog, baseUrls);
     return await spider.buildGraph(rootNzbn, onDebug);
 };
 
@@ -1007,10 +1261,14 @@ export const expandNodeDownstream = async (
     existingNodeIds: string[],
     config: ApiConfig,
     onLog?: LoggerCallback,
-    maxDepth: number = 2
+    maxDepth: number = 2,
+    baseUrls?: { nzbn?: string; companies?: string }
 ) => {
-    const spider = new OrgSpider(config, onLog);
+    const spider = new OrgSpider(config, onLog, baseUrls);
     return await spider.expandNode(targetNzbn, targetName, existingNodeIds, maxDepth);
 };
+
+// Expose the OrgSpider class for MCP tools that need direct access (e.g. upstream-only crawls).
+export { OrgSpider };
 
 export const getDirectors = fetchDirectorsByEntityName;

@@ -1,29 +1,47 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import ReactFlow, {
-  Background,
   Controls,
+  MarkerType,
   useNodesState,
   useEdgesState,
   Node,
   Edge,
   Panel,
 } from 'reactflow';
-import { Search, Camera, AlertTriangle, Loader2, MousePointer2, Building2, X, Database, ChevronRight, ChevronLeft, Terminal, Activity, Trash2, Download, FileDown, Sparkles, Undo, User, Upload } from 'lucide-react';
+import { Search, FolderOpen, AlertTriangle, X, Sparkles, Undo, ChevronRight, ChevronLeft } from 'lucide-react';
 import { ConfigBar } from './components/ConfigBar';
+import { CommandPalette, PaletteCommand } from './components/CommandPalette';
+import { FindScreen } from './components/FindScreen';
+import { PropertyReport } from './components/PropertyReport';
+import type { MainTab } from './components/TabBar';
+import type { TitleReport as PropertyTitleReport } from './services/propertyService';
+import { IntroAnimation, INTRO_SEEN_KEY } from './components/IntroAnimation';
+import { assignDepths } from './utils/graphDepth';
 import { CompanyNode, PersonNode, SummaryNode } from './components/CustomNodes';
+import { StatusLegend } from './components/StatusLegend';
 import { NodeContextMenu } from './components/NodeContextMenu';
+import { NoteEditor } from './components/NoteEditor';
 import { DirectorPanel } from './components/DirectorPanel';
 import { PersonSearchResults } from './components/PersonSearchResults';
 import { ConfirmOrgChartDialog } from './components/ConfirmOrgChartDialog';
 import { TabBar } from './components/TabBar';
+import { CasePanel } from './components/CasePanel';
 import { enrichCompanyResults, enrichGraphNodes } from './src/api/companyStatusApi';
+import { enrichPersonNodes } from './src/api/personStatusApi';
+import { displaySubjectName } from './utils/personName';
 import { markDirectLineage, calculateHiddenDescendants, expandNodeSubtree, collapseNodeSubtree } from './utils/graphVisibility';
 import { getLayoutedElements } from './services/layoutService';
 import { tidyUpLayout } from './services/layoutOptimizer';
 import { generateOrgChart, searchEntities, expandNodeDownstream } from './services/apiService';
+import { downloadInteractiveGraphHtml, downloadPersonReportHtml, downloadTitleReportHtml } from './services/exportService';
 import { extractDirectorsFromEntity } from './services/directorService';
-import { ApiConfig, EntitySearchResultItem, EntitySearchResponse, GraphSnapshot, GraphNode, GraphEdge, LogEntry, NodeType, NZBNFullEntity, PersonCompanyResult, CompanyTab, IndividualTab } from './types';
+import { ApiConfig, EntitySearchResultItem, EntitySearchResponse, GraphSnapshot, GraphNode, GraphEdge, LogEntry, NodeData, NodeType, NZBNFullEntity, PersonCompanyResult, CompanyTab, IndividualTab, PropertyTab, CaseNote, PersistedCompanyTab } from './types';
+import { loadSession, saveSession, loadSavePoints, saveSavePoints } from './utils/caseStore';
+import { diffStatuses, NodeDiff } from './utils/statusDiff';
 import { searchByPersonName } from './services/directorSearchService';
+import { findConnection, CompareEndpoint, CompareProgress, personId } from './services/compareService';
+import { loadRecentSearches, RecentSearch } from './utils/recentSearches';
+import { applyCompareEmphasis } from './utils/compareEmphasis';
 import { searchDisqualifiedDirectors, DisqualifiedDirector } from './src/api/disqualifiedDirectorsApi';
 import { searchInsolvency, InsolvencyRecord } from './src/api/insolvencyApi';
 import { BASE_API_URL, API_PATHS } from './constants';
@@ -41,6 +59,119 @@ const nodeTypes = {
   companyNode: CompanyNode,
   personNode: PersonNode,
   summaryNode: SummaryNode,
+};
+
+const isPersonNode = (n?: GraphNode | Node): boolean =>
+  n?.type === 'personNode' || (n as any)?.data?.type === 'person';
+
+/**
+ * Sumi edge styling. Matches the mockup ink tiers exactly:
+ *   .edge.d1     stroke-width 2   / opacity .85  (target ↔ 1-hop)
+ *   .edge.d2     stroke-width 1.3 / opacity .45  (2+ hops)
+ *   .edge.person stroke-width 1.6 / opacity .7
+ *   sibling      ink-wash, 1.3
+ * Arrowheads are ink at ~.6 (not blue). Edge labels are lifted out of
+ * data.label onto the top-level `label` and dressed to match .elabel
+ * (10.5px, ink-mid, paper bg, 1px 5px pad, tabular-nums, sharp corners).
+ * Bezier is React Flow's default edge type — we set nothing, so it stays.
+ */
+const ELABEL_STYLE: React.CSSProperties = {
+  fontSize: 10.5,
+  fill: 'var(--ink-mid)',
+  fontVariantNumeric: 'tabular-nums',
+  fontFamily: 'var(--gothic)',
+};
+const ELABEL_BG_STYLE: React.CSSProperties = { fill: 'var(--paper)' };
+const INK_ARROW = { type: MarkerType.ArrowClosed, color: 'oklch(from var(--ink) l c h / .6)' };
+
+const styleEdgesByDepth = <E extends Edge>(edges: E[], nodesById: Map<string, GraphNode>): E[] =>
+  edges.map((edge) => {
+    const { animated: _drop, style: _oldStyle, ...rest } = edge as any;
+    const src = nodesById.get(edge.source);
+    const tgt = nodesById.get(edge.target);
+    const relType = (edge.data as any)?.relationshipType;
+    const isCeased = !!(edge.data as any)?.isCeased;
+
+    let style: React.CSSProperties;
+    if (isCeased) {
+      // Status ramp: ceased roles are dashed ink-wash (current = solid ink-mid)
+      style = { stroke: 'var(--ink-wash)', strokeWidth: 1.4, strokeDasharray: '6 5', opacity: 0.75 };
+    } else if (relType === 'sibling') {
+      style = { stroke: 'var(--ink-wash)', strokeWidth: 1.3 };
+    } else if (isPersonNode(src) || isPersonNode(tgt)) {
+      // Status ramp: current roles are solid --ink-mid (mockup .edge-line) —
+      // except a director edge, which is dashed: directors control rather than
+      // own, so the line should read differently from a shareholding at a glance.
+      const roleKind = (edge.data as any)?.roleKind;
+      style = (roleKind === 'director' || roleKind === 'both')
+        ? { stroke: 'var(--ink-mid)', strokeWidth: 1.6, strokeDasharray: '5 4', opacity: 0.8 }
+        : { stroke: 'var(--ink-mid)', strokeWidth: 1.6, opacity: 0.85 };
+    } else {
+      const depth = Math.max(src?.data.depth ?? 2, tgt?.data.depth ?? 2);
+      style = depth <= 1
+        ? { stroke: 'var(--ink)', strokeWidth: 2, opacity: 0.85 }
+        : { stroke: 'var(--ink)', strokeWidth: 1.3, opacity: 0.45 };
+    }
+
+    const label = (edge as any).label ?? (edge.data as any)?.label;
+    return {
+      ...rest,
+      className: isCeased ? 'edge-ceased' : undefined,
+      style,
+      label,
+      labelStyle: ELABEL_STYLE,
+      labelBgStyle: ELABEL_BG_STYLE,
+      labelBgPadding: [5, 1] as [number, number],
+      labelBgBorderRadius: 0,
+      markerEnd: INK_ARROW,
+    } as E;
+  });
+
+const nodesToMap = (nodes: GraphNode[]): Map<string, GraphNode> =>
+  new Map(nodes.map((n) => [n.id, n]));
+
+/**
+ * PersistedCompanyTab → live CompanyTab (boot hydration). Only
+ * allNodesInMemory + edges were persisted, so visible nodes are rebuilt via
+ * the same assignDepths → getLayoutedElements → styleEdgesByDepth path a
+ * fresh org-chart load uses (compare tabs additionally re-apply emphasis).
+ * Quota-stubbed tabs ({id,label,nzbn,searchQuery} only) hydrate to an empty
+ * tab the user can re-search.
+ */
+const rehydrateTab = (pt: PersistedCompanyTab): CompanyTab => {
+  const base: CompanyTab = {
+    id: pt.id,
+    label: pt.label,
+    nzbn: pt.nzbn,
+    searchQuery: pt.searchQuery,
+    nodes: [],
+    edges: [],
+    allNodesInMemory: [],
+    isLoading: false,
+    ...(pt.compare ? { compare: pt.compare } : {}),
+  };
+  try {
+    if (!pt.allNodesInMemory?.length) return base;
+    const depthNodes = assignDepths(pt.allNodesInMemory, pt.edges);
+    const nodesById = nodesToMap(depthNodes);
+    // Compare tabs render the whole result; org charts filter to visible.
+    const renderNodes = pt.compare ? depthNodes : depthNodes.filter(n => n.data.isVisible);
+    const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+      renderNodes,
+      pt.edges as any
+    );
+    let liveNodes = layoutedNodes as any[];
+    let liveEdges = styleEdgesByDepth(layoutedEdges as any, nodesById) as any[];
+    if (pt.compare) {
+      const emphasized = applyCompareEmphasis(liveNodes, liveEdges, pt.compare.pathNodeIds, pt.compare.pathEdgeIds);
+      liveNodes = emphasized.nodes as any[];
+      liveEdges = emphasized.edges as any[];
+    }
+    return { ...base, nodes: liveNodes as any, edges: liveEdges as any, allNodesInMemory: depthNodes };
+  } catch (err) {
+    console.warn(`Failed to rehydrate tab "${pt.label}"`, err);
+    return base;
+  }
 };
 
 function App() {
@@ -62,26 +193,22 @@ function App() {
     } else {
       root.classList.remove('dark');
     }
-    // The Sumi app skin switches on [data-theme]; the .dark class still drives
-    // the existing responsive utility markup, so keep both in sync.
-    root.setAttribute('data-theme', theme);
+    root.dataset.theme = theme;
     localStorage.setItem('mitsuketa_theme', theme);
   }, [theme]);
 
   const toggleTheme = () => setTheme(prev => prev === 'dark' ? 'light' : 'dark');
 
-  // App State
-  const [config, setConfig] = useState<ApiConfig>(() => {
+  // App State — user API keys are no longer editable in the UI (settings
+  // removed) but the config plumbing stays: empty keys fall back to org keys
+  // server-side.
+  const [config] = useState<ApiConfig>(() => {
     const saved = localStorage.getItem('mitsuketa_config');
     return saved ? JSON.parse(saved) : DEFAULT_CONFIG;
   });
 
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<EntitySearchResultItem[]>([]);
-  const [searchTotalItems, setSearchTotalItems] = useState<number>(0);
-  const [searchCurrentPage, setSearchCurrentPage] = useState<number>(0);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [showDropdown, setShowDropdown] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isGraphLoading, setIsGraphLoading] = useState(false);
@@ -91,13 +218,11 @@ function App() {
   const [nodes, setNodes, onNodesChange] = useNodesState<GraphNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<GraphEdge>([]);
   const [allNodesInMemory, setAllNodesInMemory] = useState<GraphNode[]>([]); // Full graph stored here
-  const [snapshots, setSnapshots] = useState<GraphSnapshot[]>(() => {
-    const saved = localStorage.getItem('mitsuketa_snapshots');
-    return saved ? JSON.parse(saved) : [];
-  });
+  // Save points (formerly "snapshots"). loadSavePoints runs the one-time
+  // migration copying legacy mitsuketa_snapshots → mitsuketa_savepoints_v1.
+  const [snapshots, setSnapshots] = useState<GraphSnapshot[]>(() => loadSavePoints());
 
   // Diagnostic State
-  const [showInspector, setShowInspector] = useState(false);
   const [debugData, setDebugData] = useState<{
     upstream: any;
     downstream: any;
@@ -108,9 +233,6 @@ function App() {
 
   // Network Console State
   const [apiLogs, setApiLogs] = useState<LogEntry[]>([]);
-  const [includeInactive, setIncludeInactive] = useState(false);
-  const [showInactiveWarning, setShowInactiveWarning] = useState(false);
-  const logsEndRef = useRef<HTMLDivElement>(null);
 
   // Context Menu State
   const [contextMenu, setContextMenu] = useState<{
@@ -120,6 +242,14 @@ function App() {
     nzbn?: string;
     isCapped?: boolean;
     sourceRegisterUniqueId?: string;
+    position: { x: number; y: number };
+  } | null>(null);
+
+  // Note Editor State (Stage B) — opened from the context menu at its position
+  const [noteEditor, setNoteEditor] = useState<{
+    nodeLabel: string;
+    nzbn?: string;
+    noteKey: string; // nzbn ?? personId(label)
     position: { x: number; y: number };
   } | null>(null);
 
@@ -150,35 +280,153 @@ function App() {
   const [disqualifiedMatches, setDisqualifiedMatches] = useState<DisqualifiedDirector[]>([]);
   const [insolvencyMatches, setInsolvencyMatches] = useState<InsolvencyRecord[]>([]);
   const [confirmChartLoad, setConfirmChartLoad] = useState<PersonCompanyResult | null>(null);
+  const [personSearchOpened, setPersonSearchOpened] = useState<string | undefined>(undefined);
+
+  // Case session boot hydration (mitsuketa_session_v1) — read once; the tab /
+  // note state initializers below seed from it. Person (individual) tabs are
+  // never in the session, so they always start empty.
+  const [bootSession] = useState(() => loadSession());
 
   // Tab System State
   const MAX_TABS = 10;
-  const [activeMainTab, setActiveMainTab] = useState<'company' | 'individual'>('company');
-  const [graphTabs, setGraphTabs] = useState<CompanyTab[]>([]);
+  const [activeMainTab, setActiveMainTab] = useState<MainTab>('company');
+  const [graphTabs, setGraphTabs] = useState<CompanyTab[]>(() =>
+    bootSession ? bootSession.companyTabs.map(rehydrateTab) : []
+  );
   const [individualTabs, setIndividualTabs] = useState<IndividualTab[]>([]);
 
-  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [activeCompanyTabId, setActiveCompanyTabId] = useState<string | null>(() => {
+    if (!bootSession || bootSession.companyTabs.length === 0) return null;
+    const ids = bootSession.companyTabs.map(t => t.id);
+    return bootSession.activeCompanyTabId && ids.includes(bootSession.activeCompanyTabId)
+      ? bootSession.activeCompanyTabId
+      : ids[ids.length - 1];
+  });
+  const [activeIndividualTabId, setActiveIndividualTabId] = useState<string | null>(null);
 
-  // Global Keyboard Shortcuts
+  // 地 property tabs — memory only, never persisted. See types.ts PropertyTab
+  // for why: the reports carry restricted personal data and the property
+  // sign-in is deliberately memory-only, so caseStore must not see these.
+  const [propertyTabs, setPropertyTabs] = useState<PropertyTab[]>([]);
+  const [activePropertyTabId, setActivePropertyTabId] = useState<string | null>(null);
+  // Mirror of activeCompanyTabId for async graph loads: when a fetch resolves
+  // after the user has switched tabs, results must go to the tab that started
+  // the load — not clobber the live state of whichever tab is now active.
+  const activeCompanyTabIdRef = useRef<string | null>(null);
+  useEffect(() => { activeCompanyTabIdRef.current = activeCompanyTabId; }, [activeCompanyTabId]);
+
+  // Compare mode state (FindScreen A ↔ B connection search)
+  const [compareProgress, setCompareProgress] = useState<CompareProgress | null>(null);
+  const [compareNoLink, setCompareNoLink] = useState<{ hops: number; examined: number } | null>(null);
+  const compareCancelRef = useRef(false);
+
+  // Search view (full-canvas FindScreen). A fresh session opens on the search
+  // view — it IS the home screen — but a restored session with company tabs
+  // opens straight onto the case.
+  const [searchViewOpen, setSearchViewOpen] = useState(() => graphTabs.length === 0);
+  // Bumped on every open trigger so FindScreen remounts and its input refocuses.
+  const [searchViewNonce, setSearchViewNonce] = useState(0);
+
+  const openSearchView = useCallback(() => {
+    setSearchQuery('');
+    setSearchResults([]);
+    setError(null);
+    setSearchViewOpen(true);
+    setSearchViewNonce(n => n + 1);
+  }, []);
+
+  // Close the search view and return to a real tab, restoring that tab's
+  // content (the search view may have flipped searchMode/activeMainTab, so we
+  // can't just hide it and trust whatever live state is underneath).
+  const closeSearchView = useCallback(() => {
+    const mode: MainTab | null =
+      activeMainTab === 'individual' && individualTabs.length > 0 ? 'individual'
+      : activeMainTab === 'company' && graphTabs.length > 0 ? 'company'
+      : activeMainTab === 'property' && propertyTabs.length > 0 ? 'property'
+      : individualTabs.length > 0 ? 'individual'
+      : graphTabs.length > 0 ? 'company'
+      : propertyTabs.length > 0 ? 'property'
+      : null;
+    if (!mode) return; // nothing to return to — stay on the search home
+
+    setSearchViewOpen(false);
+    setActiveMainTab(mode);
+    if (mode === 'property') {
+      const tab = propertyTabs.find(t => t.id === activePropertyTabId) || propertyTabs[propertyTabs.length - 1];
+      setActivePropertyTabId(tab.id);
+    } else if (mode === 'company') {
+      setSearchMode('company');
+      const tab = graphTabs.find(t => t.id === activeCompanyTabId) || graphTabs[graphTabs.length - 1];
+      setActiveCompanyTabId(tab.id);
+      setSearchQuery(tab.searchQuery);
+      setNodes(tab.nodes);
+      setEdges(tab.edges);
+      setAllNodesInMemory(tab.allNodesInMemory);
+    } else {
+      setSearchMode('person');
+      const tab = individualTabs.find(t => t.id === activeIndividualTabId) || individualTabs[individualTabs.length - 1];
+      setActiveIndividualTabId(tab.id);
+      setPersonSearchResults(tab.personResults);
+      setPersonSearchName(tab.label);
+      setDisqualifiedMatches(tab.disqualifiedMatches);
+      setInsolvencyMatches(tab.insolvencyMatches);
+    }
+  }, [activeMainTab, graphTabs, individualTabs, propertyTabs, activeCompanyTabId,
+      activeIndividualTabId, activePropertyTabId, setNodes, setEdges]);
+
+  // Command palette (Ctrl/Cmd+K)
+  const [paletteOpen, setPaletteOpen] = useState(false);
+
+  // Global keyboard shortcuts: Ctrl/Cmd+K toggles the command palette; Escape
+  // (with an empty query) closes the search view when there's at least one tab
+  // to return to. The palette handles its own Escape and stops propagation.
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Ctrl+K or Cmd+K to focus search
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        searchInputRef.current?.focus();
+        setPaletteOpen(open => !open);
+      } else if (e.key === 'Escape' && !paletteOpen && searchViewOpen && searchQuery === '') {
+        closeSearchView();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-  const [activeCompanyTabId, setActiveCompanyTabId] = useState<string | null>(null);
-  const [activeIndividualTabId, setActiveIndividualTabId] = useState<string | null>(null);
+  }, [closeSearchView, paletteOpen, searchViewOpen, searchQuery]);
 
   // Sidebar State
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(
     () => window.innerWidth < 768
   );
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+  const SIDEBAR_MIN = 284; // rail (64) + minimum panel
+  const SIDEBAR_MAX = 620;
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = Number(localStorage.getItem('mitsuketa_sidebar_width'));
+    return saved >= SIDEBAR_MIN && saved <= SIDEBAR_MAX ? saved : 334;
+  });
+  const [isResizingSidebar, setIsResizingSidebar] = useState(false);
+
+  const startSidebarResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizingSidebar(true);
+    let latest = sidebarWidth;
+    const onMove = (ev: MouseEvent) => {
+      latest = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, ev.clientX));
+      setSidebarWidth(latest);
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      setIsResizingSidebar(false);
+      localStorage.setItem('mitsuketa_sidebar_width', String(latest));
+    };
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
 
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)');
@@ -187,14 +435,32 @@ function App() {
     return () => mq.removeEventListener('change', handler);
   }, []);
 
+  // Case-file trail (timestamped investigation log)
+  const [trail, setTrail] = useState<{ time: string; text: string }[]>([]);
+  const logTrail = useCallback((text: string) => {
+    const time = new Date().toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' });
+    setTrail(prev => [...prev, { time, text }].slice(-50));
+  }, []);
+
+  // Case notes (node annotations). Stage A persists/restores them (session
+  // effect below); Stage B edits them via NoteEditor / the context menu.
+  const [caseNotes, setCaseNotes] = useState<CaseNote[]>(() => bootSession?.notes ?? []);
+
+  // Save-point status diff (Stage C, design/CASES_PLAN.md §Diff). Session-only
+  // — never persisted, never re-run automatically. null = no check has run
+  // yet (Changes section stays hidden); [] = checked, nothing changed.
+  const [nodeDiffs, setNodeDiffs] = useState<NodeDiff[] | null>(null);
+  const [lastCheckedSavePointName, setLastCheckedSavePointName] = useState('');
+  const [isCheckingChanges, setIsCheckingChanges] = useState(false);
+
+  // Intro gate
+  const [showIntro, setShowIntro] = useState(() =>
+    typeof window !== 'undefined' && !sessionStorage.getItem(INTRO_SEEN_KEY)
+  );
+
   const handleLog = useCallback((entry: LogEntry) => {
     setApiLogs(prev => [...prev, entry]);
   }, []);
-
-  // Auto-scroll logs
-  useEffect(() => {
-    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [apiLogs]);
 
   // AUTO-TIDY: Run after graph loads
   useEffect(() => {
@@ -217,62 +483,59 @@ function App() {
     localStorage.setItem('mitsuketa_config', JSON.stringify(config));
   }, [config]);
 
-  // Persist Snapshots (person snapshots are session-only for insolvency register compliance)
+  // Persist Save Points (person save points are session-only for insolvency
+  // register compliance). Writes mitsuketa_savepoints_v1; the legacy
+  // mitsuketa_snapshots key is read-migrated once and never written again.
   useEffect(() => {
     const persistable = snapshots.filter(s => s.searchType !== 'person');
-    localStorage.setItem('mitsuketa_snapshots', JSON.stringify(persistable));
+    saveSavePoints(persistable);
   }, [snapshots]);
 
+  // Persist the case session — the ONE debounced (~1.5s) persist point
+  // (design/CASES_PLAN.md). individualTabs are intentionally NOT a dependency
+  // and never written: person tabs are session-only (compliance — the same
+  // rule as person save points; disqualified/insolvency matches live only on
+  // IndividualTab and so are auto-excluded).
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const result = saveSession(graphTabs, activeCompanyTabId, caseNotes);
+      if (result.droppedTabLabels.length > 0) {
+        logTrail(`Storage full · dropped saved graph for ${result.droppedTabLabels.join(', ')} (re-search to reload)`);
+      }
+    }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [graphTabs, activeCompanyTabId, caseNotes, logTrail]);
+
   // Search Logic (Level 1: Find Entity or Person)
+  const runCompanySearch = async (query: string) => {
+    setIsLoading(true);
+    setError(null);
+    setSearchResults([]);
+    setApiLogs([]); // Clear logs on new search
+    setTrail([]); // Clear investigation trail on new search
+
+    try {
+      const response = await searchEntities(query, config, handleLog, 0);
+      if (response.items.length === 0) {
+        setError("No companies found with that name/NZBN.");
+      } else {
+        setSearchResults(response.items);
+      }
+    } catch (err: any) {
+      setError(err.message || "Search failed.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!searchQuery.trim()) return;
 
     if (searchMode === 'person') {
-      // Person search mode
       await handlePersonSearch(searchQuery.trim());
     } else {
-      // Company search mode
-      setIsLoading(true);
-      setError(null);
-      setSearchResults([]);
-      setSearchTotalItems(0);
-      setSearchCurrentPage(0);
-      setShowDropdown(false);
-      setApiLogs([]); // Clear logs on new search
-
-      try {
-        const response = await searchEntities(searchQuery, config, handleLog, 0);
-        if (response.items.length === 0) {
-          setError("No companies found with that name/NZBN.");
-        } else {
-          setSearchResults(response.items);
-          setSearchTotalItems(response.totalItems);
-          setSearchCurrentPage(response.page);
-          setShowDropdown(true);
-        }
-      } catch (err: any) {
-        setError(err.message || "Search failed.");
-      } finally {
-        setIsLoading(false);
-      }
-    }
-  };
-
-  const handleLoadMore = async () => {
-    if (isLoadingMore) return;
-    setIsLoadingMore(true);
-    try {
-      const nextPage = searchCurrentPage + 1;
-      const response = await searchEntities(searchQuery, config, handleLog, nextPage);
-      if (response.items.length > 0) {
-        setSearchResults(prev => [...prev, ...response.items]);
-        setSearchCurrentPage(nextPage);
-      }
-    } catch (err: any) {
-      setError(err.message || "Failed to load more results.");
-    } finally {
-      setIsLoadingMore(false);
+      await runCompanySearch(searchQuery);
     }
   };
 
@@ -284,6 +547,7 @@ function App() {
     setDisqualifiedMatches([]); // Reset
     setInsolvencyMatches([]); // Reset
     setApiLogs([]);
+    setTrail([]);
 
     try {
       console.log(`🔍 Searching for person: "${personName}"`);
@@ -319,31 +583,26 @@ function App() {
       ) {
         setError(`No directorship, shareholding, disqualification, or insolvency records found for "${personName}".`);
       } else {
-        // Await NZBN enrichment for company statuses before updating UI
-        let finalPersonResults = personResults;
-        if (personResults.length > 0) {
-          try {
-            finalPersonResults = await enrichCompanyResults(personResults, config, handleLog);
-            console.log(`✅ Enrichment complete for "${personName}"`);
-          } catch (err) {
-            console.warn('Enrichment failed:', err);
-          }
-        }
-
-        setPersonSearchResults(finalPersonResults);
+        // Show results immediately; NZBN status enrichment (insolvency/admin flags)
+        // runs in the background and patches in below.
+        setPersonSearchResults(personResults);
         setPersonSearchName(personName);
+        setPersonSearchOpened(new Date().toLocaleTimeString('en-NZ', { hour: 'numeric', minute: '2-digit' }));
+        logTrail(`Searched "${personName}" · ${personResults.length} ${personResults.length === 1 ? 'company' : 'companies'}`);
 
         if (disqualifiedResults.roles && disqualifiedResults.roles.length > 0) {
           console.log(`⚠️ Found ${disqualifiedResults.roles.length} disqualified director matches!`);
           setDisqualifiedMatches(disqualifiedResults.roles);
+          logTrail(`Disqualified director match · ${disqualifiedResults.roles.length} ${disqualifiedResults.roles.length === 1 ? 'record' : 'records'}`);
         }
 
         if (insolvencyResults.searchResults && insolvencyResults.searchResults.length > 0) {
           console.log(`⚠️ Found ${insolvencyResults.searchResults.length} insolvency record(s)!`);
           setInsolvencyMatches(insolvencyResults.searchResults);
+          logTrail(`Insolvency match · ${insolvencyResults.searchResults.length} ${insolvencyResults.searchResults.length === 1 ? 'record' : 'records'}`);
         }
 
-        console.log(`✅ Found ${finalPersonResults.length} companies for "${personName}"`);
+        console.log(`✅ Found ${personResults.length} companies for "${personName}"`);
 
         // Create a new Individual tab
         const tabId = `ind-${Date.now()}`;
@@ -351,10 +610,10 @@ function App() {
           id: tabId,
           label: personName,
           searchQuery: personName,
-          personResults: finalPersonResults,
+          personResults,
           disqualifiedMatches: disqualifiedResults.roles || [],
           insolvencyMatches: insolvencyResults.searchResults || [],
-          isEnriching: false
+          isEnriching: personResults.length > 0
         };
 
         setIndividualTabs(prev => {
@@ -363,6 +622,28 @@ function App() {
         });
         setActiveIndividualTabId(tabId);
         setActiveMainTab('individual');
+        setSearchViewOpen(false); // the transient search chip is replaced by the real tab
+
+        // Background NZBN status enrichment — patches insolvency/admin flags into the
+        // already-visible results instead of blocking the whole screen on ~2 API calls
+        // per company.
+        if (personResults.length > 0) {
+          enrichCompanyResults(personResults, config, handleLog)
+            .then(enriched => {
+              console.log(`✅ Enrichment complete for "${personName}"`);
+              // Only replace the visible results if this search is still the one on screen
+              setPersonSearchResults(prev => (prev === personResults ? enriched : prev));
+              setIndividualTabs(prev => prev.map(t =>
+                t.id === tabId ? { ...t, personResults: enriched, isEnriching: false } : t
+              ));
+            })
+            .catch(err => {
+              console.warn('Enrichment failed:', err);
+              setIndividualTabs(prev => prev.map(t =>
+                t.id === tabId ? { ...t, isEnriching: false } : t
+              ));
+            });
+        }
       }
     } catch (err: any) {
       setError(err.message || "Person search failed.");
@@ -422,33 +703,201 @@ function App() {
       return updated;
     });
     setActiveCompanyTabId(tabId);
+    setSearchViewOpen(false); // the transient search chip is replaced by the real tab
+
+    // Clear the live graph as we switch to the new (still-empty) tab. Without
+    // this, the save-back effect (keyed on activeCompanyTabId) fires on the very
+    // next commit — active is now the NEW tab but `nodes` still hold the PREVIOUS
+    // tab's graph — and stamps the previous entity's chart onto the new tab.
+    // handleSelectEntity repopulates these once the fetch resolves.
+    setNodes([]);
+    setEdges([]);
+    setAllNodesInMemory([]);
 
     // Delegate to existing entity select logic which will populate the graph
-    await handleSelectEntity(entity);
-
-    // After loading, update the tab with the graph data
-    // (This will be done via the existing setNodes/setEdges which we read in render)
+    // (forTabId ensures late-arriving results land in THIS tab even if the
+    // user switches to another tab while the chart is still loading).
+    await handleSelectEntity(entity, tabId);
   };
 
-  const handleMainTabChange = (tab: 'company' | 'individual') => {
+  // Compare (A ↔ B): bidirectional BFS over the registers, then open the
+  // result as a Company tab labeled "A ↔ B" with the path at full ink and
+  // context dimmed. No link found → stay on FindScreen (no tab opened).
+  const handleCompare = async (a: CompareEndpoint, b: CompareEndpoint, maxHops: number = 4) => {
+    setCompareNoLink(null);
+    setError(null);
+    compareCancelRef.current = false;
+    setCompareProgress({ hop: 1, entitiesExamined: 0, apiCalls: 0 });
+
+    try {
+      const result = await findConnection(a, b, { ...config, includeInactive: true }, {
+        maxHops,
+        onProgress: setCompareProgress,
+        onLog: handleLog,
+        shouldCancel: () => compareCancelRef.current,
+      });
+
+      const compareLabel = `${a.name} ↔ ${b.name}`;
+
+      if (compareCancelRef.current) {
+        logTrail(`Compare stopped · ${compareLabel}`);
+        return;
+      }
+
+      if (!result.found) {
+        setCompareNoLink({ hops: maxHops, examined: result.stats.entitiesExamined });
+        logTrail(`No connection · ${compareLabel} · within ${maxHops} hops`);
+        return;
+      }
+
+      // Same pipeline as an org-chart load: depths → layout → edge styling,
+      // then the compare emphasis post-pass (compose, don't replace).
+      const depthNodes = assignDepths(result.nodes, result.edges);
+      const nodesById = nodesToMap(depthNodes);
+      const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
+        depthNodes as any,
+        result.edges as any
+      );
+      const styledEdges = styleEdgesByDepth(layoutedEdges, nodesById);
+      const { nodes: emphasizedNodes, edges: emphasizedEdges } = applyCompareEmphasis(
+        layoutedNodes as any[],
+        styledEdges as any[],
+        result.pathNodeIds,
+        result.pathEdgeIds
+      );
+
+      const tabId = `comp-${Date.now()}`;
+      const newTab: CompanyTab = {
+        id: tabId,
+        label: compareLabel,
+        nzbn: a.kind === 'company' ? a.nzbn : b.kind === 'company' ? b.nzbn : '',
+        searchQuery: compareLabel,
+        nodes: emphasizedNodes as any,
+        edges: emphasizedEdges as any,
+        allNodesInMemory: depthNodes,
+        isLoading: false,
+        compare: {
+          aLabel: a.name,
+          bLabel: b.name,
+          hops: result.hops,
+          pathNodeIds: result.pathNodeIds,
+          pathEdgeIds: result.pathEdgeIds,
+        },
+      };
+
+      setGraphTabs(prev => (prev.length >= MAX_TABS ? [...prev.slice(1), newTab] : [...prev, newTab]));
+      setActiveCompanyTabId(tabId);
+      setActiveMainTab('company');
+      setSearchMode('company');
+      setSearchViewOpen(false);
+      setNodes(emphasizedNodes as any);
+      setEdges(emphasizedEdges as any);
+      setAllNodesInMemory(depthNodes);
+
+      logTrail(`Connection found · ${compareLabel} · ${result.hops} ${result.hops === 1 ? 'hop' : 'hops'}`);
+    } catch (err: any) {
+      setError(err.message || 'Compare failed.');
+    } finally {
+      setCompareProgress(null);
+    }
+  };
+
+  const handleCompareCancel = () => {
+    compareCancelRef.current = true;
+  };
+
+  // Company suggestions for the Compare slot inputs (selecting locks {nzbn,name})
+  const fetchCompareSuggestions = useCallback(async (q: string): Promise<EntitySearchResultItem[]> => {
+    try {
+      const response = await searchEntities(q, config, handleLog, 0);
+      return response.items;
+    } catch {
+      return [];
+    }
+  }, [config, handleLog]);
+
+  const handleMainTabChange = (tab: MainTab) => {
     setActiveMainTab(tab);
-    if (tab === 'individual' && activeIndividualTabId) {
-      // Restore the active individual tab's data
+
+    // BUG 1 — while the search view is open, the main-tab buttons are just the
+    // other face of FindScreen's Companies/People/Property mode line. Don't
+    // switch tab content; only flip the search mode so both controls stay one
+    // fact. (FindScreen's own mode line mirrors this by setting activeMainTab.)
+    if (searchViewOpen) {
+      if (tab !== 'property') {
+        setSearchMode(tab === 'individual' ? 'person' : 'company');
+        setSearchResults([]);
+        setError(null);
+      }
+      return;
+    }
+
+    if (tab === 'property') {
+      // No open report to return to — land on the property face of the search.
+      if (propertyTabs.length === 0) openSearchView();
+      return;
+    }
+
+    // Not searching: this is a real tab switch — restore the active tab's saved
+    // state so its chart / person results, case file and exports all come back.
+    // If the target mode has no tab to show, fall back to the search home.
+    if (tab === 'individual') {
+      setSearchMode('person');
       const activeTab = individualTabs.find(t => t.id === activeIndividualTabId);
       if (activeTab) {
         setPersonSearchResults(activeTab.personResults);
         setPersonSearchName(activeTab.label);
         setDisqualifiedMatches(activeTab.disqualifiedMatches);
         setInsolvencyMatches(activeTab.insolvencyMatches);
-        setSearchMode('person');
+      } else if (individualTabs.length === 0) {
+        openSearchView();
       }
-    } else if (tab === 'company') {
+    } else {
       setSearchMode('company');
+      // Restore the active company tab's graph. Previously this branch only set
+      // searchMode and leaned on whatever was still in the live `nodes` — so if
+      // those had been cleared (e.g. after viewing a person tab / snapshot) the
+      // graph, case file and exports vanished even though the tab still held data.
+      const activeTab = graphTabs.find(t => t.id === activeCompanyTabId);
+      if (activeTab) {
+        setSearchQuery(activeTab.searchQuery);
+        setNodes(activeTab.nodes);
+        setEdges(activeTab.edges);
+        setAllNodesInMemory(activeTab.allNodesInMemory);
+      } else if (graphTabs.length === 0) {
+        openSearchView();
+      }
     }
   };
 
+  /**
+   * A title report opens as its own tab, exactly like a chart or a person
+   * result: it gets a chip, it survives switching to Company or Individual, and
+   * it can be exported. Re-opening a title already open just focuses that tab
+   * rather than stacking duplicates.
+   */
+  const handleOpenPropertyReport = (report: PropertyTitleReport, titleNo: string) => {
+    const existing = propertyTabs.find(t => t.titleNo === titleNo);
+    if (existing) {
+      setPropertyTabs(prev => prev.map(t => (t.id === existing.id ? { ...t, report } : t)));
+      setActivePropertyTabId(existing.id);
+    } else {
+      const id = `property-${titleNo}-${Date.now()}`;
+      setPropertyTabs(prev => [...prev, { id, label: titleNo, titleNo, report }].slice(-MAX_TABS));
+      setActivePropertyTabId(id);
+    }
+    setActiveMainTab('property');
+    setSearchViewOpen(false);
+  };
+
   const handleSubTabClick = (tabId: string) => {
+    setSearchViewOpen(false); // clicking a real tab closes the search view
+    if (activeMainTab === 'property') {
+      setActivePropertyTabId(tabId);
+      return;
+    }
     if (activeMainTab === 'company') {
+      setSearchMode('company'); // keep search mode in step with the tab we land on
       setActiveCompanyTabId(tabId);
       const tab = graphTabs.find(t => t.id === tabId);
       if (tab) {
@@ -459,6 +908,7 @@ function App() {
         setAllNodesInMemory(tab.allNodesInMemory);
       }
     } else {
+      setSearchMode('person');
       setActiveIndividualTabId(tabId);
       const tab = individualTabs.find(t => t.id === tabId);
       if (tab) {
@@ -470,7 +920,115 @@ function App() {
     }
   };
 
+  // Boot restore: after a session hydration, push the active company tab onto
+  // the canvas exactly the way a tab click does (same path as
+  // handleSubTabClick), once, on mount. activeMainTab starts as 'company' so
+  // the company branch is taken.
+  const bootRestoredRef = useRef(false);
+  useEffect(() => {
+    if (bootRestoredRef.current) return;
+    bootRestoredRef.current = true;
+    if (activeCompanyTabId && graphTabs.some(t => t.id === activeCompanyTabId)) {
+      handleSubTabClick(activeCompanyTabId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Command palette: jump to any tab regardless of the current main tab
+  // (handleSubTabClick only reaches tabs in the active mode).
+  const jumpToTab = (kind: MainTab, tabId: string) => {
+    setSearchViewOpen(false);
+    setActiveMainTab(kind);
+    if (kind === 'property') {
+      setActivePropertyTabId(tabId);
+      return;
+    }
+    if (kind === 'company') {
+      setSearchMode('company');
+      setActiveCompanyTabId(tabId);
+      const tab = graphTabs.find(t => t.id === tabId);
+      if (tab) {
+        setSearchQuery(tab.searchQuery);
+        setNodes(tab.nodes);
+        setEdges(tab.edges);
+        setAllNodesInMemory(tab.allNodesInMemory);
+      }
+    } else {
+      setSearchMode('person');
+      setActiveIndividualTabId(tabId);
+      const tab = individualTabs.find(t => t.id === tabId);
+      if (tab) {
+        setPersonSearchResults(tab.personResults);
+        setPersonSearchName(tab.label);
+        setDisqualifiedMatches(tab.disqualifiedMatches);
+        setInsolvencyMatches(tab.insolvencyMatches);
+      }
+    }
+  };
+
+  // Command palette: re-run a recent search on the Find screen.
+  const runRecentSearch = (r: RecentSearch) => {
+    openSearchView();
+    setSearchQuery(r.q);
+    setSearchMode(r.mode);
+    setActiveMainTab(r.mode === 'person' ? 'individual' : 'company');
+    if (r.mode === 'person') void handlePersonSearch(r.q);
+    else void runCompanySearch(r.q);
+  };
+
+  // Built fresh each time the palette opens (recents come from localStorage).
+  const buildPaletteCommands = (): PaletteCommand[] => [
+    ...graphTabs.map<PaletteCommand>(t => ({
+      id: `tab-${t.id}`,
+      group: 'Open tabs',
+      label: t.label,
+      hint: t.nzbn,
+      run: () => jumpToTab('company', t.id),
+    })),
+    ...individualTabs.map<PaletteCommand>(t => ({
+      id: `tab-${t.id}`,
+      group: 'Open tabs',
+      label: t.label,
+      hint: 'Individual',
+      run: () => jumpToTab('individual', t.id),
+    })),
+    ...loadRecentSearches().map<PaletteCommand>((r, i) => ({
+      id: `recent-${i}`,
+      group: 'Recent searches',
+      label: r.q,
+      hint: r.mode === 'person' ? 'People' : 'Companies',
+      run: () => runRecentSearch(r),
+    })),
+    {
+      id: 'action-theme',
+      group: 'Actions',
+      label: 'Toggle theme',
+      hint: theme === 'dark' ? 'To light' : 'To dark',
+      run: toggleTheme,
+    },
+    {
+      id: 'action-find',
+      group: 'Actions',
+      label: 'Go to Find screen',
+      run: openSearchView,
+    },
+  ];
+
   const handleSubTabClose = (tabId: string) => {
+    if (activeMainTab === 'property') {
+      setPropertyTabs(prev => {
+        const updated = prev.filter(t => t.id !== tabId);
+        if (activePropertyTabId === tabId) {
+          const newActive = updated.length > 0 ? updated[updated.length - 1].id : null;
+          setActivePropertyTabId(newActive);
+          // No report left to show — back to the search home, which reopens on
+          // the property face because the session is still unlocked.
+          if (!newActive) openSearchView();
+        }
+        return updated;
+      });
+      return;
+    }
     if (activeMainTab === 'company') {
       setGraphTabs(prev => {
         const updated = prev.filter(t => t.id !== tabId);
@@ -487,6 +1045,7 @@ function App() {
           } else {
             setNodes([]);
             setEdges([]);
+            openSearchView(); // no company tab left to show — back to the search home
           }
         }
         return updated;
@@ -510,6 +1069,7 @@ function App() {
             setPersonSearchName('');
             setDisqualifiedMatches([]);
             setInsolvencyMatches([]);
+            openSearchView(); // no individual tab left to show — back to the search home
           }
         }
         return updated;
@@ -529,20 +1089,21 @@ function App() {
   }, [nodes, edges, allNodesInMemory, activeCompanyTabId]);
 
   // Selection Logic (Level 2: Build Graph)
-  const handleSelectEntity = async (entity: EntitySearchResultItem) => {
-    setShowDropdown(false);
+  // forTabId: the company tab this load belongs to. If the user switches away
+  // before the fetch resolves, results are stamped into that tab's stored
+  // entry instead of the live canvas (which by then shows a different tab).
+  const handleSelectEntity = async (entity: EntitySearchResultItem, forTabId?: string) => {
     setSearchQuery(entity.entityName);
     setIsGraphLoading(true);
     setError(null);
     hasAutoTidiedRef.current = false; // Reset for new graph
     setDebugData({ upstream: null, downstream: null, audit: null });
-    setShowInspector(true); // Auto-open inspector on load for better UX given the requirement
 
     try {
       // Pass debug callback and logger
       const graph = await generateOrgChart(
         entity.nzbn,
-        { ...config, includeInactive },
+        { ...config, includeInactive: true },
         (type, data, message) => {
           setDebugData(prev => {
             if (type === 'audit') {
@@ -581,133 +1142,136 @@ function App() {
         );
 
         // Enrich nodes with insolvency/admin status BEFORE rendering
-        // so all badges (PREV: IN LIQUIDATION, external admin, Removed, etc.) appear instantly
-        console.log('🔍 Enriching nodes with NZBN status data before render...');
-        const enrichedNodes = await enrichGraphNodes(processedNodes, { ...config, includeInactive }, handleLog);
+        // so all badges (PREV: IN LIQUIDATION, external admin, Removed, etc.) appear instantly.
+        // Company and person enrichment run in parallel — they touch disjoint node
+        // types, and person checks are already deduplicated to one call per unique
+        // individual by the graph itself (personId gives every person exactly one
+        // node, however many companies they appear on — design/HANDOVER.md §4.1).
+        console.log('🔍 Enriching nodes with NZBN status + register-check data before render...');
+        const [companyEnriched, personEnriched] = await Promise.all([
+          enrichGraphNodes(processedNodes, { ...config, includeInactive: true }, handleLog),
+          enrichPersonNodes(processedNodes, config, handleLog),
+        ]);
+        const enrichedNodes = processedNodes.map((n, i) =>
+          n.data.type === 'company' ? companyEnriched[i] : n.data.type === 'person' ? personEnriched[i] : n
+        );
         console.log('✅ Enrichment complete, rendering graph with full status data');
 
-        // Store ALL enriched nodes in memory
-        setAllNodesInMemory(enrichedNodes);
+        // Assign ink-depth (undirected BFS from target) before layout so edges + nodes tier
+        const depthNodes = assignDepths(enrichedNodes, graph.edges);
+        const nodesById = nodesToMap(depthNodes);
 
         // Filter to show only visible nodes
-        const visibleNodes = enrichedNodes.filter(n => n.data.isVisible);
+        const visibleNodes = depthNodes.filter(n => n.data.isVisible);
         console.log('👁️ VISIBLE NODES:', visibleNodes.map(n => n.data.label));
 
         const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
           visibleNodes,
           graph.edges
         );
-        setNodes(layoutedNodes);
-        setEdges(layoutedEdges);
+        const styledEdges = styleEdgesByDepth(layoutedEdges, nodesById);
 
-        // AUTO-TIDY: Optimize layout after one paint frame
-        console.log('🎨 Auto-Tidy: Scheduling automatic layout optimization...');
-        requestAnimationFrame(() => {
-          console.log('🎨 Auto-Tidy: Running now...');
-          const optimized = tidyUpLayout(layoutedNodes, layoutedEdges);
-          setNodes(optimized.nodes);
-          setEdges(optimized.edges);
-          console.log('✨ Auto-Tidy: Complete!');
-        });
+        if (forTabId && activeCompanyTabIdRef.current !== forTabId) {
+          // The user switched to another tab (or mode) while this chart was
+          // loading. Writing into live state here would clobber whatever they
+          // are now looking at AND get save-back-stamped into the wrong tab's
+          // entry — stamp the originating tab's stored entry directly instead.
+          setGraphTabs(prev => prev.map(t =>
+            t.id === forTabId
+              ? { ...t, nodes: layoutedNodes as any, edges: styledEdges as any, allNodesInMemory: depthNodes, isLoading: false }
+              : t
+          ));
+        } else {
+          // Store ALL enriched nodes in memory
+          setAllNodesInMemory(depthNodes);
+          setNodes(layoutedNodes);
+          setEdges(styledEdges);
+
+          // AUTO-TIDY: Optimize layout after one paint frame
+          console.log('🎨 Auto-Tidy: Scheduling automatic layout optimization...');
+          requestAnimationFrame(() => {
+            console.log('🎨 Auto-Tidy: Running now...');
+            const optimized = tidyUpLayout(layoutedNodes, layoutedEdges);
+            setNodes(optimized.nodes);
+            setEdges(styleEdgesByDepth(optimized.edges, nodesById));
+            console.log('✨ Auto-Tidy: Complete!');
+          });
+        }
+
+        // Trail: graph mapped + flag count
+        const mapName = depthNodes.find(n => n.data.isTarget)?.data.label || entity.entityName;
+        logTrail(`Mapped ${mapName} · ${visibleNodes.length} entities`);
+        const flagCount = depthNodes.filter(n =>
+          n.data.isInExternalAdmin || n.data.hasHistoricInsolvency || n.data.removalCommenced
+        ).length;
+        if (flagCount > 0) logTrail(`Flags · ${flagCount} ${flagCount === 1 ? 'entity' : 'entities'}`);
       }
     } catch (err: any) {
       setError(err.message || "Failed to fetch corporate map.");
     } finally {
       setIsGraphLoading(false);
+      // Stop the tab's loading pulse even when the load failed or came back
+      // empty (the save-back effect only clears it on a successful stamp).
+      if (forTabId) {
+        setGraphTabs(prev => prev.map(t =>
+          t.id === forTabId && t.isLoading ? { ...t, isLoading: false } : t
+        ));
+      }
     }
   };
 
   const deleteSnapshot = (snapshotId: string, e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent loading the snapshot
-    if (confirm('Delete this snapshot?')) {
+    if (confirm('Delete this save point?')) {
       const updated = snapshots.filter(s => s.id !== snapshotId);
       setSnapshots(updated); // useEffect handles localStorage persistence
     }
   };
 
-  const exportAsPNG = async () => {
-    let element: HTMLElement | null = null;
-    let filename = 'mitsuketa';
 
-    if (searchMode === 'person' && personSearchResults.length > 0) {
-      element = document.getElementById('person-search-results');
-      filename = `person-results-${personSearchName.replace(/[^a-z0-9]/gi, '_')}`;
-    } else if (nodes.length > 0) {
-      element = document.querySelector('.react-flow') as HTMLElement;
-      filename = `mitsuketa-${new Date().toISOString().split('T')[0]}`;
-    }
+  const [isExportingHtml, setIsExportingHtml] = useState(false);
 
-    if (!element) return;
+  const activePropertyTab = propertyTabs.find(t => t.id === activePropertyTabId) ?? null;
 
+  /** The report downloads unfiltered — a filtered record is a misleading one. */
+  const exportPropertyReport = async (tab: PropertyTab) => {
+    setIsExportingHtml(true);
     try {
-      const { toPng } = await import('html-to-image');
-      const dataUrl = await toPng(element, {
-        backgroundColor: theme === 'dark' ? 'oklch(0.185 0.008 75)' : 'oklch(0.952 0.007 85)',
-        quality: 1.0,
-      });
-
-      const link = document.createElement('a');
-      link.download = `${filename}.png`;
-      link.href = dataUrl;
-      link.click();
+      await downloadTitleReportHtml(tab.report as PropertyTitleReport);
     } catch (err) {
-      console.error('Failed to export PNG:', err);
-      setError('Failed to export as PNG');
+      console.error('Failed to export title report:', err);
+      setError('Failed to export the title report');
+    } finally {
+      setIsExportingHtml(false);
     }
   };
 
-  const exportAsPDF = async () => {
-    let element: HTMLElement | null = null;
-
-    if (searchMode === 'person' && personSearchResults.length > 0) {
-      element = document.getElementById('person-search-results');
-    } else if (nodes.length > 0) {
-      element = document.querySelector('.react-flow') as HTMLElement;
-    }
-
-    if (!element) return;
-
+  const exportAsHtml = async () => {
+    setIsExportingHtml(true);
     try {
-      const { toPng } = await import('html-to-image');
-      const dataUrl = await toPng(element, {
-        backgroundColor: theme === 'dark' ? 'oklch(0.185 0.008 75)' : 'oklch(0.952 0.007 85)',
-        quality: 1.0,
-      });
-
-      const pdfWindow = window.open('', '_blank');
-      if (pdfWindow) {
-        pdfWindow.document.write(`
-          <html>
-            <head>
-              <title>Mitsuketa PDF Export</title>
-              <style>
-                body { margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #fff; }
-                img { max-width: 100%; max-height: 100%; object-fit: contain; }
-                @media print {
-                  body { height: auto; display: block; }
-                  img { max-width: 100%; height: auto; }
-                }
-              </style>
-            </head>
-            <body>
-              <img src="${dataUrl}" />
-              <script>
-                // Wait for image to load then print
-                window.onload = function() { 
-                  setTimeout(() => {
-                    window.print(); 
-                    // Optional: window.close() after print, but some browsers block it.
-                  }, 500);
-                }
-              </script>
-            </body>
-          </html>
-        `);
-        pdfWindow.document.close();
+      if (activeMainTab === 'individual' && personSearchResults.length > 0) {
+        await downloadPersonReportHtml({
+          personName: personSearchName,
+          results: personSearchResults,
+          disqualified: disqualifiedMatches,
+          insolvency: insolvencyMatches,
+        });
+      } else if (allNodesInMemory.length > 0) {
+        const target = allNodesInMemory.find(n => n.data.isTarget) || allNodesInMemory[0];
+        await downloadInteractiveGraphHtml({
+          title: target.data.entityName || target.data.label,
+          nzbn: target.data.nzbn,
+          searchQuery,
+          nodes: allNodesInMemory,
+          edges: edges as unknown as GraphEdge[],
+          notes: caseNotes.filter((n) => n.tabId === activeCompanyTabId),
+        });
       }
     } catch (err) {
-      console.error('Failed to export PDF:', err);
-      setError('Failed to export as PDF');
+      console.error('Failed to export HTML:', err);
+      setError('Failed to export as HTML');
+    } finally {
+      setIsExportingHtml(false);
     }
   };
 
@@ -716,7 +1280,7 @@ function App() {
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.download = `snapshot-${snap.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json`;
+    link.download = `save-point-${snap.name.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.json`;
     link.href = url;
     link.click();
     URL.revokeObjectURL(url);
@@ -728,18 +1292,13 @@ function App() {
     const blob = new Blob([json], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.download = `mitsuketa-all-snapshots-${new Date().toISOString().split('T')[0]}.json`;
+    link.download = `mitsuketa-all-save-points-${new Date().toISOString().split('T')[0]}.json`;
     link.href = url;
     link.click();
     URL.revokeObjectURL(url);
   };
 
-  const importSnapshotRef = useRef<HTMLInputElement>(null);
-
-  const triggerImportSnapshot = () => {
-    importSnapshotRef.current?.click();
-  };
-
+  // (The file-input ref for importing lives inside CasePanel now.)
   const handleImportSnapshot = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -752,7 +1311,7 @@ function App() {
 
         // Simple verification
         if (!parsed.id || (!parsed.nodes && !parsed.personResults)) {
-          setError("Invalid snapshot format");
+          setError("Invalid save point format");
           return;
         }
 
@@ -769,22 +1328,12 @@ function App() {
 
       } catch (err) {
         console.error("Import failed", err);
-        setError("Failed to import snapshot");
+        setError("Failed to import save point");
       }
     };
     reader.readAsText(file);
     // Reset inputs
     event.target.value = '';
-  };
-
-  const clearSearch = () => {
-    setSearchQuery('');
-    setSearchResults([]);
-    setSearchTotalItems(0);
-    setSearchCurrentPage(0);
-    setShowDropdown(false);
-    setError(null);
-    setApiLogs([]);
   };
 
   const handleNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
@@ -806,6 +1355,76 @@ function App() {
     setNodes((nds) => nds.map((n) => ({ ...n, data: { ...n.data, isHighlighted: false } })));
   }, [setNodes]);
 
+  // ── Case notes (Stage B) ────────────────────────────────────────────────
+  // One note per node identity: key = nzbn ?? personId(label). "Add note" on
+  // an already-annotated node opens the existing note for editing.
+
+  const openNoteEditor = (_nodeId: string, nodeLabel: string, nzbn?: string) => {
+    const position = contextMenu?.position ?? { x: window.innerWidth / 2 - 140, y: window.innerHeight / 3 };
+    setContextMenu(null); // the editor takes over the menu's position
+    setNoteEditor({ nodeLabel, nzbn, noteKey: nzbn || personId(nodeLabel), position });
+  };
+
+  const editorNote = noteEditor ? caseNotes.find(n => n.key === noteEditor.noteKey) : undefined;
+
+  const handleSaveNote = (text: string, flag: boolean) => {
+    if (!noteEditor) return;
+    const { noteKey, nodeLabel, nzbn } = noteEditor;
+    setNoteEditor(null);
+    if (text.length === 0) {
+      // Clearing the text and saving deletes the note.
+      if (editorNote) {
+        setCaseNotes(prev => prev.filter(n => n.key !== noteKey));
+        logTrail(`Note deleted · ${nodeLabel}`);
+      }
+      return;
+    }
+    if (editorNote) {
+      setCaseNotes(prev => prev.map(n => (n.key === noteKey ? { ...n, text, flag } : n)));
+      logTrail(`Note updated · ${nodeLabel}`);
+    } else {
+      const note: CaseNote = {
+        id: Date.now().toString(),
+        key: noteKey,
+        tabId: activeCompanyTabId ?? '',
+        nodeLabel,
+        text,
+        flag,
+        createdAt: Date.now(),
+      };
+      setCaseNotes(prev => [...prev, note]);
+      logTrail(`Note added · ${nodeLabel}${nzbn ? ` (${nzbn})` : ''}`);
+    }
+  };
+
+  const handleDeleteNoteFromEditor = () => {
+    if (!noteEditor) return;
+    const { noteKey, nodeLabel } = noteEditor;
+    setNoteEditor(null);
+    setCaseNotes(prev => prev.filter(n => n.key !== noteKey));
+    logTrail(`Note deleted · ${nodeLabel}`);
+  };
+
+  const handleDeleteNote = (noteId: string) => {
+    const note = caseNotes.find(n => n.id === noteId);
+    setCaseNotes(prev => prev.filter(n => n.id !== noteId));
+    if (note) logTrail(`Note deleted · ${note.nodeLabel}`);
+  };
+
+  // Sidebar note row click: jump to the note's tab, then highlight the node
+  // by key — the same label/nzbn highlight mechanic as handleNodeClick.
+  const handleJumpToNote = (note: CaseNote) => {
+    if (graphTabs.some(t => t.id === note.tabId)) {
+      jumpToTab('company', note.tabId);
+    }
+    setNodes(nds =>
+      nds.map(n => ({
+        ...n,
+        data: { ...n.data, isHighlighted: (n.data.nzbn || personId(n.data.label)) === note.key },
+      }))
+    );
+  };
+
   const takeSnapshot = () => {
     if (searchMode === 'person') {
       if (personSearchResults.length === 0) return;
@@ -820,8 +1439,16 @@ function App() {
         personResults: personSearchResults
       };
       setSnapshots([snap, ...snapshots]);
+      logTrail(`Save point saved · "${snap.name}"`);
     } else {
       if (nodes.length === 0) return;
+      // Copy notes whose key matches a node in the saved graph — the save
+      // point carries its annotations (design/CASES_PLAN.md §Notes).
+      const graphKeys = new Set(nodes.map(n => {
+        const data = n.data as unknown as NodeData;
+        return data.nzbn || personId(data.label);
+      }));
+      const matchedNotes = caseNotes.filter(cn => graphKeys.has(cn.key));
       const snap: GraphSnapshot = {
         id: Date.now().toString(),
         name: `Graph: ${nodes[0].data.label} (${new Date().toLocaleTimeString()})`,
@@ -829,26 +1456,103 @@ function App() {
         searchType: 'company',
         searchQuery: nodes[0].data.label,
         nodes,
-        edges
+        edges,
+        ...(matchedNotes.length > 0 ? { notes: matchedNotes } : {})
       };
       setSnapshots([snap, ...snapshots]);
+      logTrail(`Save point saved · "${snap.name}"`);
     }
   };
 
   const loadSnapshot = (snap: GraphSnapshot) => {
     if (snap.searchType === 'person') {
       setSearchMode('person');
+      setActiveMainTab('individual');
       setPersonSearchResults(snap.personResults || []);
       setPersonSearchName(snap.searchQuery || '');
       setNodes([]);
       setEdges([]);
+      setAllNodesInMemory([]);
+      logTrail(`Save point loaded · "${snap.name}"`);
     } else {
       setSearchMode('company');
+      setActiveMainTab('company');
       setPersonSearchResults([]);
       setPersonSearchName('');
-      setNodes(snap.nodes);
-      setEdges(snap.edges);
+      // Re-assign ink-depth so restored graphs tier correctly
+      const depthNodes = assignDepths(snap.nodes, snap.edges);
+      const nodesById = nodesToMap(depthNodes);
+      setAllNodesInMemory(depthNodes);
+      setNodes(depthNodes);
+      setEdges(styleEdgesByDepth(snap.edges as unknown as Edge[], nodesById));
+      logTrail(`Save point loaded · "${snap.name}"`);
     }
+    setSearchViewOpen(false); // reveal the restored content on the canvas
+  };
+
+  // "Check for changes" on a save-point row (Stage C, design/CASES_PLAN.md
+  // §Diff). Explicit button only — never automatic. Loads the save point
+  // (existing loadSnapshot path), re-enriches a clone of its saved nodes
+  // (1 cached NZBN call per company node), diffs against the saved statuses,
+  // then stamps data.diff on the changed nodes before they render. Diff
+  // results are session-only state — never written into the save point.
+  const handleCheckChanges = async (snap: GraphSnapshot) => {
+    if (snap.searchType === 'person' || snap.nodes.length === 0) return;
+
+    setIsCheckingChanges(true);
+    const companyCount = snap.nodes.filter(n => n.data.type === 'company' && n.data.nzbn).length;
+    logTrail(`Checking ${companyCount} ${companyCount === 1 ? 'entity' : 'entities'}…`);
+
+    try {
+      // Deep-clone the saved nodes so enrichment never mutates the save point.
+      const clone: GraphNode[] = snap.nodes.map(n => ({ ...n, data: { ...n.data } }));
+      const freshNodes = await enrichGraphNodes(clone, { ...config, includeInactive: true }, handleLog);
+      const diffs = diffStatuses(snap.nodes, freshNodes);
+      setNodeDiffs(diffs);
+      setLastCheckedSavePointName(snap.name);
+
+      // Load the save point onto the canvas (mirrors loadSnapshot's company
+      // branch), stamping data.diff on the nodes that changed.
+      setSearchMode('company');
+      setActiveMainTab('company');
+      setPersonSearchResults([]);
+      setPersonSearchName('');
+      const diffByNodeId = new Map(diffs.map(d => [d.nodeId, d]));
+      const stampedNodes = freshNodes.map(n => {
+        const d = diffByNodeId.get(n.id);
+        return d
+          ? { ...n, data: { ...n.data, diff: { prevStatus: d.prevStatus, prevBucket: d.prevBucket } } }
+          : n;
+      });
+      const depthNodes = assignDepths(stampedNodes, snap.edges);
+      const nodesById = nodesToMap(depthNodes);
+      setAllNodesInMemory(depthNodes);
+      setNodes(depthNodes);
+      setEdges(styleEdgesByDepth(snap.edges as unknown as Edge[], nodesById));
+      setSearchViewOpen(false);
+
+      logTrail(
+        diffs.length > 0
+          ? `Changes found · ${diffs.length} ${diffs.length === 1 ? 'entity' : 'entities'} changed since "${snap.name}"`
+          : `No changes since "${snap.name}"`
+      );
+    } catch (err) {
+      console.error('Failed to check for changes:', err);
+      setError('Failed to check for changes');
+    } finally {
+      setIsCheckingChanges(false);
+    }
+  };
+
+  // Changes sidebar row click: highlight the node by key (nodes are already
+  // on the canvas — handleCheckChanges just loaded this save point).
+  const handleJumpToChange = (diff: NodeDiff) => {
+    setNodes(nds =>
+      nds.map(n => ({
+        ...n,
+        data: { ...n.data, isHighlighted: (n.data.nzbn || personId(n.data.label)) === diff.key },
+      }))
+    );
   };
 
   // Context Menu Handlers
@@ -881,16 +1585,27 @@ function App() {
       }
     }));
 
-    // Re-layout the graph with the new target node as the visual center
-    // This will rearrange nodes into a pyramid with target in middle
+    // Re-assign ink-depth relative to the new target, then re-layout
+    const depthNodes = assignDepths(updatedNodes as unknown as GraphNode[], edges as unknown as GraphEdge[]);
+    const nodesById = nodesToMap(depthNodes);
     const { nodes: relayoutedNodes, edges: relayoutedEdges } = getLayoutedElements(
-      updatedNodes,
+      depthNodes as unknown as GraphNode[],
       edges
     );
 
     // Apply the new layout positions
     setNodes(relayoutedNodes);
-    setEdges(relayoutedEdges);
+    setEdges(styleEdgesByDepth(relayoutedEdges, nodesById));
+
+    // Keep memory depths in sync so the case-file stats + node tiers match
+    setAllNodesInMemory(prev => {
+      if (prev.length === 0) return prev;
+      const targetId = depthNodes.find(n => n.data.isTarget)?.id;
+      return assignDepths(
+        prev.map(n => ({ ...n, data: { ...n.data, isTarget: n.id === targetId } })),
+        edges as unknown as GraphEdge[]
+      );
+    });
   };
 
   const handleHideParents = (targetNodeId: string) => {
@@ -1119,20 +1834,23 @@ function App() {
         const mergedMemory = [...updatedMemory, ...newNodes];
         const mergedEdges = [...edges, ...newEdges];
 
-        // Recalculate hidden counts
+        // Recalculate hidden counts, then ink-depth
         const withHiddenCounts = calculateHiddenDescendants(mergedMemory, mergedEdges);
+        const depthNodes = assignDepths(withHiddenCounts, mergedEdges as unknown as GraphEdge[]);
+        const nodesById = nodesToMap(depthNodes);
 
-        setAllNodesInMemory(withHiddenCounts);
+        setAllNodesInMemory(depthNodes);
 
         // Filter visible nodes and re-layout
-        const visibleNodes = withHiddenCounts.filter(n => n.data.isVisible);
+        const visibleNodes = depthNodes.filter(n => n.data.isVisible);
         const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
           visibleNodes,
           mergedEdges
         );
 
         setNodes(layoutedNodes);
-        setEdges(layoutedEdges);
+        setEdges(styleEdgesByDepth(layoutedEdges, nodesById));
+        if (newNodes.length > 0) logTrail(`Expanded ${label} · +${newNodes.length} ${newNodes.length === 1 ? 'entity' : 'entities'}`);
       } catch (err) {
         console.error('Failed to lazy-load node:', err);
         setError(`Failed to expand structure: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -1147,24 +1865,30 @@ function App() {
     // Standard expand: reveal already-in-memory hidden nodes
     console.log('🚀 EXPANDING:', { nodeId, nzbn, label });
 
+    const prevVisible = allNodesInMemory.filter(n => n.data.isVisible).length;
+
     // Expand the subtree in memory
     let expandedNodes = expandNodeSubtree(allNodesInMemory, edges, nodeId);
 
-    // Recalculate hidden counts after expansion
+    // Recalculate hidden counts after expansion, then ink-depth
     expandedNodes = calculateHiddenDescendants(expandedNodes, edges);
+    const depthNodes = assignDepths(expandedNodes, edges as unknown as GraphEdge[]);
+    const nodesById = nodesToMap(depthNodes);
 
     // Update memory
-    setAllNodesInMemory(expandedNodes);
+    setAllNodesInMemory(depthNodes);
 
     // Filter visible nodes and re-layout
-    const visibleNodes = expandedNodes.filter(n => n.data.isVisible);
+    const visibleNodes = depthNodes.filter(n => n.data.isVisible);
     const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
       visibleNodes,
       edges
     );
 
     setNodes(layoutedNodes);
-    setEdges(layoutedEdges);
+    setEdges(styleEdgesByDepth(layoutedEdges, nodesById));
+    const added = visibleNodes.length - prevVisible;
+    if (added > 0) logTrail(`Expanded ${label} · +${added} ${added === 1 ? 'entity' : 'entities'}`);
   };
 
   const handleCollapseBranch = (nodeId: string, nzbn: string, label: string) => {
@@ -1173,21 +1897,23 @@ function App() {
     // Collapse the subtree in memory
     let collapsedNodes = collapseNodeSubtree(allNodesInMemory, edges, nodeId);
 
-    // Recalculate hidden counts after collapse
+    // Recalculate hidden counts after collapse, then ink-depth
     collapsedNodes = calculateHiddenDescendants(collapsedNodes, edges);
+    const depthNodes = assignDepths(collapsedNodes, edges as unknown as GraphEdge[]);
+    const nodesById = nodesToMap(depthNodes);
 
     // Update memory
-    setAllNodesInMemory(collapsedNodes);
+    setAllNodesInMemory(depthNodes);
 
     // Filter visible nodes and re-layout
-    const visibleNodes = collapsedNodes.filter(n => n.data.isVisible);
+    const visibleNodes = depthNodes.filter(n => n.data.isVisible);
     const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
       visibleNodes,
       edges
     );
 
     setNodes(layoutedNodes);
-    setEdges(layoutedEdges);
+    setEdges(styleEdgesByDepth(layoutedEdges, nodesById));
   };
 
   // Tidy Up Layout Handler
@@ -1220,28 +1946,130 @@ function App() {
 
 
 
+  // Decoration pass: stamp hasNote/noteFlagged onto NodeData from caseNotes,
+  // keyed by nzbn ?? personId(label) (the one person-identity normalization).
+  // No consumer yet — Stage B's CustomNodes dog-ear renders these. Kept cheap:
+  // identity when there are no notes, untouched node objects when unannotated.
+  // Role filter (left panel) — view-only, never persisted.
+  //
+  // Directors only, deliberately. A "hide shareholders" companion was built and
+  // removed: it appeared to work on the searched company and do nothing further
+  // out, which is not a bug in the filter but in what there is to filter —
+  // individual shareholders are only ever parsed by crawlUpstream (the root and
+  // its parents). crawlDownstream never creates a person node for a subsidiary's
+  // shareholders, so there was nothing out there to hide. A control that behaves
+  // differently depending on where you look is worse than no control, and hiding
+  // directors is what makes the corporate structure readable anyway.
+  const [hideDirectors, setHideDirectors] = useState(false);
+
+  const nodesWithAnnotations = useMemo(() => {
+    if (caseNotes.length === 0) return nodes;
+    const flagByKey = new Map<string, boolean>();
+    for (const note of caseNotes) {
+      flagByKey.set(note.key, (flagByKey.get(note.key) ?? false) || note.flag);
+    }
+    return nodes.map(n => {
+      const data = n.data as unknown as NodeData;
+      const key = data.nzbn || personId(data.label);
+      if (!flagByKey.has(key)) return data.hasNote ? { ...n, data: { ...data, hasNote: false, noteFlagged: false } as any } : n;
+      return { ...n, data: { ...data, hasNote: true, noteFlagged: !!flagByKey.get(key) } as any };
+    });
+  }, [nodes, caseNotes]);
+
+  /**
+   * Role filter — hides person nodes so a prolific chart can be read.
+   *
+   * Someone who is BOTH a director and a shareholder is only hidden when both
+   * filters are on: they are genuinely part of the ownership structure, so
+   * "hide directors" must not remove them from it. Edges are filtered to match,
+   * because React Flow warns and misroutes when an edge names a node that is
+   * no longer in the list.
+   *
+   * Purely a view over the same data — nothing is refetched, and allNodesInMemory
+   * is untouched, so exports and save points still carry the whole chart.
+   */
+  const hidePerson = useCallback((data: NodeData): boolean => {
+    if (data.type !== NodeType.PERSON) return false;
+    // Only a director-ONLY person is hidden. Someone who also holds shares is
+    // part of the ownership structure, which is the thing being looked at.
+    return hideDirectors && data.roleKind === 'director';
+  }, [hideDirectors]);
+
+  const visibleNodes = useMemo(() => {
+    if (!hideDirectors) return nodesWithAnnotations;
+    return nodesWithAnnotations.filter(n => !hidePerson(n.data as unknown as NodeData));
+  }, [nodesWithAnnotations, hideDirectors, hidePerson]);
+
+  const visibleEdges = useMemo(() => {
+    if (!hideDirectors) return edges;
+    const ids = new Set(visibleNodes.map(n => n.id));
+    return edges.filter(e => ids.has(e.source) && ids.has(e.target));
+  }, [edges, visibleNodes, hideDirectors]);
+
+  // How many the filter would remove, for the panel's count. Counts only
+  // director-ONLY people, matching what hidePerson actually hides, so the number
+  // on the button is the number that disappears.
+  const hideableDirectors = useMemo(
+    () => nodes.filter(n => (n.data as unknown as NodeData).roleKind === 'director').length,
+    [nodes]);
+
+  // Case-file derived values
+  const graphLoaded = allNodesInMemory.length > 0;
+  const caseTarget = allNodesInMemory.find(n => n.data.isTarget) || allNodesInMemory[0];
+  const caseDepth = allNodesInMemory.reduce((m, n) => Math.max(m, n.data.depth ?? 0), 0);
+  const caseFlags = allNodesInMemory.filter(n =>
+    n.data.isInExternalAdmin || n.data.hasHistoricInsolvency || n.data.removalCommenced
+  ).length;
+  const caseOpened = trail[0]?.time;
+
+  // Individual case-file derived values
+  const personActiveCount = personSearchResults.filter(r => !r.isInactive).length;
+  const personFlagsCount = personSearchResults.filter(r =>
+    r.isInExternalAdmin || r.hasHistoricInsolvency || r.removalCommenced
+  ).length + disqualifiedMatches.length + insolvencyMatches.length;
+
   return (
-    <div className="sumi-app h-screen w-screen flex flex-col bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
+    <div className="h-screen w-screen flex flex-col bg-paper">
+      {showIntro && (
+        <IntroAnimation
+          onComplete={() => {
+            try { sessionStorage.setItem(INTRO_SEEN_KEY, '1'); } catch { /* private mode */ }
+            setShowIntro(false);
+          }}
+        />
+      )}
       <ConfigBar
-        config={config}
-        onConfigChange={setConfig}
         theme={theme}
         toggleTheme={toggleTheme}
       />
 
-      <main className="flex-1 flex mt-16 relative overflow-hidden">
-        {/* Sidebar Toggle Button - positioned on the edge of the sidebar */}
+      <main className="flex-1 flex mt-[52px] relative overflow-hidden">
+        {/* Sidebar collapse expander (floating) */}
         <button
           onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          className={`absolute top-1/2 -translate-y-1/2 z-50 p-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md shadow-lg transition-all hover:bg-slate-50 dark:hover:bg-slate-700 ${
+          className={`absolute top-1/2 -translate-y-1/2 z-50 p-1.5 bg-paper border border-rule text-ink-mid hover:text-ink hover:border-ink-mid ${isResizingSidebar ? '' : 'transition-all'} ${
             isMobile
               ? (isSidebarCollapsed ? 'left-2' : 'hidden')
-              : (isSidebarCollapsed ? 'left-2' : 'left-[376px]')
+              : (isSidebarCollapsed ? 'left-2' : '')
             }`}
-          title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          style={!isMobile && !isSidebarCollapsed ? { left: sidebarWidth } : undefined}
+          aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
-          {isSidebarCollapsed ? <ChevronRight size={16} className="text-gray-600 dark:text-gray-300" /> : <ChevronLeft size={16} className="text-gray-600 dark:text-gray-300" />}
+          {isSidebarCollapsed ? <ChevronRight size={16} strokeWidth={1.5} /> : <ChevronLeft size={16} strokeWidth={1.5} />}
         </button>
+
+        {/* Drag handle to resize the sidebar */}
+        {!isMobile && !isSidebarCollapsed && (
+          <div
+            onMouseDown={startSidebarResize}
+            className="absolute top-0 bottom-0 z-40 w-1 -ml-0.5 cursor-col-resize hover:bg-accent/40"
+            style={{ left: sidebarWidth }}
+            role="separator"
+            aria-orientation="vertical"
+            aria-label="Resize sidebar"
+          />
+        )}
 
         {/* Mobile backdrop - tap outside to close sidebar */}
         {isMobile && !isSidebarCollapsed && (
@@ -1251,269 +2079,106 @@ function App() {
           />
         )}
 
-        {/* Sidebar */}
-        <div className={`bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col shadow-xl transition-all duration-300 ease-in-out overflow-hidden ${
-          isMobile
-            ? `absolute inset-y-0 left-0 z-40 w-[85vw] ${isSidebarCollapsed ? '-translate-x-full' : 'translate-x-0'}`
-            : `relative z-20 ${isSidebarCollapsed ? 'w-0' : 'w-96'}`
-        }`}>
+        {/* Left column: icon rail + case-file / search panel */}
+        <div
+          className={`flex bg-paper overflow-hidden ${
+            isMobile
+              ? `absolute inset-y-0 left-0 z-40 transition-transform duration-300 ease-in-out ${isSidebarCollapsed ? '-translate-x-full' : 'translate-x-0'}`
+              : `relative z-20 ${isResizingSidebar ? '' : 'transition-[width] duration-300 ease-in-out'}`
+          }`}
+          style={{ width: isMobile ? 334 : (isSidebarCollapsed ? 0 : sidebarWidth) }}
+        >
 
-          {/* Search Section */}
-          <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex-shrink-0 relative">
-            <h2 className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-wider mb-3">Search</h2>
+          {/* Icon rail */}
+          <nav className="w-16 flex-shrink-0 border-r border-rule bg-paper flex flex-col items-center py-3.5 gap-1.5" aria-label="Primary">
+            <button
+              onClick={openSearchView}
+              className={`relative w-10 h-10 grid place-items-center transition-colors ${searchViewOpen ? 'text-ink' : 'text-ink-mid hover:text-ink'}`}
+              aria-label="Search"
+              title="Search"
+            >
+              {searchViewOpen && <span className="absolute left-[-12px] top-2 bottom-2 w-0.5 bg-accent" />}
+              <Search size={17} strokeWidth={1.5} />
+            </button>
+            <button
+              onClick={closeSearchView}
+              className={`relative w-10 h-10 grid place-items-center transition-colors ${!searchViewOpen ? 'text-ink' : 'text-ink-mid hover:text-ink'}`}
+              aria-label="Case"
+              title="Case"
+            >
+              {!searchViewOpen && <span className="absolute left-[-12px] top-2 bottom-2 w-0.5 bg-accent" />}
+              <FolderOpen size={17} strokeWidth={1.5} />
+            </button>
+            <span className="flex-1" />
+          </nav>
 
-            {/* Search Mode Toggle */}
-            <div className="flex gap-2 mb-3">
-              <button
-                onClick={() => {
-                  setSearchMode('company');
-                  setActiveMainTab('company');
-                  setSearchQuery('');
-                  setError(null);
-                }}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${searchMode === 'company'
-                  ? 'bg-blue-500 text-white shadow-md'
-                  : 'bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                  }`}
-              >
-                <Building2 size={16} />
-                Company
-              </button>
-              <button
-                onClick={() => {
-                  setSearchMode('person');
-                  setActiveMainTab('individual');
-                  setSearchResults([]);
-                  setShowDropdown(false);
-                  setSearchQuery('');
-                  setError(null);
-                }}
-                className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2 ${searchMode === 'person'
-                  ? 'bg-purple-500 text-white shadow-md'
-                  : 'bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-gray-300 hover:bg-slate-200 dark:hover:bg-slate-700'
-                  }`}
-              >
-                <User size={16} />
-                Person
-              </button>
-            </div>
-
-            <form onSubmit={handleSearch} className="flex gap-2 relative">
-              <div className="relative flex-1 group">
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  placeholder={searchMode === 'person' ? 'Search by director/shareholder name...' : 'Search companies by name or NZBN...'}
-                  className="w-full bg-slate-100 dark:bg-slate-800 text-gray-900 dark:text-white rounded-l px-3 py-2 text-sm border border-slate-200 dark:border-slate-700 focus:border-blue-500 focus:outline-none placeholder-slate-500 transition-colors"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={clearSearch}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                  >
-                    <X size={14} />
-                  </button>
-                )}
-              </div>
-              <button
-                type="submit"
-                disabled={isLoading || isGraphLoading}
-                className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded-r transition-colors disabled:opacity-50 flex items-center justify-center min-w-[44px]"
-              >
-                {isLoading ? <Loader2 className="animate-spin" size={18} /> : <Search size={18} />}
-              </button>
-            </form>
-
-            {/* Include Inactive Entities Toggle */}
-            <div className="mt-3 flex items-center gap-2 px-1">
-              <input
-                type="checkbox"
-                id="include-inactive"
-                checked={includeInactive}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    setShowInactiveWarning(true);
-                  } else {
-                    setIncludeInactive(false);
-                  }
-                }}
-                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 cursor-pointer"
-              />
-              <label htmlFor="include-inactive" className="text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
-                Include inactive/removed entities
-                <span className="block text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 leading-tight">
-                  Expands graph to show removed parents and subsidiaries
-                </span>
-              </label>
-            </div>
-
-            {error && (
-              <div className="mt-3 bg-red-100 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 p-2 rounded flex gap-2 items-start">
-                <AlertTriangle className="text-red-600 dark:text-red-500 shrink-0 mt-0.5" size={14} />
-                <p className="text-xs text-red-600 dark:text-red-300 leading-tight">{error}</p>
-              </div>
-            )}
-
-            {/* Dropdown Results */}
-            {showDropdown && searchResults.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mx-4 mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-2xl z-50 max-h-80 overflow-y-auto">
-                <div className="sticky top-0 bg-slate-50 dark:bg-slate-900/90 backdrop-blur px-3 py-2 border-b border-slate-200 dark:border-slate-700 text-[10px] text-gray-500 dark:text-gray-400 uppercase font-bold flex justify-between items-center">
-                  <span>Matches found ({searchTotalItems || searchResults.length})</span>
-                  <button onClick={() => setShowDropdown(false)} className="hover:text-blue-500"><X size={12} /></button>
-                </div>
-                {searchResults.map((entity) => (
-                  <button
-                    key={entity.nzbn}
-                    onClick={() => handleSelectEntityInTab(entity)}
-                    className="w-full text-left px-4 py-3 border-b border-slate-100 dark:border-slate-700/50 hover:bg-blue-50 dark:hover:bg-slate-700/50 transition-colors flex items-start gap-3 group"
-                  >
-                    <div className="mt-1 p-1.5 bg-slate-100 dark:bg-slate-900 rounded text-slate-400 dark:text-slate-500 group-hover:bg-blue-200 dark:group-hover:bg-blue-900/30 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                      <Building2 size={16} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate group-hover:text-blue-700 dark:group-hover:text-blue-300">
-                        {entity.entityName}
-                      </p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="text-xs font-mono text-gray-500 dark:text-gray-400">{entity.nzbn}</span>
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded-full uppercase font-bold ${entity.entityStatusDescription.toLowerCase().includes('registered')
-                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400'
-                          : 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-400'
-                          }`}>
-                          {entity.entityStatusDescription}
-                        </span>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-                {searchResults.length < searchTotalItems && (
-                  <div className="sticky bottom-0 bg-slate-50 dark:bg-slate-900/90 backdrop-blur px-3 py-2 border-t border-slate-200 dark:border-slate-700">
-                    <button
-                      onClick={handleLoadMore}
-                      disabled={isLoadingMore}
-                      className="w-full text-center text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 py-1.5 disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      {isLoadingMore ? (
-                        <>
-                          <Loader2 className="animate-spin" size={12} />
-                          Loading...
-                        </>
-                      ) : (
-                        `Load more (showing ${searchResults.length} of ${searchTotalItems})`
-                      )}
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-
-
-          {/* Snapshots */}
-          <div className="flex-1 overflow-y-auto p-4 min-h-0">
-            <div className="flex justify-between items-center mb-3">
-              <h2 className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-wider">Snapshots</h2>
-              <div className="flex items-center gap-1">
-                <input
-                  type="file"
-                  ref={importSnapshotRef}
-                  onChange={handleImportSnapshot}
-                  accept=".json"
-                  className="hidden"
-                />
-                <button onClick={triggerImportSnapshot} className="mr-1 text-slate-500 hover:text-blue-500 dark:hover:text-blue-400 transition-colors" title="Import Snapshot">
-                  <Upload size={16} />
-                </button>
-                <button onClick={takeSnapshot} className="text-blue-500 dark:text-blue-400 hover:text-blue-700 dark:hover:text-white transition-colors" title="Save Snapshot">
-                  <Camera size={16} />
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              {snapshots.length === 0 && (
-                <p className="text-xs text-slate-500 dark:text-slate-600 italic">No snapshots saved.</p>
-              )}
-              {snapshots.map((snap) => (
-                <div
-                  key={snap.id}
-                  className="p-3 bg-white dark:bg-slate-800/50 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-blue-500/50 rounded transition-all group relative"
-                >
-                  <div onClick={() => loadSnapshot(snap)} className="cursor-pointer">
-                    <p className="text-sm text-gray-700 dark:text-gray-300 font-medium truncate group-hover:text-blue-600 dark:group-hover:text-blue-300">{snap.name}</p>
-                    <p className="text-[10px] text-gray-500">
-                      {new Date(snap.dateCreated).toLocaleDateString()}
-                      {snap.searchType === 'person' && (
-                        <span className="ml-1.5 text-[9px] text-amber-600 dark:text-amber-400 font-medium">Session only</span>
-                      )}
-                    </p>
-                  </div>
-                  <button
-                    onClick={(e) => deleteSnapshot(snap.id, e)}
-                    className="absolute top-2 right-2 p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Delete snapshot"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); exportSnapshot(snap); }}
-                    className="absolute bottom-2 right-2 p-1 text-gray-400 hover:text-blue-500 dark:hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity"
-                    title="Export Snapshot (JSON)"
-                  >
-                    <Download size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Footer Legend */}
-          <div className="hidden border-t border-slate-200 dark:border-slate-800 text-[10px] text-slate-500 dark:text-slate-600 flex-shrink-0">
-            {/* Legend removed */}
-          </div>
-
-          {/* Export Section */}
-          <div className="p-4 border-t border-slate-200 dark:border-slate-800 flex-shrink-0">
-            <h2 className="text-gray-500 dark:text-gray-400 text-xs font-bold uppercase tracking-wider mb-3">Export</h2>
-            <div className="space-y-2">
-              <button
-                onClick={exportAsPNG}
-                disabled={nodes.length === 0 && personSearchResults.length === 0}
-                className="w-full px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white rounded flex items-center justify-center gap-2 transition-colors"
-              >
-                <FileDown size={16} />
-                Export as PNG
-              </button>
-              <button
-                onClick={exportAsPDF}
-                disabled={nodes.length === 0 && personSearchResults.length === 0}
-                className="w-full px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white rounded flex items-center justify-center gap-2 transition-colors"
-              >
-                <FileDown size={16} />
-                Export as PDF
-              </button>
-              <button
-                onClick={exportAllSnapshots}
-                disabled={snapshots.length === 0}
-                className="w-full px-3 py-2 text-sm bg-slate-600 hover:bg-slate-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white rounded flex items-center justify-center gap-2 transition-colors"
-              >
-                <Database size={16} />
-                Export Snapshots
-              </button>
-            </div>
-          </div>
+          {/* Cases dossier panel */}
+          <CasePanel
+            activeMainTab={activeMainTab}
+            graphLoaded={graphLoaded}
+            caseTarget={caseTarget}
+            entityCount={allNodesInMemory.length}
+            caseDepth={caseDepth}
+            caseFlags={caseFlags}
+            caseOpened={caseOpened}
+            personSearchName={displaySubjectName(personSearchName, personSearchResults)}
+            personResultsCount={personSearchResults.length}
+            personActiveCount={personActiveCount}
+            personFlagsCount={personFlagsCount}
+            personSearchOpened={personSearchOpened}
+            hideDirectors={hideDirectors}
+            onToggleHideDirectors={() => setHideDirectors(v => !v)}
+            hideableDirectors={hideableDirectors}
+            trail={trail}
+            caseNotes={caseNotes}
+            noteTabLabels={Object.fromEntries(graphTabs.map(t => [t.id, t.label]))}
+            onDeleteNote={handleDeleteNote}
+            onJumpToNote={handleJumpToNote}
+            companyTabs={graphTabs}
+            individualTabs={individualTabs}
+            onJumpToPerson={(person, app) => {
+              // Same jump + highlight-by-key mechanic as handleJumpToNote.
+              jumpToTab(app.kind === 'person-tab' ? 'individual' : 'company', app.tabId);
+              if (app.kind === 'graph-node') {
+                setNodes(nds => nds.map(n => ({
+                  ...n,
+                  data: { ...n.data, isHighlighted: !n.data.nzbn && personId(n.data.label) === person.key },
+                })));
+              }
+            }}
+            nodeDiffs={nodeDiffs}
+            lastCheckedSavePointName={lastCheckedSavePointName}
+            isCheckingChanges={isCheckingChanges}
+            onJumpToChange={handleJumpToChange}
+            savePoints={snapshots}
+            onLoadSavePoint={loadSnapshot}
+            onDeleteSavePoint={deleteSnapshot}
+            onExportSavePoint={exportSnapshot}
+            onExportAllSavePoints={exportAllSnapshots}
+            onTakeSavePoint={takeSnapshot}
+            onImportSavePoint={handleImportSnapshot}
+            onCheckChanges={handleCheckChanges}
+            onExportHtml={exportAsHtml}
+            isExportingHtml={isExportingHtml}
+            canExport={nodes.length > 0 || personSearchResults.length > 0}
+          />
         </div>
 
-        {/* Graph Area & Network Console */}
-        <div className="flex-1 flex flex-col h-full bg-slate-50 dark:bg-gray-950 relative transition-colors duration-300">
-          {isGraphLoading && (
-            <div className="absolute inset-0 z-50 bg-white/50 dark:bg-slate-950/50 backdrop-blur-sm flex items-center justify-center flex-col gap-4">
-              <Loader2 className="w-10 h-10 text-blue-600 animate-spin" />
-              <p className="text-sm font-semibold text-slate-600 dark:text-slate-300">Mapping Corporate Structure...</p>
+        {/* Graph Area */}
+        <div className="flex-1 flex flex-col h-full bg-paper relative">
+          {/* Also covers the person search (isLoading), which "Search as Individual"
+              fires from the graph view. That path used to give NO feedback at all:
+              a 40-directorship subject takes tens of seconds to come back, so the
+              click read as a dead button. Excluded while the find screen is open,
+              which has its own inline spinner for search-as-you-type. */}
+          {(isGraphLoading || (isLoading && !searchViewOpen)) && (
+            <div className="absolute top-0 left-0 right-0 z-50">
+              <div className="h-0.5 bg-paper2 overflow-hidden relative">
+                <div className="loadsweep absolute inset-y-0 left-0 w-1/3 bg-accent" />
+              </div>
+              <div className="bg-paper border-b border-rule py-1.5 text-center text-ink-mid" style={{ fontSize: 12 }}>
+                {isGraphLoading ? 'Mapping corporate structure…' : 'Searching registers…'}
+              </div>
             </div>
           )}
 
@@ -1523,14 +2188,66 @@ function App() {
             onMainTabChange={handleMainTabChange}
             companyTabs={graphTabs.map(t => ({ id: t.id, label: t.label, isLoading: t.isLoading }))}
             individualTabs={individualTabs.map(t => ({ id: t.id, label: t.label, isLoading: t.isEnriching }))}
-            activeSubTabId={activeMainTab === 'company' ? activeCompanyTabId : activeIndividualTabId}
+            propertyTabs={propertyTabs.map(t => ({ id: t.id, label: t.label }))}
+            activeSubTabId={
+              activeMainTab === 'company' ? activeCompanyTabId
+              : activeMainTab === 'individual' ? activeIndividualTabId
+              : activePropertyTabId
+            }
             onSubTabClick={handleSubTabClick}
             onSubTabClose={handleSubTabClose}
+            searchViewOpen={searchViewOpen}
+            onNewSearch={openSearchView}
           />
 
           <div className="flex-1 relative">
-            {/* Show Person Search Results OR ReactFlow Graph based on active main tab */}
-            {activeMainTab === 'individual' && (personSearchResults.length > 0 || disqualifiedMatches.length > 0 || insolvencyMatches.length > 0) ? (
+            {/* A property report owns the canvas whenever its tab is active — it
+                is a document, not a graph, so it scrolls in place. */}
+            {!searchViewOpen && activeMainTab === 'property' && activePropertyTab ? (
+              <div className="absolute inset-0 overflow-y-auto bg-paper">
+                <PropertyReport
+                  key={activePropertyTab.id}
+                  report={activePropertyTab.report as PropertyTitleReport}
+                  onBack={openSearchView}
+                  onExport={() => exportPropertyReport(activePropertyTab)}
+                  isExporting={isExportingHtml}
+                />
+              </div>
+            ) : searchViewOpen || (nodes.length === 0 && !isGraphLoading && !(activeMainTab === 'individual' && (personSearchResults.length > 0 || disqualifiedMatches.length > 0 || insolvencyMatches.length > 0))) ? (
+              <div className="absolute inset-0">
+                <FindScreen
+                  key={searchViewNonce}
+                  searchQuery={searchQuery}
+                  onSearchQueryChange={setSearchQuery}
+                  onSearchSubmit={() => handleSearch({ preventDefault: () => {} } as React.FormEvent)}
+                  results={searchResults.slice(0, 6)}
+                  onResultSelect={handleSelectEntityInTab}
+                  isLoading={isLoading}
+                  searchMode={searchMode}
+                  onSearchModeChange={(m) => {
+                    setSearchMode(m);
+                    setActiveMainTab(m === 'person' ? 'individual' : 'company');
+                    setSearchResults([]);
+                    setError(null);
+                  }}
+                  onCompare={handleCompare}
+                  onCompareCancel={handleCompareCancel}
+                  compareProgress={compareProgress}
+                  compareNoLink={compareNoLink}
+                  onCompareReset={() => setCompareNoLink(null)}
+                  fetchCompanySuggestions={fetchCompareSuggestions}
+                  startOnProperty={activeMainTab === 'property'}
+                  onPropertyFaceChange={(on) => {
+                    // Keep the tab bar in step with the mode line: entering 地
+                    // makes Property the active mode, leaving it hands back to
+                    // whichever of Companies/People the search is on.
+                    if (on) setActiveMainTab('property');
+                    else setActiveMainTab(searchMode === 'person' ? 'individual' : 'company');
+                  }}
+                  onOpenPropertyReport={handleOpenPropertyReport}
+                />
+              </div>
+            ) : activeMainTab === 'individual' && (personSearchResults.length > 0 || disqualifiedMatches.length > 0 || insolvencyMatches.length > 0) ? (
               <PersonSearchResults
                 personName={personSearchName}
                 results={personSearchResults}
@@ -1545,28 +2262,10 @@ function App() {
                   setSearchQuery('');
                 }}
               />
-            ) : nodes.length === 0 && !isLoading ? (
-              <div className="absolute inset-0 flex items-center justify-center bg-slate-50 dark:bg-slate-950 p-6 text-center">
-                <div className="max-w-md space-y-4">
-                  <div className="mx-auto w-16 h-16 bg-blue-100 dark:bg-blue-900/40 rounded-full flex items-center justify-center mb-6">
-                    <Search className="text-blue-600 dark:text-blue-400" size={32} />
-                  </div>
-                  <h3 className="text-2xl font-bold text-slate-800 dark:text-white">Begin your investigation</h3>
-                  <p className="text-slate-600 dark:text-slate-400 text-sm">
-                    Enter a company name or NZBN in the search bar above to map its corporate structure, or switch to Person Mode to find an individual's directorships.
-                  </p>
-                  <div className="pt-4 flex justify-center gap-2 text-xs text-slate-500 dark:text-slate-500">
-                    <span className="bg-slate-200 dark:bg-slate-800 px-2 py-1 rounded border border-slate-300 dark:border-slate-700">Ctrl</span>
-                    <span>+</span>
-                    <span className="bg-slate-200 dark:bg-slate-800 px-2 py-1 rounded border border-slate-300 dark:border-slate-700">K</span>
-                    <span>to focus search</span>
-                  </div>
-                </div>
-              </div>
             ) : (
               <ReactFlow
-                nodes={nodes}
-                edges={edges}
+                nodes={visibleNodes}
+                edges={visibleEdges}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onNodeClick={handleNodeClick}
@@ -1574,32 +2273,36 @@ function App() {
                 onPaneClick={handlePaneClick}
                 nodeTypes={nodeTypes}
                 fitView
-                className="bg-slate-50 dark:bg-slate-950"
+                className="bg-paper"
                 minZoom={0.1}
               >
-                <Background color={theme === 'dark' ? "oklch(0.30 0.010 75)" : "oklch(0.855 0.008 80)"} gap={16} />
-                <Controls className="!bg-white dark:!bg-slate-800 !border-slate-200 dark:!border-slate-700 [&>button]:!fill-gray-600 dark:[&>button]:!fill-gray-300 hover:[&>button]:!fill-black dark:hover:[&>button]:!fill-white" />
+                {/* No dot grid — the sumi canvas is plain washi paper (bg-paper
+                    on the pane), with the washi grain overlay from index.css. */}
+                <Controls />
 
-                {/* Tidy Up Controls - Only show after graph loads */}
+                {/* Tidy Up controls — styled to match the mockup .replay button
+                    (1px rule border, paper bg, ~12px, ink-mid text, hover to ink). */}
                 {nodes.length > 0 && (
                   <Panel position="bottom-left" className="mb-2 ml-2">
                     <div className="flex flex-col gap-2">
                       <button
                         onClick={handleTidyUp}
-                        className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300"
+                        className="bg-paper border border-rule text-ink-mid hover:text-ink hover:border-ink-mid transition-colors flex items-center gap-2"
+                        style={{ fontSize: 12, padding: '7px 13px' }}
                         title="Optimize layout into compact pyramid shape"
                       >
-                        <Sparkles size={18} className="text-blue-500" />
+                        <Sparkles size={15} strokeWidth={1.5} className="text-accent" />
                         <span>Tidy Up</span>
                       </button>
 
                       {originalLayout && (
                         <button
                           onClick={handleUndoTidyUp}
-                          className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors shadow flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300"
+                          className="bg-paper border border-rule text-ink-mid hover:text-ink hover:border-ink-mid transition-colors flex items-center gap-2"
+                          style={{ fontSize: 12, padding: '7px 13px' }}
                           title="Revert to original layout"
                         >
-                          <Undo size={18} className="text-orange-500" />
+                          <Undo size={15} strokeWidth={1.5} className="text-amber" />
                           <span>Undo</span>
                         </button>
                       )}
@@ -1607,21 +2310,28 @@ function App() {
                   </Panel>
                 )}
 
-                {nodes.length === 0 && !isLoading && !isGraphLoading && !error && (
-                  <Panel position="top-center" className="mt-20">
-                    <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur border border-slate-200 dark:border-slate-700 p-8 rounded-xl text-center max-w-md shadow-xl">
-                      <MousePointer2 className="w-12 h-12 text-slate-400 dark:text-slate-600 mx-auto mb-4" />
-                      <h3 className="text-xl font-bold text-slate-800 dark:text-slate-200 mb-2">Ready to Map</h3>
-                      <p className="text-slate-600 dark:text-slate-400 mb-4">
-                        Search for a company by name or NZBN in the sidebar to begin.
-                      </p>
-                      <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight">
-                        Data sourced from NZ Government registers (MBIE). Provided for informational purposes only.
-                      </p>
-                    </div>
+                {/* Ink-depth + status-ramp legend — bottom-right. */}
+                {nodes.length > 0 && (
+                  <Panel position="bottom-right" className="mb-2 mr-2">
+                    <StatusLegend />
                   </Panel>
                 )}
               </ReactFlow>
+            )}
+
+            {/* Error banner (search / graph failures surface here now the panel search is gone) */}
+            {error && (
+              <div className="absolute top-3 left-1/2 -translate-x-1/2 z-50 bg-paper border border-crit px-3 py-2 flex gap-2 items-start max-w-md">
+                <AlertTriangle className="text-crit shrink-0 mt-0.5" size={14} strokeWidth={1.5} />
+                <p className="text-crit leading-tight" style={{ fontSize: 12 }}>{error}</p>
+                <button
+                  onClick={() => setError(null)}
+                  className="text-ink-pale hover:text-ink flex-shrink-0"
+                  aria-label="Dismiss error"
+                >
+                  <X size={12} strokeWidth={1.5} />
+                </button>
+              </div>
             )}
 
             {/* Context Menu */}
@@ -1644,8 +2354,25 @@ function App() {
                 onSearchPerson={(name: string) => {
                   setContextMenu(null);
                   setSearchMode('person');
+                  setSearchQuery(name); // keep the search box in step, as the director-panel path does
                   handlePersonSearch(name);
                 }}
+                onAddNote={openNoteEditor}
+              />
+            )}
+
+            {/* Note Editor (Stage B) — takes over the context menu's position */}
+            {noteEditor && (
+              <NoteEditor
+                nodeLabel={noteEditor.nodeLabel}
+                nzbn={noteEditor.nzbn}
+                position={noteEditor.position}
+                initialText={editorNote?.text ?? ''}
+                initialFlag={editorNote?.flag ?? false}
+                hasExisting={!!editorNote}
+                onSave={handleSaveNote}
+                onDelete={handleDeleteNoteFromEditor}
+                onCancel={() => setNoteEditor(null)}
               />
             )}
 
@@ -1675,53 +2402,18 @@ function App() {
               />
             )}
 
-            {/* Inactive Entity Warning Dialog */}
-            {showInactiveWarning && (
-              <>
-                <div className="fixed inset-0 bg-black/50 z-50" onClick={() => setShowInactiveWarning(false)} />
-                <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 bg-white dark:bg-slate-900 rounded-lg shadow-2xl border border-slate-200 dark:border-slate-700 p-6 max-w-md">
-                  <div className="flex items-start gap-3 mb-4">
-                    <AlertTriangle className="text-yellow-500 shrink-0 mt-1" size={24} />
-                    <div>
-                      <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">Warning</h3>
-                      <p className="text-sm text-gray-700 dark:text-gray-300">
-                        This will display ALL inactive entities associated with your search, which could potentially result in a longer search time and a more complicated graph depending on the search.
-                      </p>
-                      <p className="text-sm text-gray-700 dark:text-gray-300 mt-2 font-semibold">
-                        Do you still wish to proceed?
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-3 justify-end">
-                    <button
-                      onClick={() => setShowInactiveWarning(false)}
-                      className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-800 rounded"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => {
-                        setIncludeInactive(true);
-                        setShowInactiveWarning(false);
-                      }}
-                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded"
-                    >
-                      Proceed
-                    </button>
-                  </div>
-                </div>
-              </>
-            )}
           </div>
+
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="bg-slate-100 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-2 px-4 text-center">
-        <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">
-          <strong>Mitsuketa</strong> 見つけた
-        </p>
-      </footer>
+      {/* Command palette (Ctrl/Cmd+K) */}
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        getCommands={buildPaletteCommands}
+      />
+
       <Analytics />
     </div>
   );

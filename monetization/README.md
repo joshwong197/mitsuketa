@@ -84,40 +84,27 @@ python -m monetization.test_monetization
 python -m unittest discover -s monetization -p 'test_*.py' -v
 ```
 
-## Wiring into the site (`site/app.py`)
+## Mitsuketa integration
 
-The search-input audit and read-only `/audit` viewer are wired. Billing and
-per-search metering are not. The remaining touch points are:
+The React property screen and `api/property.ts` use `utils/propertyAudit.ts` to
+write to this same Neon `search_audit` table. The existing per-user credential
+is recorded as `password:<username>`, alongside the optional matter reference.
+Searches and report opens return a durable `AUD-<id>`; database failure blocks
+the LINZ request. `PROPERTY_AUDIT_ADMINS` gates the in-app read-only viewer.
 
-Live verification and current logging behaviour are recorded in
-`LIVE_AUDIT_CHECK.md`. Searches expose `AUD-<id>` and accept an optional matter
-reference. The viewer includes the authenticated Basic credential; individual
-account attribution awaits the Clerk integration proposed in `AUTH_PLAN.md`.
-Existing databases need the additive actor/matter_ref migration at the end of
-`schema.sql` before running the updated application.
+See `design/MONETIZATION_PREVIEW.md` for setup and local/preview acceptance
+checks. The Python `site/` remains a separate local prototype. Its previous
+verification is not evidence for the deployed React flow.
 
-- **Meter the paid action.** Before returning a title report in `title_page()`:
-  ```python
-  from monetization import db, entitlements
-  if db.available():
-      access = entitlements.authorize_report(
-          db.store, db.entitlement_store, acc, ref=title_no, manual=True
-      )
-      if not access.allowed:
-          return paywall_page()      # no pass / annual access -> buy or subscribe
-  ```
-  (Decide which action costs a credit: the report view is the natural one; the
-  results list stays free.)
-- **Billing routes.** Add `GET /billing` (show `credits.REPORT_PASS_PACKS`,
-  `credits.PROFESSIONAL_ANNUAL`, and balance),
-  `POST /billing/checkout` (`billing.create_checkout_session` -> redirect), and
-  `POST /billing/webhook` (`billing.handle_webhook`).
+Billing and pass metering remain unwired and disabled. Before connecting them,
+map a verified provider identity to the account UUID and keep administrator
+permission separate from purchased entitlements.
 
 ## Still stubbed (needs your input / review)
 
 - **Accounts / sign-in.** `account` is the identity table, but authentication is
-  still the site's single-user Basic auth. Real per-user sign-in is the next
-  piece; `acc` above is a placeholder for the signed-in account id.
+  currently per-user environment credentials in Mitsuketa. Provider-backed
+  account mapping is deferred; see `AUTH_PLAN.md`.
 - **Professional Stripe lifecycle.** The local entitlement and database model
   are ready, but subscription Checkout and subscription webhooks are deferred
   with all Stripe account/product work. Future webhook activation should call

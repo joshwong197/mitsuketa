@@ -1,5 +1,5 @@
-import { ApiConfig, PersonCompanyResult, LoggerCallback, GraphNode } from '../../types';
-import { BASE_API_URL, API_PATHS } from '../../constants';
+import { ApiConfig, PersonCompanyResult, LoggerCallback, GraphNode } from '../../types.js';
+import { BASE_API_URL, API_PATHS } from '../../constants.js';
 
 /**
  * External administration status types from NZBN API entityStatusDescription
@@ -44,24 +44,98 @@ interface NZBNEntityResponse {
     'company-details'?: NZBNCompanyDetails;
 }
 
-/**
- * Fetch a single company's NZBN entity details to extract insolvency/admin status.
- */
-async function fetchCompanyStatus(
-    nzbn: string,
-    config: ApiConfig,
-    logger?: LoggerCallback
-): Promise<{
+export interface CompanyStatusResult {
     entityStatusDescription: string;
     isInExternalAdmin: boolean;
     externalAdminType?: string;
     removalCommenced: boolean;
     hasHistoricInsolvency: boolean;
     historicInsolvencyType?: string;
-} | null> {
+}
+
+/**
+ * Fetch entity status history (chronological list of past entity statuses).
+ * Exported so the MCP server can wrap it as a standalone tool.
+ */
+export async function fetchEntityStatusHistory(
+    nzbn: string,
+    config: ApiConfig,
+    baseUrl: string = '/api/proxy',
+    logger?: LoggerCallback
+): Promise<Array<{ entityStatusDescription: string; effectiveFrom?: string; effectiveTo?: string }>> {
+    const proxyPath = `${API_PATHS.nzbn}/entities/${nzbn}/history/entity-statuses`;
+    const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
+    const response = await fetch(url, {
+        headers: {
+            'x-user-api-key': config.nzbnKey || '',
+            'x-api-type': 'nzbn',
+            'Accept': 'application/json'
+        }
+    });
+    if (logger) {
+        logger({
+            timestamp: new Date().toISOString(),
+            method: 'GET',
+            url: proxyPath,
+            headers: {},
+            status: response.status,
+            message: response.statusText
+        });
+    }
+    if (!response.ok) {
+        return [];
+    }
+    const data = await response.json();
+    return Array.isArray(data) ? data : [];
+}
+
+// Session-lifetime cache of NZBN entity lookups so the shareholding-% enrichment and the
+// status enrichment (and repeat searches) share one fetch per company instead of two.
+// ponytail: unbounded-ish Map capped by wholesale clear; LRU if memory ever matters
+const entityCache = new Map<string, Promise<any | null>>();
+
+/**
+ * Fetch (with caching) the raw NZBN entity payload for a company.
+ * Resolves to null on any failure; failures are not cached so a retry can succeed.
+ */
+export function fetchNzbnEntityCached(
+    nzbn: string,
+    apiKey: string = '',
+    baseUrl: string = '/api/proxy'
+): Promise<any | null> {
+    const key = `${baseUrl}|${nzbn}`;
+    let pending = entityCache.get(key);
+    if (!pending) {
+        const proxyPath = `${API_PATHS.nzbn}/entities/${encodeURIComponent(nzbn)}`;
+        const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
+        pending = fetch(url, {
+            headers: {
+                'x-user-api-key': apiKey || '',
+                'x-api-type': 'nzbn',
+                'Accept': 'application/json'
+            }
+        })
+            .then(r => (r.ok ? r.json() : null))
+            .catch(() => null);
+        if (entityCache.size > 500) entityCache.clear();
+        entityCache.set(key, pending);
+        pending.then(v => { if (v === null) entityCache.delete(key); });
+    }
+    return pending;
+}
+
+/**
+ * Fetch a single company's NZBN entity details to extract insolvency/admin status.
+ */
+export async function fetchCompanyStatus(
+    nzbn: string,
+    config: ApiConfig,
+    logger?: LoggerCallback,
+    baseUrl: string = '/api/proxy'
+): Promise<CompanyStatusResult | null> {
     // Use secure proxy
     const proxyPath = `${API_PATHS.nzbn}/entities/${nzbn}`;
-    const url = `/api/proxy?path=${encodeURIComponent(proxyPath)}`;
+    const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
 
     if (logger) {
         logger({
@@ -75,13 +149,7 @@ async function fetchCompanyStatus(
     }
 
     try {
-        const response = await fetch(url, {
-            headers: {
-                'x-user-api-key': config.nzbnKey || '',
-                'x-api-type': 'nzbn',
-                'Accept': 'application/json'
-            }
-        });
+        const data: NZBNEntityResponse | null = await fetchNzbnEntityCached(nzbn, config.nzbnKey, baseUrl);
 
         if (logger) {
             logger({
@@ -89,17 +157,15 @@ async function fetchCompanyStatus(
                 method: 'GET',
                 url,
                 headers: {},
-                status: response.status,
-                message: response.statusText
+                status: data ? 200 : 0,
+                message: data ? 'OK (cached fetch)' : 'Failed'
             });
         }
 
-        if (!response.ok) {
-            console.warn(`⚠️ Failed to fetch status for ${nzbn}: ${response.status}`);
+        if (!data) {
+            console.warn(`⚠️ Failed to fetch status for ${nzbn}`);
             return null;
         }
-
-        const data: NZBNEntityResponse = await response.json();
 
         // The company details can be under "company" or "company-details" depending on the response
         const companyDetails = data.company || data['company-details'];
@@ -111,8 +177,15 @@ async function fetchCompanyStatus(
         );
         const externalAdminType = isInExternalAdmin ? statusDesc : undefined;
 
-        // Check removal commenced
-        const removalCommenced = companyDetails?.removalCommenced === true;
+        // "Removal commenced" is meant to mean removal is IN PROGRESS (types.ts:
+        // "True if registered but removal process has started"). The register keeps
+        // the flag set after removal COMPLETES, which made an already-removed
+        // company render "REMOVED" and "REMOVAL IN PROGRESS" side by side —
+        // contradictory, confirmed against a live entity. Gate it on the entity not
+        // already being removed, so downstream consumers (the graph node badge, the
+        // statusRamp bucket, exports) all get the intended meaning from one place.
+        const alreadyRemoved = statusDesc.toLowerCase().includes('removed') || statusDesc.toLowerCase() === 'inactive';
+        const removalCommenced = companyDetails?.removalCommenced === true && !alreadyRemoved;
 
         // Check historic insolvency (for removed companies)
         let hasHistoricInsolvency = false;
@@ -153,7 +226,7 @@ async function fetchCompanyStatus(
             historicInsolvencyType = Array.from(allInsolvencies).join(' & ');
         }
 
-        const isRemoved = removalCommenced || statusDesc.toLowerCase().includes('removed') || statusDesc.toLowerCase() === 'inactive';
+        const isRemoved = alreadyRemoved || companyDetails?.removalCommenced === true;
 
         // --- DEBUG LOGGING ---
         if (isRemoved) {
@@ -174,7 +247,7 @@ async function fetchCompanyStatus(
         if (!hasHistoricInsolvency) {
             try {
                 const historyProxyPath = `${API_PATHS.nzbn}/entities/${nzbn}/history/entity-statuses`;
-                const historyUrl = `/api/proxy?path=${encodeURIComponent(historyProxyPath)}`;
+                const historyUrl = `${baseUrl}?path=${encodeURIComponent(historyProxyPath)}`;
                 const historyResponse = await fetch(historyUrl, {
                     headers: {
                         'x-user-api-key': config.nzbnKey || '',
@@ -259,7 +332,8 @@ export async function enrichCompanyResults(
     config: ApiConfig,
     logger?: LoggerCallback,
     concurrency: number = 5,
-    onProgress?: (completed: number, total: number) => void
+    onProgress?: (completed: number, total: number) => void,
+    baseUrl: string = '/api/proxy'
 ): Promise<PersonCompanyResult[]> {
 
 
@@ -274,7 +348,7 @@ export async function enrichCompanyResults(
     for (let i = 0; i < uniqueNzbns.length; i += concurrency) {
         const batch = uniqueNzbns.slice(i, i + concurrency);
         const batchResults = await Promise.all(
-            batch.map(nzbn => fetchCompanyStatus(nzbn, config, logger))
+            batch.map(nzbn => fetchCompanyStatus(nzbn, config, logger, baseUrl))
         );
 
         batch.forEach((nzbn, idx) => {
@@ -311,7 +385,8 @@ export async function enrichGraphNodes(
     nodes: GraphNode[],
     config: ApiConfig,
     logger?: LoggerCallback,
-    concurrency: number = 5
+    concurrency: number = 5,
+    baseUrl: string = '/api/proxy'
 ): Promise<GraphNode[]> {
 
 
@@ -328,7 +403,7 @@ export async function enrichGraphNodes(
         const batch = uniqueNzbns.slice(i, i + concurrency);
 
         const promises = batch.map(async (nzbn) => {
-            const status = await fetchCompanyStatus(nzbn, config, logger);
+            const status = await fetchCompanyStatus(nzbn, config, logger, baseUrl);
             if (status) {
                 statusMap.set(nzbn, status);
             }

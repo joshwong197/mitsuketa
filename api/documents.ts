@@ -1,12 +1,27 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { checkRateLimit } from '../mcp/lib/rateLimit.js';
 
 const COMPANIES_OFFICE_BASE = 'https://app.companiesoffice.govt.nz';
+
+// A directors panel fetches at most a dozen or two consent PDFs at once;
+// 300/min per IP never touches real use but stops bulk document scraping
+// riding through this deployment.
+const DOCUMENTS_LIMIT_PER_MINUTE = 300;
 
 function documentDownloadUrl(docId: string) {
     return `${COMPANIES_OFFICE_BASE}/companies/app/service/services/documents/${docId}`;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+    const clientIp = (req.headers['x-forwarded-for'] as string) || 'anonymous';
+    const rl = checkRateLimit(clientIp, 'documents', DOCUMENTS_LIMIT_PER_MINUTE);
+    if (!rl.allowed) {
+        return res.status(429).json({
+            error: 'Rate limit exceeded',
+            message: `Request limit of ${rl.limit} per minute exceeded. Please wait a moment and try again.`,
+        });
+    }
+
     const { docId } = req.query;
 
     if (!docId || typeof docId !== 'string') {
@@ -36,7 +51,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const buffer = Buffer.from(await response.arrayBuffer());
 
         res.setHeader('Content-Type', contentType);
-        res.setHeader('Cache-Control', 'public, max-age=86400');
+        // Consent forms carry signatures and residential addresses — public
+        // register data, but they don't belong in shared/CDN caches. The
+        // browser that asked may keep its copy for the day.
+        res.setHeader('Cache-Control', 'private, max-age=86400');
         return res.send(buffer);
     } catch (err: any) {
         console.error('Document proxy error:', err);

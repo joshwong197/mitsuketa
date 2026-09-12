@@ -48,10 +48,15 @@ yarn-error.log*
 *.sw?
 
 .vercel
+
+# Added by `vercel link`, broadened to catch .env.local (the OIDC token).
+# The template is the exception — it holds names only and belongs in the repo.
+.env*
+!.env.example
+
+# Local monetisation experiments and private working notes
 .neon
 .worktrees/
-
-# Local hand-offs, captured reports, scratch work and the separate prototype.
 CODEX_HANDOFF.md
 MONETIZATION_HANDOFF.md
 LINZ_EMAIL_DRAFT.md
@@ -64,6 +69,5 @@ design/handoff.html
 skills-lock.json
 __pycache__/
 *.py[cod]
-
-.vercel
-.env*
+test-results/
+playwright-report/

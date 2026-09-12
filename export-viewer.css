@@ -1,0 +1,119 @@
+/* Static CSS for the self-contained HTML export — replaces the Tailwind + reactflow CDNs
+   so exported files work fully offline. Built by `npm run build:export-viewer`.
+   Self-contained by design: the sumi token sheet is duplicated from index.css §1
+   (design/SUMI_SPEC.md is the source of truth) — no imports from the app. */
+@import "tailwindcss" source(none);
+@import "reactflow/dist/style.css";
+/* Note: components/ must be a directory @source — "./components/CustomNodes.tsx" silently matched nothing */
+@source "./export-viewer.entry.tsx";
+@source "./components";
+
+/* ─── Sumi tokens (mirror of index.css / SUMI_SPEC.md §1) ─────────── */
+:root {
+  color-scheme: light dark;
+
+  /* accent — 藍 ai-indigo */
+  --acc-l: oklch(0.40 0.095 265);
+  --acc-d: oklch(0.72 0.085 260);
+
+  --paper:      light-dark(oklch(0.952 0.007 85), oklch(0.185 0.008 75));
+  --paper2:     light-dark(oklch(0.930 0.008 85), oklch(0.225 0.009 75));
+  --ink:        light-dark(oklch(0.235 0.014 65), oklch(0.905 0.012 85));
+  --ink-mid:    light-dark(oklch(0.44 0.012 65),  oklch(0.68 0.012 85));
+  --ink-pale:   light-dark(oklch(0.62 0.010 70),  oklch(0.50 0.010 80));
+  --ink-wash:   light-dark(oklch(0.78 0.009 75),  oklch(0.35 0.009 75));
+  --rule:       light-dark(oklch(0.855 0.008 80), oklch(0.30 0.010 75));
+  --accent:     light-dark(var(--acc-l), var(--acc-d));
+  --accent-ink: light-dark(oklch(0.965 0.006 85), oklch(0.185 0.008 75));
+  --crit:       light-dark(oklch(0.55 0.17 30),  oklch(0.66 0.17 30));
+  --amber:      light-dark(oklch(0.60 0.10 78),  oklch(0.72 0.10 78));
+  --green:      light-dark(oklch(0.50 0.08 150), oklch(0.68 0.09 150));
+
+  /* type families — exported files are offline, so webfonts are not embedded;
+     the stacks fall back to system Mincho/Gothic */
+  --serif:  "Shippori Mincho", "Yu Mincho", serif;
+  --gothic: "Zen Kaku Gothic New", "Yu Gothic UI", "Segoe UI", system-ui, sans-serif;
+  --mono:   "Cascadia Mono", Consolas, ui-monospace, monospace;
+}
+:root[data-theme="light"] { color-scheme: light }
+:root[data-theme="dark"]  { color-scheme: dark }
+
+/* ─── Expose tokens to Tailwind v4 utilities ──────────────────────── */
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper2: var(--paper2);
+  --color-ink: var(--ink);
+  --color-ink-mid: var(--ink-mid);
+  --color-ink-pale: var(--ink-pale);
+  --color-ink-wash: var(--ink-wash);
+  --color-rule: var(--rule);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-crit: var(--crit);
+  --color-amber: var(--amber);
+  --color-green: var(--green);
+}
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ─── Base ─────────────────────────────────────────────────────────── */
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--gothic);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ─── React Flow chrome (token-dyed, mirrors index.css) ───────────── */
+/* Canvas dots: Background's `color` prop is an SVG attribute and cannot
+   take var(), so dye the pattern here instead */
+.react-flow__background circle { fill: var(--rule); }
+
+.react-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--rule);
+  border-radius: 0;
+}
+.react-flow__controls-button {
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+  border-radius: 0;
+  width: 26px;
+  height: 26px;
+}
+.react-flow__controls-button:last-child { border-bottom: none; }
+.react-flow__controls-button:hover { background: var(--paper2); }
+.react-flow__controls-button svg { fill: var(--ink-mid); }
+.react-flow__controls-button:hover svg { fill: var(--ink); }
+
+/* Sumi nodes carry their own accent border on select — no blue ring */
+.react-flow__node.selected,
+.react-flow__node:focus,
+.react-flow__node:focus-visible { outline: none; }
+
+/* ─── Print ─────────────────────────────────────────────────────────
+   The exported chart is a web page first, but it does get printed. Drop
+   every tinted ground to white and let the node borders carry the
+   structure, so a 200-node chart costs ink for the ink, not the paper.
+   Severity squares keep their fill — that colour is the finding, not
+   decoration. The dot grid, the controls and the attribution go: none of
+   them mean anything on paper. */
+@media print {
+  :root { color-scheme: light; }
+  body { background: #fff; }
+  .react-flow__background,
+  .react-flow__controls,
+  .react-flow__attribution { display: none !important; }
+  /* Node cards and the header panel: white ground, hairline border. */
+  .bg-paper, .bg-paper2 { background: #fff !important; }
+  .react-flow__node { box-shadow: none !important; }
+  /* Anything that is a coloured severity mark keeps its fill. */
+  .bg-crit, .bg-amber, .bg-green { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* Let the chart spill onto as many sheets as it needs rather than clipping. */
+  .w-screen, .h-screen { width: auto !important; height: auto !important; }
+}
