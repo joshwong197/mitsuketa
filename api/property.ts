@@ -356,8 +356,11 @@ return async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).send(Buffer.from(await upstream.arrayBuffer()));
     }
 
-    // Optional matter reference is separate from the authenticated credential.
-    const reference = str(req.query.ref) || undefined;
+    // Every register request needs a matter, independently of the credential.
+    const reference = str(req.query.ref);
+    if (!reference) {
+        return res.status(400).json({ error: 'reference_required', message: 'Enter a matter reference before searching.' });
+    }
     if (reference && (reference.length > MAX_REFERENCE || /[\x00-\x1f\x7f]/.test(reference))) {
         return res.status(400).json({ error: 'bad_reference', message: 'Use a matter reference of up to 100 characters, without control characters.' });
     }

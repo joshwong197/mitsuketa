@@ -32,7 +32,16 @@ test('Mitsuketa entry, Property tab, reference, report and admin audit stay conn
     await expect(page.getByRole('button', { name: 'Agree and continue' })).toBeDisabled();
     await page.getByRole('checkbox').check();
     await page.getByRole('button', { name: 'Agree and continue' }).click();
+    await page.getByLabel('Property address', { exact: true }).fill('Example commercial address');
+    await expect(page.locator('form').getByRole('button', { name: 'Search', exact: true })).toBeDisabled();
+    await page.getByLabel('Matter reference', { exact: true }).fill('   ');
+    await expect(page.locator('form').getByRole('button', { name: 'Search', exact: true })).toBeDisabled();
     await page.getByLabel('Matter reference', { exact: true }).fill('CASE-BROWSER');
+    await page.getByRole('button', { name: 'Save reference', exact: true }).click();
+    await page.getByLabel('Matter reference', { exact: true }).fill('NEW');
+    await page.getByLabel('Saved matter references').selectOption('CASE-BROWSER');
+    await expect(page.getByLabel('Matter reference', { exact: true })).toHaveValue('CASE-BROWSER');
+    expect(await page.evaluate(() => JSON.parse(localStorage.getItem('mitsuketa:matters:example') || '[]'))).toEqual(['CASE-BROWSER']);
     await page.getByLabel('Property address', { exact: true }).fill('Example commercial address');
     await page.locator('form').getByRole('button', { name: 'Search', exact: true }).click();
     await expect(page.getByText('Search reference: AUD-101', { exact: false })).toBeVisible();
@@ -43,6 +52,10 @@ test('Mitsuketa entry, Property tab, reference, report and admin audit stay conn
     await expect(page.getByText('Search reference: AUD-102', { exact: false })).toBeVisible();
     expect(requests.find(url => url.searchParams.get('mode') === 'title')?.searchParams.get('ref')).toBe('CASE-BROWSER');
     await page.getByRole('button', { name: /Back to property search/ }).click();
+    await page.getByLabel('Saved matter references').selectOption('CASE-BROWSER');
+    await page.getByRole('button', { name: 'Remove saved reference', exact: true }).click();
+    await expect(page.getByLabel('Saved matter references')).toHaveCount(0);
+    await expect(page.getByLabel('Matter reference', { exact: true })).toHaveValue('CASE-BROWSER');
     await page.getByRole('button', { name: 'Search audit', exact: true }).click();
     await expect(page.getByRole('cell', { name: 'CASE-BROWSER', exact: true })).toBeVisible();
 });

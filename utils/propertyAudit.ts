@@ -38,12 +38,12 @@ export async function recordSearch(input: SearchAuditInput, execute: Query = que
         // the stored record. A credential name is not verified mailbox ownership.
         const rows = await execute(
             'INSERT INTO search_audit (mode, query, title_no, actor, matter_ref, ip) '
-            + 'VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
+            + 'VALUES ($1,$2,$3,$4,$5,$6) RETURNING audit_reference',
             [input.mode, input.query, input.mode === 'title' ? input.query : null,
                 `password:${input.searcher}`, input.reference || null, normalizeIp(input.ip)],
         );
-        if (rows[0]?.id == null) throw new AuditUnavailableError();
-        return `AUD-${rows[0].id}`;
+        if (!rows[0]?.audit_reference) throw new AuditUnavailableError();
+        return String(rows[0].audit_reference);
     } catch {
         // DB errors can contain connection details; expose/log no raw exception.
         throw new AuditUnavailableError();
@@ -53,7 +53,7 @@ export async function recordSearch(input: SearchAuditInput, execute: Query = que
 export async function recentSearches(searcher?: string, execute: Query = query) {
     try {
         return await execute(
-            "SELECT 'AUD-' || id AS audit_reference, created_at, mode, query, "
+            "SELECT COALESCE(audit_reference::text, 'AUD-' || id) AS audit_reference, created_at, mode, query, "
             + 'title_no, actor, matter_ref, ip FROM search_audit '
             + 'WHERE ($1::text IS NULL OR actor=$1) '
             + 'ORDER BY created_at DESC, id DESC LIMIT 200',

@@ -4,10 +4,10 @@ import { createPropertyHandler } from '../api/property';
 
 const calls: { sql: string; params: unknown[] }[] = [];
 const sql = async (text: string, params: unknown[]) => {
-    calls.push({ sql: text, params }); return [{ id: 123 }];
+    calls.push({ sql: text, params }); return [{ audit_reference: '18ae328b-966c-4371-aa48-ad5c73694462' }];
 };
 assert.equal(await recordSearch({ mode: 'address', query: 'Example road', searcher: 'operator',
-    reference: "CASE-'123", ip: '127.0.0.1, 10.0.0.1', owners: ['must never be stored'] } as any, sql), 'AUD-123');
+    reference: "CASE-'123", ip: '127.0.0.1, 10.0.0.1', owners: ['must never be stored'] } as any, sql), '18ae328b-966c-4371-aa48-ad5c73694462');
 assert.deepEqual(calls[0].params, ['address', 'Example road', null, 'password:operator', "CASE-'123", '127.0.0.1']);
 assert.ok(!calls[0].sql.includes("CASE-'123"));
 assert.equal(normalizeIp('testclient'), null);
@@ -69,8 +69,18 @@ assert.equal(search.headers['cache-control'], 'no-store');
 assert.equal(events.at(-1).searcher, 'operator');
 assert.equal(events.at(-1).reference, 'CASE-123');
 assert.equal(upstream, 1);
+for (const mode of ['address', 'owner', 'title']) {
+    for (const ref of [undefined, '', '   ']) {
+        const before = events.length;
+        const result = await request({ mode, q: 'Example', title_no: 'EXAMPLE', ...(ref === undefined ? {} : { ref }) }, cookie);
+        assert.equal(result.status, 400);
+        assert.equal(result.body.error, 'reference_required');
+        assert.equal(events.length, before, 'Missing matter must not create a search audit');
+        assert.equal(upstream, 1, 'Missing matter must stop LINZ');
+    }
+}
 failAudit = true;
-assert.equal((await request({ mode: 'title', title_no: 'EXAMPLE' }, cookie)).status, 503);
+assert.equal((await request({ mode: 'title', title_no: 'EXAMPLE', ref: 'CASE-123' }, cookie)).status, 503);
 assert.equal(upstream, 1, 'Audit failure must stop the LINZ request');
 failAudit = false;
 const admin = await request({ mode: 'login' }, undefined, { searcher: 'admin', password: 'test-only-admin' });

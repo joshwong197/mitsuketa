@@ -108,3 +108,8 @@ CREATE INDEX IF NOT EXISTS search_audit_account_idx ON search_audit (account_id)
 -- credential (e.g. basic:operator), not a proven individual when shared.
 ALTER TABLE search_audit ADD COLUMN IF NOT EXISTS actor text;
 ALTER TABLE search_audit ADD COLUMN IF NOT EXISTS matter_ref varchar(120);
+
+-- Historical references remain AUD-<id>; new inserts receive opaque UUIDs.
+ALTER TABLE search_audit ADD COLUMN IF NOT EXISTS audit_reference uuid;
+ALTER TABLE search_audit ALTER COLUMN audit_reference SET DEFAULT gen_random_uuid();
+CREATE UNIQUE INDEX IF NOT EXISTS search_audit_reference_idx ON search_audit (audit_reference);

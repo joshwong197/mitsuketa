@@ -21,16 +21,18 @@ environment settings and the production branch are separate.
 The existing Neon database needs `search_audit.actor` and
 `search_audit.matter_ref` (the two additive ALTER statements at the end of
 `monetization/schema.sql`). The complete schema is for a fresh database; do not
-recreate it merely to deploy the web app.
+recreate it merely to deploy the web app. Apply `monetization/migrations/001_audit_reference.sql` before deploying the UUID adapter. This adds a unique nullable UUID column and a default for future inserts, preserving historical references.
+
+Saved matter references are explicit browser-local favourites, scoped by credential username, with a maximum of 50. They are not synced between devices or origins and are not an access-control boundary on a shared browser. Removing a saved reference does not alter audit history.
 
 ## Manual acceptance check
 
 1. Open Mitsuketa and choose **Start searching**.
 2. Choose **Property**, sign in using an existing provisioned credential, and
    accept the property-use notice.
-3. Enter an optional matter reference and the approved test address:
+3. Enter a required matter reference and the approved test address:
    `810 Great South Road, Penrose, Auckland 1061`.
-4. The results display `AUD-<id>`. Open a title; the report shows its own audit
+4. The results display a random UUID (historical entries retain `AUD-<id>`). Open a title; the report shows its own audit
    reference and the same matter reference.
 5. Return to property search. For an administrator, **Search audit** opens the
    latest 200 inputs, with an optional username filter. Find the matter
@@ -44,7 +46,7 @@ prove the deployed environment is configured.
 Search-address, search-owner and report-opened actions are inserted into
 `search_audit` before the LINZ request. A failed insert blocks the request with
 503. The durable reference is returned in JSON and `X-Search-Reference`.
-Matter references are optional, at most 100 characters, and bound to the
+Matter references are required server-side for address, owner and title requests, at most 100 characters, and bound to the
 submitted results so editing the next search cannot relabel an old result.
 
 `actor=password:<username>` records the credential, not verified mailbox

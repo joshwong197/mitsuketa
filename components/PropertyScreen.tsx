@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { ArrowRight, Loader2, Lock, Search as SearchIcon } from 'lucide-react';
 import { PropertyStyles } from './PropertyStyles';
 import { PropertyAudit } from './PropertyAudit';
+import { MatterReference } from './MatterReference';
 import {
     fetchTitleReport, login, logout, searchAddress, searchOwner,
     PropertyError,
@@ -341,7 +342,7 @@ const Search: React.FC<{
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!query.trim() || busy) return;
+        if (!query.trim() || !reference.trim() || busy) return;
         clear();
         const matter = reference.trim();
         setSubmittedReference(matter);
@@ -403,11 +404,7 @@ const Search: React.FC<{
             </div>
 
             <form onSubmit={submit}>
-                <Field label="Matter reference (optional)" hint="Use a case or file code. It will be recorded with this search and its reports.">
-                    <input aria-label="Matter reference" className={inputClass} style={inputStyle}
-                        value={reference} onChange={e => setReference(e.target.value)} maxLength={100}
-                        placeholder="e.g. CASE-123" disabled={busy} />
-                </Field>
+                <MatterReference searcher={searcher} value={reference} onChange={setReference} disabled={busy} />
                 {/* Fused search bar — the same frame as FindScreen's .find-bigsearch */}
                 <div
                     className="property-bigsearch flex relative overflow-hidden"
@@ -435,12 +432,12 @@ const Search: React.FC<{
                     />
                     <button
                         type="submit"
-                        disabled={!query.trim() || busy}
+                        disabled={!query.trim() || !reference.trim() || busy}
                         className="property-btn bg-ink text-paper inline-flex items-center gap-2 transition-colors duration-150 flex-shrink-0"
                         style={{
                             padding: '0 22px', fontSize: 14, letterSpacing: '.04em',
-                            opacity: !query.trim() || busy ? 0.45 : 1,
-                            cursor: !query.trim() || busy ? 'not-allowed' : 'pointer',
+                            opacity: !query.trim() || !reference.trim() || busy ? 0.45 : 1,
+                            cursor: !query.trim() || !reference.trim() || busy ? 'not-allowed' : 'pointer',
                         }}
                     >
                         {busy
@@ -450,7 +447,7 @@ const Search: React.FC<{
                     </button>
                 </div>
 
-                {/* Search modes share the same optional matter reference. */}
+                {/* Search modes share the same required matter reference. */}
                 <div
                     className="flex items-center flex-wrap text-ink-mid"
                     style={{ marginTop: 12, gap: 2, fontSize: 12.5 }}
@@ -567,7 +564,7 @@ const Search: React.FC<{
                                             meta={[r.title?.type, r.title?.status,
                                                 r.title?.land_district ?? r.land_district]
                                                 .filter(Boolean).join(' · ')}
-                                            onClick={() => openTitle(r.title_no!)}
+                                            onClick={() => run(() => openTitle(r.title_no!))}
                                         />
                                     ))}
                                 </ResultList>
