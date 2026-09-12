@@ -134,7 +134,8 @@ export const DirectorPanel: React.FC<DirectorPanelProps> = ({
                                                 )}
 
                                                 {dir.resignationDate && (
-                                                    <p className="text-xs text-red-600 dark:text-red-400 mt-1 font-medium">
+                                                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 font-medium flex items-center gap-1">
+                                                        <span className="sumi-status-mark sumi-status-mark--wash" aria-hidden="true">消</span>
                                                         <span>Resigned:</span> {new Date(dir.resignationDate).toLocaleDateString('en-NZ', { year: 'numeric', month: 'short', day: 'numeric' })}
                                                     </p>
                                                 )}

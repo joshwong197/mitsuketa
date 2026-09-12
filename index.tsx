@@ -4,6 +4,7 @@ import App from './App';
 import Landing from './components/Landing';
 import About from './components/About';
 import Terms from './components/Terms';
+import './app-sumi.css';
 
 // Marketing pages route off the URL hash (#/about, #/terms); everything else is
 // Home. "Start searching" leaves the marketing site and mounts the app.

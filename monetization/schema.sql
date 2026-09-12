@@ -1,8 +1,9 @@
 -- Mitsuketa monetisation schema (Neon Postgres)
 --
--- Three record types, per MONETIZATION_HANDOFF.md §5:
+-- Four record types:
 --   purchase       finance/tax log        (IRD wants business records ~7 years)
---   credit_ledger  the credit balance     (append-only; balance = SUM(delta))
+--   credit_ledger  report-pass balance    (append-only; balance = SUM(delta))
+--   entitlement    annual named-user access (no report-pass consumption)
 --   search_audit   LINZ input log         (who searched what, when; NOT results)
 --
 -- What is deliberately NOT here: the owner/mortgagee/caveator names a title
@@ -47,6 +48,30 @@ CREATE OR REPLACE VIEW account_balance AS
     LEFT JOIN credit_ledger l ON l.account_id = a.id
     GROUP BY a.id;
 
+-- ── account entitlements ───────────────────────────────────────────────────
+-- Professional is unlimited only for manual report generation by this named
+-- account. UI/API callers enforce the manual-use boundary; this table records
+-- the time-bounded access term. source_ref makes activation/renewal idempotent.
+CREATE TABLE IF NOT EXISTS account_entitlement (
+    id               uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+    account_id       uuid        NOT NULL REFERENCES account(id) ON DELETE CASCADE,
+    entitlement_key  text        NOT NULL CHECK (entitlement_key IN
+                                  ('professional_annual')),
+    status           text        NOT NULL DEFAULT 'active' CHECK (status IN
+                                  ('active','cancelled','expired')),
+    starts_at        timestamptz NOT NULL,
+    ends_at          timestamptz NOT NULL,
+    source           text        NOT NULL DEFAULT 'manual' CHECK (source IN
+                                  ('manual','stripe')),
+    source_ref       text        UNIQUE NOT NULL,
+    created_at       timestamptz NOT NULL DEFAULT now(),
+    updated_at       timestamptz NOT NULL DEFAULT now(),
+    CHECK (ends_at > starts_at)
+);
+CREATE INDEX IF NOT EXISTS account_entitlement_active_idx
+    ON account_entitlement (account_id, entitlement_key, ends_at)
+    WHERE status = 'active';
+
 -- ── purchases (finance/tax log) ─────────────────────────────────────────────
 -- One row per Stripe checkout. No owner names, so it can be kept the ~7 years
 -- IRD expects without holding any LINZ personal data.
@@ -57,7 +82,7 @@ CREATE TABLE IF NOT EXISTS purchase (
     stripe_payment_intent       text,
     amount_cents                integer     NOT NULL,   -- what was charged
     currency                    text        NOT NULL DEFAULT 'nzd',
-    credits                     integer     NOT NULL,   -- credits granted for it
+    credits                     integer     NOT NULL,   -- internal report passes granted
     status                      text        NOT NULL DEFAULT 'pending'
                                   CHECK (status IN ('pending','paid','refunded','failed')),
     created_at                  timestamptz NOT NULL DEFAULT now()
@@ -78,3 +103,8 @@ CREATE TABLE IF NOT EXISTS search_audit (
 );
 CREATE INDEX IF NOT EXISTS search_audit_created_idx ON search_audit (created_at);
 CREATE INDEX IF NOT EXISTS search_audit_account_idx ON search_audit (account_id);
+
+-- Additive migration for existing databases. actor describes the authenticated
+-- credential (e.g. basic:operator), not a proven individual when shared.
+ALTER TABLE search_audit ADD COLUMN IF NOT EXISTS actor text;
+ALTER TABLE search_audit ADD COLUMN IF NOT EXISTS matter_ref varchar(120);

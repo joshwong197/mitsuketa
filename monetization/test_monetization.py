@@ -4,8 +4,12 @@ same consume/grant rule the site uses against MemStore.
 
     python test_monetization.py
 """
-import credits
-from credits import BUNDLES, MemStore, grant, consume, balance
+try:  # package invocation: python -m monetization.test_monetization
+    from . import credits
+    from .credits import BUNDLES, MemStore, balance, consume, grant
+except ImportError:  # direct invocation from monetization/: python test_monetization.py
+    import credits
+    from credits import BUNDLES, MemStore, balance, consume, grant
 
 ACC = "acc-1"
 
@@ -64,6 +68,24 @@ def test_bundles_are_sane():
     ordered = sorted(BUNDLES.values(), key=lambda b: b.credits)
     per = [b.price_cents / b.credits for b in ordered]
     assert per == sorted(per, reverse=True), "bulk should be cheaper per credit"
+
+
+def test_agreed_report_pass_pricing():
+    expected = {
+        "payg": (1, 500),
+        "passes_10": (10, 3000),
+        "passes_100": (100, 20000),
+    }
+    assert set(BUNDLES) == set(expected)
+    for key, (passes, cents) in expected.items():
+        pack = BUNDLES[key]
+        assert pack.report_passes == passes
+        assert pack.price_cents == cents
+
+    plan = credits.PROFESSIONAL_ANNUAL
+    assert plan.price_cents == 50000
+    assert plan.interval == "year"
+    assert plan.terms == "Unlimited manual reports for one named user"
 
 
 def demo():

@@ -23,13 +23,11 @@ export const ConfigBar: React.FC<Props> = ({ config, onConfigChange, theme, togg
 
   return (
     <>
-      <div className="fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 p-4 shadow-sm dark:shadow-xl transition-colors duration-300">
+      <div className="sumi-app-header fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-700 p-4 shadow-sm dark:shadow-xl transition-colors duration-300">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="bg-blue-600 p-2 rounded-lg">
-              <Eye className="text-white" size={20} />
-            </div>
-            <h1 className="text-xl font-bold bg-gradient-to-r from-blue-600 to-emerald-600 dark:from-blue-400 dark:to-emerald-400 bg-clip-text text-transparent flex items-baseline gap-2">
+            <div className="sumi-brand-seal" aria-hidden="true">見</div>
+            <h1 className="sumi-brand-name text-xl flex items-baseline gap-2">
               Mitsuketa <span className="text-sm font-normal text-slate-500 dark:text-slate-400">見つけた</span>
             </h1>
           </div>

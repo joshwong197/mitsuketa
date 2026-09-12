@@ -62,8 +62,8 @@ function App() {
     } else {
       root.classList.remove('dark');
     }
-    // Sumi tokens in index.css switch on [data-theme] (light-dark()); the .dark
-    // class alone only drives the CDN-Tailwind utilities, so set both.
+    // The Sumi app skin switches on [data-theme]; the .dark class still drives
+    // the existing responsive utility markup, so keep both in sync.
     root.setAttribute('data-theme', theme);
     localStorage.setItem('mitsuketa_theme', theme);
   }, [theme]);
@@ -642,7 +642,7 @@ function App() {
     try {
       const { toPng } = await import('html-to-image');
       const dataUrl = await toPng(element, {
-        backgroundColor: theme === 'dark' ? '#020617' : '#f8fafc',
+        backgroundColor: theme === 'dark' ? 'oklch(0.185 0.008 75)' : 'oklch(0.952 0.007 85)',
         quality: 1.0,
       });
 
@@ -670,7 +670,7 @@ function App() {
     try {
       const { toPng } = await import('html-to-image');
       const dataUrl = await toPng(element, {
-        backgroundColor: theme === 'dark' ? '#020617' : '#f8fafc',
+        backgroundColor: theme === 'dark' ? 'oklch(0.185 0.008 75)' : 'oklch(0.952 0.007 85)',
         quality: 1.0,
       });
 
@@ -1221,7 +1221,7 @@ function App() {
 
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
+    <div className="sumi-app h-screen w-screen flex flex-col bg-slate-50 dark:bg-slate-950 transition-colors duration-300">
       <ConfigBar
         config={config}
         onConfigChange={setConfig}
@@ -1491,7 +1491,7 @@ function App() {
               <button
                 onClick={exportAsPDF}
                 disabled={nodes.length === 0 && personSearchResults.length === 0}
-                className="w-full px-3 py-2 text-sm bg-red-600 hover:bg-red-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white rounded flex items-center justify-center gap-2 transition-colors"
+                className="w-full px-3 py-2 text-sm bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white rounded flex items-center justify-center gap-2 transition-colors"
               >
                 <FileDown size={16} />
                 Export as PDF
@@ -1577,7 +1577,7 @@ function App() {
                 className="bg-slate-50 dark:bg-slate-950"
                 minZoom={0.1}
               >
-                <Background color={theme === 'dark' ? "#1e293b" : "#e2e8f0"} gap={16} />
+                <Background color={theme === 'dark' ? "oklch(0.30 0.010 75)" : "oklch(0.855 0.008 80)"} gap={16} />
                 <Controls className="!bg-white dark:!bg-slate-800 !border-slate-200 dark:!border-slate-700 [&>button]:!fill-gray-600 dark:[&>button]:!fill-gray-300 hover:[&>button]:!fill-black dark:hover:[&>button]:!fill-white" />
 
                 {/* Tidy Up Controls - Only show after graph loads */}

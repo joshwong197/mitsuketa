@@ -48,3 +48,22 @@ yarn-error.log*
 *.sw?
 
 .vercel
+.neon
+.worktrees/
+
+# Local hand-offs, captured reports, scratch work and the separate prototype.
+CODEX_HANDOFF.md
+MONETIZATION_HANDOFF.md
+LINZ_EMAIL_DRAFT.md
+monetization/LIVE_AUDIT_CHECK.md
+site/
+tmp/
+.claude/skills/
+design/HANDOFF.md
+design/handoff.html
+skills-lock.json
+__pycache__/
+*.py[cod]
+
+.vercel
+.env*

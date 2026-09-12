@@ -1,6 +1,6 @@
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from 'reactflow';
-import { Building2, User, Users, AlertTriangle, Shield } from 'lucide-react';
+import { Building2, User, Users } from 'lucide-react';
 import { NodeData } from '../types';
 
 export const CompanyNode = memo(({ data, selected }: NodeProps<NodeData>) => {
@@ -19,6 +19,9 @@ export const CompanyNode = memo(({ data, selected }: NodeProps<NodeData>) => {
 
   const isHighlighted = data.isHighlighted;
   const isTarget = data.isTarget;
+  const normalizedStatus = data.status?.toLowerCase() || '';
+  const isRegistered = normalizedStatus.includes('registered');
+  const isRemoved = normalizedStatus.includes('removed') || normalizedStatus.includes('inactive');
 
   return (
     <div
@@ -31,8 +34,8 @@ export const CompanyNode = memo(({ data, selected }: NodeProps<NodeData>) => {
       style={{ width: `${dynamicWidth}px` }}
     >
       {isTarget && (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-          Target
+        <div className="sumi-target-seal absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider flex items-center">
+          <span className="sumi-status-mark" aria-hidden="true">見</span> Target
         </div>
       )}
 
@@ -55,10 +58,17 @@ export const CompanyNode = memo(({ data, selected }: NodeProps<NodeData>) => {
               {data.status && !data.isInExternalAdmin && (
                 <span className={`
                   inline-block px-2 py-0.5 text-[10px] uppercase tracking-wide rounded-full font-bold max-w-full truncate
-                  ${data.status.toLowerCase().includes('registered')
+                  ${isRegistered
                     ? 'bg-emerald-100 dark:bg-emerald-900/60 text-emerald-700 dark:text-emerald-400'
+                    : isRemoved
+                      ? 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400'
                     : 'bg-red-100 dark:bg-red-900/60 text-red-700 dark:text-red-400'}
                 `} title={data.status}>
+                  {!isRegistered && (
+                    <span className={`sumi-status-mark mr-1 ${isRemoved ? 'sumi-status-mark--wash' : 'sumi-status-mark--crit'}`} aria-hidden="true">
+                      {isRemoved ? '消' : '紅'}
+                    </span>
+                  )}
                   {data.status}
                 </span>
               )}
@@ -72,9 +82,9 @@ export const CompanyNode = memo(({ data, selected }: NodeProps<NodeData>) => {
 
               {/* External Administration Alert */}
               {data.isInExternalAdmin && data.externalAdminType && (
-                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-orange-100 dark:bg-orange-900/40 border border-orange-200 dark:border-orange-800 shrink-0" title={data.externalAdminType}>
-                  <AlertTriangle size={10} className="text-orange-600 dark:text-orange-400" />
-                  <span className="text-[9px] font-bold text-orange-700 dark:text-orange-300">
+                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/40 border border-red-200 dark:border-red-800 shrink-0" title={data.externalAdminType}>
+                  <span className="sumi-status-mark sumi-status-mark--crit" aria-hidden="true">紅</span>
+                  <span className="text-[9px] font-bold text-red-700 dark:text-red-300">
                     {data.externalAdminType.toUpperCase()}
                   </span>
                 </div>
@@ -83,7 +93,7 @@ export const CompanyNode = memo(({ data, selected }: NodeProps<NodeData>) => {
               {/* Removal In Progress Alert */}
               {data.removalCommenced && (
                 <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900/40 border border-amber-200 dark:border-amber-800 shrink-0" title="Removal in Progress">
-                  <Shield size={10} className="text-amber-600 dark:text-amber-400" />
+                  <span className="sumi-status-mark sumi-status-mark--amber" aria-hidden="true">琥</span>
                   <span className="text-[9px] font-bold text-amber-700 dark:text-amber-300">
                     REMOVAL
                   </span>
@@ -93,7 +103,7 @@ export const CompanyNode = memo(({ data, selected }: NodeProps<NodeData>) => {
               {/* Historic Insolvency Flag (for removed companies) */}
               {data.hasHistoricInsolvency && (
                 <div className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-red-100 dark:bg-red-900/40 border border-red-200 dark:border-red-800 shrink-0" title={`Previously in ${data.historicInsolvencyType}`}>
-                  <AlertTriangle size={10} className="text-red-600 dark:text-red-400" />
+                  <span className="sumi-status-mark sumi-status-mark--crit" aria-hidden="true">紅</span>
                   <span className="text-[9px] font-bold text-red-700 dark:text-red-300">
                     PREV: {data.historicInsolvencyType?.toUpperCase() || 'INSOLVENT'}
                   </span>
@@ -113,7 +123,7 @@ export const CompanyNode = memo(({ data, selected }: NodeProps<NodeData>) => {
 
       {/* Capped Mega-Node Badge (bottom-right) */}
       {data.isCapped && (
-        <div className="absolute -bottom-2 -right-2 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-md border-2 border-white dark:border-slate-900" title="Trustee mega-node — right-click to expand">
+        <div className="absolute -bottom-2 -right-2 bg-slate-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full shadow-md border-2 border-white dark:border-slate-900" title="Trustee mega-node — right-click to expand">
           {data.cappedChildCount || '?'} capped
         </div>
       )}

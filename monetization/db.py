@@ -55,6 +55,35 @@ class PgStore:
                 (account_id, delta, reason, ref),
             )
 
+    def consume(self, account_id: str, *, n: int, ref: str | None) -> bool:
+        """Atomically spend report passes without opening nested connections."""
+        with connect() as conn:
+            conn.autocommit = False
+            try:
+                conn.execute(
+                    "SELECT pg_advisory_xact_lock(hashtextextended(%s, 0))",
+                    (str(account_id),),
+                )
+                row = conn.execute(
+                    "SELECT COALESCE(SUM(delta),0) FROM credit_ledger "
+                    "WHERE account_id=%s",
+                    (account_id,),
+                ).fetchone()
+                current = int(row[0]) if row else 0
+                if current < n:
+                    conn.rollback()
+                    return False
+                conn.execute(
+                    "INSERT INTO credit_ledger (account_id, delta, reason, ref) "
+                    "VALUES (%s,%s,'search',%s)",
+                    (account_id, -n, ref),
+                )
+                conn.commit()
+                return True
+            except BaseException:
+                conn.rollback()
+                raise
+
     @contextmanager
     def lock(self, account_id: str):
         # A transaction-scoped advisory lock keyed on the account serialises
@@ -77,3 +106,47 @@ class PgStore:
 
 # One shared instance for the app to import.
 store = PgStore()
+
+
+class PgEntitlementStore:
+    """Postgres-backed named-user entitlements."""
+
+    def has_active(self, account_id: str, entitlement_key: str, *,
+                   at=None) -> bool:
+        with connect() as conn:
+            row = conn.execute(
+                "SELECT EXISTS ("
+                " SELECT 1 FROM account_entitlement"
+                " WHERE account_id=%s AND entitlement_key=%s AND status='active'"
+                " AND starts_at <= COALESCE(%s, now())"
+                " AND ends_at > COALESCE(%s, now())"
+                ")",
+                (account_id, entitlement_key, at, at),
+            ).fetchone()
+            return bool(row and row[0])
+
+    def upsert(self, account_id: str, entitlement_key: str, *, starts_at,
+               ends_at, source: str, source_ref: str) -> None:
+        with connect() as conn:
+            row = conn.execute(
+                "INSERT INTO account_entitlement "
+                "(account_id, entitlement_key, status, starts_at, ends_at, "
+                " source, source_ref) "
+                "VALUES (%s,%s,'active',%s,%s,%s,%s) "
+                "ON CONFLICT (source_ref) DO UPDATE SET "
+                "account_id=EXCLUDED.account_id, "
+                "entitlement_key=EXCLUDED.entitlement_key, status='active', "
+                "starts_at=EXCLUDED.starts_at, ends_at=EXCLUDED.ends_at, "
+                "source=EXCLUDED.source, updated_at=now() "
+                "WHERE account_entitlement.account_id=EXCLUDED.account_id "
+                "AND account_entitlement.entitlement_key=EXCLUDED.entitlement_key "
+                "RETURNING id",
+                (account_id, entitlement_key, starts_at, ends_at, source, source_ref),
+            ).fetchone()
+            if not row:
+                raise RuntimeError(
+                    "entitlement source_ref is already attached to another account"
+                )
+
+
+entitlement_store = PgEntitlementStore()

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Building2, Briefcase, TrendingUp, AlertTriangle, Shield } from 'lucide-react';
+import { Building2 } from 'lucide-react';
 import { PersonCompanyResult } from '../types';
 
 interface CompanyRoleCardProps {
@@ -56,8 +56,11 @@ export const CompanyRoleCard: React.FC<CompanyRoleCardProps> = ({ result, onClic
     };
 
     const getStatusBadgeClass = () => {
-        if (isInExternalAdmin || isCompanyRemoved) {
-            return 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 border border-orange-300 dark:border-orange-700 font-bold';
+        if (isInExternalAdmin) {
+            return 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border border-red-300 dark:border-red-700 font-bold';
+        }
+        if (isCompanyRemoved) {
+            return 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border border-gray-300 dark:border-gray-700 font-bold';
         }
         if (removalCommenced) {
             return 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700 font-bold';
@@ -96,9 +99,9 @@ export const CompanyRoleCard: React.FC<CompanyRoleCardProps> = ({ result, onClic
                 {/* Removal In Progress Alert */}
                 {removalCommenced && !isCompanyRemoved && (
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800">
-                        <Shield size={14} className="text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                        <span className="sumi-status-mark sumi-status-mark--amber" aria-hidden="true">琥</span>
                         <span className="text-xs font-bold text-amber-700 dark:text-amber-300">
-                            📋 Removal in Progress
+                            Removal in Progress
                         </span>
                     </div>
                 )}
@@ -106,7 +109,7 @@ export const CompanyRoleCard: React.FC<CompanyRoleCardProps> = ({ result, onClic
                 {/* Historic Insolvency Flag (for removed companies) */}
                 {isCompanyRemoved && hasHistoricInsolvency && (
                     <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-                        <AlertTriangle size={14} className="text-red-500 dark:text-red-400 flex-shrink-0" />
+                        <span className="sumi-status-mark sumi-status-mark--crit" aria-hidden="true">紅</span>
                         <span className="text-xs font-semibold text-red-600 dark:text-red-300">
                             Previously In {historicInsolvencyType ? historicInsolvencyType.replace(/^in\s+/i, '') : 'Insolvency'}
                         </span>
@@ -120,19 +123,20 @@ export const CompanyRoleCard: React.FC<CompanyRoleCardProps> = ({ result, onClic
                 {isDirector && (
                     <div className="flex items-center gap-2 flex-wrap">
                         <div className="flex items-center gap-2">
-                            <Briefcase size={16} className="text-purple-600 dark:text-purple-400" />
+                            <span className="sumi-status-mark sumi-status-mark--role" aria-hidden="true">締</span>
                             <span className="text-sm font-semibold text-purple-700 dark:text-purple-300">
                                 Director
                             </span>
                         </div>
                         {/* Resignation/Inactive Badge - More Prominent */}
                         {result.isInactive && (
-                            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-red-100 dark:bg-red-900/40 border border-red-300 dark:border-red-700">
-                                <span className="text-sm font-bold text-red-700 dark:text-red-300">
-                                    ⚠ Resigned
+                            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-700">
+                                <span className="sumi-status-mark sumi-status-mark--wash" aria-hidden="true">消</span>
+                                <span className="text-sm font-bold text-gray-600 dark:text-gray-400">
+                                    Resigned
                                 </span>
                                 {resignationDateFormatted && (
-                                    <span className="text-xs text-red-600 dark:text-red-400">
+                                    <span className="text-xs text-gray-500 dark:text-gray-400">
                                         {resignationDateFormatted}
                                     </span>
                                 )}
@@ -145,7 +149,7 @@ export const CompanyRoleCard: React.FC<CompanyRoleCardProps> = ({ result, onClic
                 <div>
                     <div className="flex items-center justify-between mb-1">
                         <div className="flex items-center gap-1.5">
-                            <TrendingUp size={14} className="text-blue-600 dark:text-blue-400" />
+                            <span className="sumi-status-mark sumi-status-mark--role" aria-hidden="true">株</span>
                             <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
                                 Shareholding
                             </span>
@@ -170,7 +174,9 @@ export const CompanyRoleCard: React.FC<CompanyRoleCardProps> = ({ result, onClic
 
             {/* Footer */}
             <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-700">
-                <span className={`text-xs font-medium px-2 py-1 rounded ${getStatusBadgeClass()}`}>
+                <span className={`text-xs font-medium px-2 py-1 rounded flex items-center gap-1 ${getStatusBadgeClass()}`}>
+                    {(isInExternalAdmin || isCompanyRemoved) && <span className={`sumi-status-mark ${isInExternalAdmin ? 'sumi-status-mark--crit' : 'sumi-status-mark--wash'}`} aria-hidden="true">{isInExternalAdmin ? '紅' : '消'}</span>}
+                    {removalCommenced && !isCompanyRemoved && <span className="sumi-status-mark sumi-status-mark--amber" aria-hidden="true">琥</span>}
                     {getDisplayStatus()}
                 </span>
                 <span className="text-xs text-blue-600 dark:text-blue-400 group-hover:underline font-medium">
