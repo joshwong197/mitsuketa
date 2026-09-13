@@ -3,7 +3,7 @@ import { createClerkClient } from '@clerk/backend';
 import { neon } from '@neondatabase/serverless';
 import type { VercelRequest } from '@vercel/node';
 
-export const NOTICE_VERSION = '2026-09-12';
+export const NOTICE_VERSION = '2026-09-14';
 export class AccessError extends Error {
     constructor(readonly status: number, readonly code: string, message: string) { super(message); }
 }
@@ -64,6 +64,13 @@ export async function getMember(req: VercelRequest): Promise<Member> {
     }
     const id = String(rows[0].id);
     await accountQuery('INSERT INTO property_access(account_id) VALUES($1) ON CONFLICT DO NOTHING', [id]);
+    // Only backend-owned invitation metadata or an explicitly approved existing
+    // Clerk subject can activate a grant. Never use client metadata/email alone.
+    const grant = user.publicMetadata?.mitsuketaGrant as { applicationId?: unknown; nonce?: unknown } | undefined;
+    await accountQuery('SELECT property_claim_application($1,$2,$3,$4,$5,$6,$7)',
+        [id, process.env.CLERK_ISSUER, auth.userId, email,
+            typeof grant?.applicationId === 'string' ? grant.applicationId : '',
+            typeof grant?.nonce === 'string' ? grant.nonce : '', NOTICE_VERSION]);
     const access = (await accountQuery('SELECT status,accepted_notice_version FROM property_access WHERE account_id=$1', [id]))[0];
     const canAudit = (process.env.PROPERTY_CLERK_ADMINS || '').split(',').map(s => s.trim()).includes(auth.userId);
     return { id, searcher: email, issuer: process.env.CLERK_ISSUER, subject: auth.userId, canAudit,

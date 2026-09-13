@@ -180,7 +180,7 @@ export const CompanyNode = memo(({ data, selected }: NodeProps<NodeData>) => {
           {data.nzbn
             ? `NZBN: ${data.nzbn}`
             : data.sourceRegisterUniqueId
-              ? `Company no. ${data.sourceRegisterUniqueId}`
+              ? `Register no. ${data.sourceRegisterUniqueId}`
               : 'NZBN not linked'}
         </p>
 
@@ -283,7 +283,7 @@ const SealGlyph = ({ roleKind, color }: { roleKind?: 'shareholder' | 'director' 
   }
   return (
     <span style={{ fontFamily: 'var(--serif)', fontSize: 12, color }} aria-hidden="true">
-      {roleKind === 'director' ? '締' : '株'}
+      {roleKind === 'director' ? '締' : roleKind === 'shareholder' ? '株' : '人'}
     </span>
   );
 };
@@ -328,7 +328,7 @@ export const PersonNode = memo(({ data, selected }: NodeProps<NodeData>) => {
     data.roleKind === 'both' ? 'Shareholder · Director'
       : data.roleKind === 'director' ? 'Director'
         : data.roleKind === 'shareholder' ? 'Shareholder'
-          : 'Individual';
+          : data.reportedRole || 'Individual';
 
   return (
     <div

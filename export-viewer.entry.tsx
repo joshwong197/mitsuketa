@@ -10,6 +10,8 @@ import { CompanyNode, PersonNode, SummaryNode } from './components/CustomNodes';
 import { getLayoutedElements } from './services/layoutService';
 import { calculateHiddenDescendants, expandNodeSubtree, collapseNodeSubtree } from './utils/graphVisibility';
 import type { CaseNote, GraphEdge, GraphNode } from './types';
+import { EntityRecord } from './components/EntityRecord';
+import type { EntityProfile } from './services/entityProfile';
 
 const nodeTypes = {
     companyNode: CompanyNode,
@@ -18,6 +20,9 @@ const nodeTypes = {
 };
 
 interface ExportPayload {
+    record?: EntityProfile;
+    recordUnavailable?: string;
+    scope?: 'simple' | 'comprehensive';
     title: string;
     nzbn?: string;
     searchQuery?: string;
@@ -101,6 +106,7 @@ function NotesBlock({ notes }: { notes: CaseNote[] }) {
 }
 
 function ExportedGraph({ payload }: { payload: ExportPayload }) {
+    const [view, setView] = useState<'network' | 'record'>('network');
     const notes = payload.notes ?? [];
     // Note lookup by stable node key (nzbn ?? personId(label)) — stamps the
     // dog-ear fields so shared CustomNodes renders them, same as the app.
@@ -181,6 +187,16 @@ function ExportedGraph({ payload }: { payload: ExportPayload }) {
 
     return (
         <div className="w-screen h-screen bg-paper relative">
+            <header className="export-report-bar">
+                <strong>見つけた <span>Mitsuketa</span></strong>
+                <nav aria-label="Report views">
+                    <button aria-pressed={view==='network'} onClick={()=>setView('network')}>Network</button>
+                    <button aria-pressed={view==='record'} onClick={()=>setView('record')}>Record</button>
+                </nav>
+                <span className="export-scope">{payload.scope==='simple'?'Simple':'Comprehensive'} search</span>
+                <button aria-label={`Switch to ${effective==='dark'?'light':'dark'} theme`} onClick={()=>setTheme(effective==='dark'?'light':'dark')}>{effective==='dark'?'Light':'Dark'}</button>
+            </header>
+            {view==='network'&&<div className="export-network">
             <ReactFlow
                 nodes={rfNodes}
                 edges={rfEdges}
@@ -198,38 +214,34 @@ function ExportedGraph({ payload }: { payload: ExportPayload }) {
                 <Controls position="bottom-left" showInteractive={false} />
             </ReactFlow>
 
-            {/* Header: identity + timestamp. Must stay visible in any screenshot. */}
-            <div className="absolute top-4 left-4 z-10 bg-paper px-4 py-3 border border-rule max-w-md">
-                <h1 className="text-sm font-bold text-ink">{payload.title}</h1>
-                {payload.nzbn && <p className="text-[11px] text-ink-mid font-mono tabular-nums">NZBN: {payload.nzbn}</p>}
-                <p className="text-[11px] text-ink-mid mt-1 font-semibold">Generated: {generatedStr}</p>
-                <p className="text-[10px] text-ink-pale mt-0.5">
-                    Point-in-time snapshot — reflects NZ register data as at the generation date. Click a node to expand or collapse its branch; drag to reposition.
-                </p>
-                <p className="text-[10px] text-ink-pale mt-1">
-                    {allNodes.filter((n) => n.data.isVisible).length} of {allNodes.length} entities shown · {payload.edges.length} relationships
-                </p>
-                <div className="flex gap-2 mt-2">
-                    <button onClick={expandAll} className="text-[11px] px-2 py-1 bg-ink text-paper hover:bg-accent hover:text-accent-ink">
-                        Expand all
-                    </button>
-                    <button onClick={resetView} className="text-[11px] px-2 py-1 border border-rule text-ink-mid hover:border-ink-mid hover:text-ink">
-                        Reset view
-                    </button>
-                    <button
-                        onClick={() => setTheme(effective === 'dark' ? 'light' : 'dark')}
-                        aria-label={`Switch to ${effective === 'dark' ? 'light' : 'dark'} theme`}
-                        className="text-[11px] px-2 py-1 border border-rule text-ink-mid hover:border-ink-mid hover:text-ink"
-                    >
-                        {effective === 'dark' ? 'Light' : 'Dark'}
-                    </button>
+            <details className="export-network-panel">
+                <summary>Report details</summary>
+                <div className="export-network-panel-body">
+                    <h1>{payload.title}</h1>
+                    {payload.nzbn && <p className="export-network-nzbn">NZBN: {payload.nzbn}</p>}
+                    <p className="export-network-generated">Generated: {generatedStr}</p>
+                    <p className="export-network-explainer">
+                        Point-in-time snapshot — reflects NZ register data as at the generation date. Click a node to expand or collapse its branch; drag to reposition.
+                    </p>
+                    <p className="export-network-count">
+                        {allNodes.filter((n) => n.data.isVisible).length} of {allNodes.length} entities shown · {payload.edges.length} relationships
+                    </p>
+                    <div className="export-network-actions">
+                        <button onClick={expandAll}>Expand all</button>
+                        <button onClick={resetView}>Reset view</button>
+                    </div>
+                    <NotesBlock notes={notes} />
                 </div>
-                <NotesBlock notes={notes} />
-            </div>
+            </details>
 
             <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 text-[11px] text-ink-pale pointer-events-none">
                 Mitsuketa 見つけた · {generatedStr}
             </div>
+            </div>}
+            {view==='record'&&<main className="export-record" aria-label="Entity record">
+                <p className="export-snapshot">{payload.title} · Snapshot exported {generatedStr}</p>
+                {payload.record?<EntityRecord profile={payload.record}/>:<p>{payload.recordUnavailable||'No entity record is included in this snapshot.'}</p>}
+            </main>}
         </div>
     );
 }

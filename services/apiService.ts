@@ -3,6 +3,7 @@ import { BASE_API_URL, API_PATHS } from '../constants.js';
 import { personId } from '../utils/personId.js';
 import { unlinkedCompanyId, normaliseEntityName } from '../utils/entityId.js';
 import { computePersonRoleFlags } from '../utils/personRoles.js';
+import { personName, rememberEntityProfile } from './entityProfile.js';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -172,9 +173,13 @@ class OrgSpider {
                 label: rootDetails.entityName,
                 nzbn: rootDetails.nzbn,
                 sourceRegisterUniqueId: rootDetails.sourceRegisterUniqueId,
+                sourceRegister: rootDetails.sourceRegister,
+                entityTypeCode: rootDetails.entityTypeCode,
+                entityTypeDescription: rootDetails.entityTypeDescription,
                 status: rootDetails.entityStatusDescription,
                 type: NodeType.COMPANY,
                 isTarget: true, // Mark as center
+                companySearchScope: this.config.companySearchScope || 'comprehensive',
             },
             position: { x: 0, y: 0 }
         });
@@ -183,6 +188,12 @@ class OrgSpider {
         // PHASE 1: Crawl upstream to find all parents
         console.log('=== PHASE 1: Crawling Upstream (Finding Parents) ===');
         await this.crawlUpstream(rootDetails);
+
+        if (this.config.companySearchScope === 'simple') {
+            onDebug?.('audit', { totalNodes: this.nodes.size, totalEdges: this.edges.length, parentsExpanded: 0 },
+                'Simple search: target and immediate shareholders/directors only');
+            return { nodes: computePersonRoleFlags(Array.from(this.nodes.values()), this.edges), edges: this.edges };
+        }
 
         // PHASE 2: For each parent we found, expand their full downstream structure
         // This reveals all siblings, cousins, uncles - the full corporate web
@@ -263,7 +274,7 @@ class OrgSpider {
                 .filter((h: any) => h.otherShareholder?.nzbn)
                 .map((h: any) => h.otherShareholder!.nzbn as string);
 
-            if (parentNzbnsToPreFetch.length > 1) {
+            if (this.config.companySearchScope !== 'simple' && parentNzbnsToPreFetch.length > 1) {
                 console.log(`🚀 Prefetching ${parentNzbnsToPreFetch.length} parent statuses in parallel`);
                 await Promise.all(parentNzbnsToPreFetch.map(nzbn =>
                     this.getCachedOrFetch(nzbn, () =>
@@ -313,7 +324,7 @@ class OrgSpider {
                         // register number. Recover the NZBN so an unlinked NZ
                         // parent is crawled, deduped, status-checked and labelled
                         // exactly like a linked one.
-                        if (!parentNzbn) {
+                        if (!parentNzbn && this.config.companySearchScope !== 'simple') {
                             parentNzbn = await this.resolveNzbn(holderCompanyNumber, holderName);
                             if (parentNzbn) {
                                 console.log(`[Parent: ${holderLabel}] 🔗 Register left this shareholder unlinked — resolved to NZBN ${parentNzbn}`);
@@ -326,7 +337,7 @@ class OrgSpider {
                         parentSourceRegisterUniqueId = holderCompanyNumber;
 
                         // FILTER: Check if parent is removed before adding (OPTIMIZED)
-                        if (parentNzbn) {
+                        if (parentNzbn && this.config.companySearchScope !== 'simple') {
                             try {
                                 // OPTIMIZATION: Use cached lightweight endpoint
                                 const parentData = await this.getCachedOrFetch(
@@ -385,7 +396,7 @@ class OrgSpider {
                     this.addEdge(holderId, details.nzbn, edgeLabel, 'parent', false, isPerson ? 'shareholder' : undefined);
 
                     // Recursive Upstream for Corporate Parents
-                    if (!isPerson && parentNzbn && !this.visited.has(parentNzbn)) {
+                    if (this.config.companySearchScope !== 'simple' && !isPerson && parentNzbn && !this.visited.has(parentNzbn)) {
                         this.visited.add(parentNzbn);
                         try {
                             // OPTIMIZATION: Removed crawlSiblings here - Phase 2's crawlDownstream
@@ -410,8 +421,8 @@ class OrgSpider {
 
                 // Ceased (resigned/inactive) roles are skipped by default, but kept
                 // as dashed ink-wash edges when includeInactive is on.
-                const roleCeased = !!role.roleStatus && role.roleStatus.toLowerCase() !== 'active';
-                if (roleCeased && !this.config.includeInactive) continue;
+                const roleCeased = (!!role.endDate && Date.parse(role.endDate) <= Date.now()) || (!!role.roleStatus && role.roleStatus.toLowerCase() !== 'active');
+                if (roleCeased && (this.config.companySearchScope === 'simple' || !this.config.includeInactive)) continue;
 
                 let holderId = '';
                 let holderLabel = '';
@@ -420,7 +431,7 @@ class OrgSpider {
                 let parentSourceRegisterUniqueId: string | undefined = undefined;
 
                 if (role.rolePerson?.fullName || role.rolePerson?.firstName) {
-                    holderLabel = role.rolePerson.fullName || `${role.rolePerson.firstName} ${role.rolePerson.lastName}`;
+                    holderLabel = personName(role.rolePerson);
                     holderId = personId(holderLabel);
                     isPerson = true;
                 } else if (role.roleEntity?.entityName || role.roleEntity?.name || role.roleEntity?.nzbn) {
@@ -435,7 +446,7 @@ class OrgSpider {
 
                     // roleEntity.nzbn is documented as "currently not populated",
                     // so resolution by name is the only way these holders link up.
-                    if (!parentNzbn && roleEntityName) {
+                    if (this.config.companySearchScope !== 'simple' && !parentNzbn && roleEntityName) {
                         parentNzbn = await this.resolveNzbn(undefined, roleEntityName);
                         if (parentNzbn) {
                             console.log(`[Role Entity: ${holderLabel}] 🔗 Resolved to NZBN ${parentNzbn}`);
@@ -444,7 +455,7 @@ class OrgSpider {
 
                     holderId = parentNzbn || unlinkedCompanyId(holderLabel);
 
-                    if (parentNzbn) {
+                    if (parentNzbn && this.config.companySearchScope !== 'simple') {
                         try {
                             const parentData = await this.getCachedOrFetch(
                                 parentNzbn,
@@ -485,6 +496,7 @@ class OrgSpider {
                         sourceRegisterUniqueId: parentSourceRegisterUniqueId,
                         type: isPerson ? NodeType.PERSON : NodeType.COMPANY,
                         status: role.roleType || 'Entity Role',
+                        reportedRole: role.roleType,
                         entityTypeDescription: isPerson ? undefined : 'Role Entity'
                     },
                     position: { x: 0, y: 0 }
@@ -492,7 +504,7 @@ class OrgSpider {
 
                 this.addEdge(holderId, details.nzbn, `▼ ${role.roleType}`, 'parent', roleCeased);
 
-                if (!isPerson && parentNzbn && !this.visited.has(parentNzbn)) {
+                if (this.config.companySearchScope !== 'simple' && !isPerson && parentNzbn && !this.visited.has(parentNzbn)) {
                     this.visited.add(parentNzbn);
                     try {
                         // OPTIMIZATION: Removed crawlSiblings here - Phase 2 handles sibling discovery.
@@ -529,10 +541,10 @@ class OrgSpider {
             // Ceased (resigned) directorships are skipped by default, kept as
             // dashed ink-wash edges when includeInactive is on — same rule as
             // every other role edge.
-            const roleCeased = !!role.roleStatus && role.roleStatus.toLowerCase() !== 'active';
-            if (roleCeased && !this.config.includeInactive) continue;
+            const roleCeased = (!!role.endDate && Date.parse(role.endDate) <= Date.now()) || (!!role.roleStatus && role.roleStatus.toLowerCase() !== 'active');
+            if (roleCeased && (this.config.companySearchScope === 'simple' || !this.config.includeInactive)) continue;
 
-            const holderLabel = role.rolePerson.fullName || `${role.rolePerson.firstName} ${role.rolePerson.lastName}`;
+            const holderLabel = personName(role.rolePerson);
             const holderId = personId(holderLabel);
 
             this.addNode({
@@ -1076,6 +1088,7 @@ export async function fetchEntityDetails(nzbn: string, config: ApiConfig, baseUr
     } else {
         // Use legacy full endpoint for main data
         const fullDetails = await fetchEntityDetailsFull(nzbn, config, baseUrl, logger);
+        rememberEntityProfile(fullDetails);
 
         // OPTIMIZATION: The full endpoint returns sourceRegisterUniqueIdentifier (not sourceRegisterUniqueId).
         // Map the field name instead of making a redundant second API call. Saves ~300ms per call.

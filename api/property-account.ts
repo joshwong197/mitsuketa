@@ -28,11 +28,18 @@ return async function handler(req: VercelRequest, res: VercelResponse) {
             if (!member.canAudit) throw new AccessError(403, 'forbidden', 'Administrator access is required.');
             const rows = await query('SELECT a.id,a.email,p.status,p.organisation,p.purpose,p.requested_at,p.reviewed_at '
                 + 'FROM property_access p JOIN account a ON a.id=p.account_id WHERE a.auth_issuer=$1 '
+                + 'AND NOT EXISTS(SELECT 1 FROM property_application x WHERE x.issuer=a.auth_issuer AND x.email=a.email) '
                 + 'ORDER BY p.requested_at DESC NULLS LAST,a.created_at DESC LIMIT 200', [member.issuer]);
             return res.status(200).json({ rows });
         }
         if (req.method !== 'POST') return res.status(405).json({ error: 'POST_required' });
         const body = req.body || {};
+        if (mode === 'accept-notice') {
+            requireApproved(member);
+            if (body.noticeVersion !== NOTICE_VERSION) throw new AccessError(400, 'notice_required', 'Read and accept the current privacy notice and terms.');
+            await query('UPDATE property_access SET accepted_notice_version=$2 WHERE account_id=$1', [member.id, NOTICE_VERSION]);
+            return res.status(200).json({ ok: true });
+        }
         if (mode === 'apply') {
             const organisation = text(body.organisation, 160);
             const purpose = text(body.purpose, 1000);
@@ -50,6 +57,7 @@ return async function handler(req: VercelRequest, res: VercelResponse) {
             if (!['approved', 'rejected', 'suspended'].includes(status)) throw new AccessError(400, 'bad_status', 'Choose an approval decision.');
             const rows = await query('WITH changed AS (UPDATE property_access p SET status=$2,reviewed_by=$3,reviewed_at=now() '
                 + 'FROM account a WHERE p.account_id=$1 AND a.id=p.account_id AND a.auth_issuer=$4 '
+                + 'AND NOT EXISTS(SELECT 1 FROM property_application x WHERE x.issuer=a.auth_issuer AND x.email=a.email) '
                 + 'AND ($2 <> \'approved\' OR p.accepted_notice_version=$5) RETURNING p.account_id,p.status) '
                 + 'INSERT INTO property_access_history(account_id,status,reviewed_by) SELECT account_id,status,$3 FROM changed RETURNING id',
             [id, status, member.id, member.issuer, NOTICE_VERSION]);

@@ -19,6 +19,8 @@ export interface FindScreenProps {
   onResultSelect: (item: EntitySearchResultItem) => void;
   isLoading: boolean;
   searchMode: 'company' | 'person';
+  companySearchScope?: 'simple' | 'comprehensive';
+  onCompanySearchScopeChange?: (scope: 'simple' | 'comprehensive') => void;
   onSearchModeChange: (m: 'company' | 'person') => void;
   // Compare mode (A ↔ B connection search)
   onCompare: (a: CompareEndpoint, b: CompareEndpoint, maxHops?: number) => void;
@@ -194,6 +196,8 @@ export const FindScreen: React.FC<FindScreenProps> = ({
   onResultSelect,
   isLoading,
   searchMode,
+  companySearchScope = 'comprehensive',
+  onCompanySearchScopeChange,
   onSearchModeChange,
   onCompare,
   onCompareCancel,
@@ -362,6 +366,23 @@ export const FindScreen: React.FC<FindScreenProps> = ({
         </h2>
 
         {/* Big search */}
+        {findFace && searchMode === 'company' && onCompanySearchScopeChange && (
+          <div style={{ marginBottom: 18 }}>
+            <div role="group" aria-label="Company search scope" className="flex justify-center gap-2">
+              {(['simple', 'comprehensive'] as const).map(scope => <button key={scope} type="button"
+                aria-pressed={companySearchScope === scope} disabled={isLoading}
+                onClick={() => onCompanySearchScopeChange(scope)}
+                style={{ padding: '7px 14px', border: '1px solid var(--rule)',
+                  background: companySearchScope === scope ? 'var(--ink)' : 'transparent',
+                  color: companySearchScope === scope ? 'var(--paper)' : 'var(--ink-mid)' }}>
+                {scope === 'simple' ? 'Simple' : 'Comprehensive'}
+              </button>)}
+            </div>
+            <p style={{ marginTop: 8, fontSize: 12, color: 'var(--ink-mid)' }}>
+              {companySearchScope === 'simple' ? 'Selected company, immediate shareholders and directors.' : 'Ownership chains, subsidiaries and related entities.'}
+            </p>
+          </div>
+        )}
         {findFace && (
         <div
           className="find-bigsearch flex text-left relative overflow-hidden"
@@ -380,7 +401,7 @@ export const FindScreen: React.FC<FindScreenProps> = ({
             onChange={(e) => onSearchQueryChange(e.target.value)}
             onKeyDown={handleKeyDown}
             aria-label="Search company or person"
-            placeholder={searchMode === 'company' ? 'Search by company name or NZBN' : 'Search by person name'}
+            placeholder={searchMode === 'company' ? 'Company, entity name or NZBN' : 'Search by person name'}
             className="flex-1 bg-transparent"
             style={{
               border: 'none',
@@ -452,7 +473,8 @@ export const FindScreen: React.FC<FindScreenProps> = ({
                   background: i === selectedIndex ? 'oklch(from var(--accent) l c h / .12)' : undefined,
                 }}
               >
-                <b style={{ fontWeight: 600, fontSize: 13.5 }}>{item.entityName}</b>
+                <div><b style={{ fontWeight: 600, fontSize: 13.5 }}>{item.entityName}</b>
+                  <p className="text-ink-mid" style={{ fontSize: 11, marginTop: 3 }}>{item.entityTypeDescription || item.entityTypeCode || 'Entity type not supplied'}</p></div>
                 <span
                   className="whitespace-nowrap text-ink-mid"
                   style={{ fontFamily: 'var(--mono)', fontSize: 11, fontVariantNumeric: 'tabular-nums' }}
@@ -589,7 +611,7 @@ export const FindScreen: React.FC<FindScreenProps> = ({
           {([
             {
               kanji: '社',
-              label: 'Companies',
+              label: 'Companies & entities',
               active: findFace && searchMode === 'company',
               onClick: () => { setCompareMode(false); setProperty(false); onSearchModeChange('company'); },
             },

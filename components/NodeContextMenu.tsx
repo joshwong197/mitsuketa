@@ -1,5 +1,6 @@
 import React from 'react';
 import { Users, Maximize2, Eye, Minimize2, ExternalLink, PenLine } from 'lucide-react';
+import { registerLink } from '../services/entityProfile';
 
 interface NodeContextMenuProps {
     nodeId: string;
@@ -7,7 +8,10 @@ interface NodeContextMenuProps {
     nodeType: string;
     nzbn?: string;
     isCapped?: boolean;
+    simpleSearch?: boolean;
     sourceRegisterUniqueId?: string; // NZCN - Company number
+    sourceRegister?: string;
+    onEntityDetails?: (nzbn: string) => void;
     position: { x: number; y: number };
     onClose: () => void;
     onRecenter: (nodeId: string, nzbn: string, label: string) => void;
@@ -26,7 +30,10 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
     nodeType,
     nzbn,
     isCapped,
+    simpleSearch = false,
     sourceRegisterUniqueId,
+    sourceRegister,
+    onEntityDetails,
     position,
     onClose,
     onRecenter,
@@ -40,6 +47,13 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
 }) => {
     const menuItems = [
         {
+            icon: Eye,
+            label: 'Entity details',
+            onClick: () => { if (nzbn) onEntityDetails?.(nzbn); onClose(); },
+            disabled: !nzbn,
+            hide: nodeType === 'personNode' || !onEntityDetails,
+        },
+        {
             icon: PenLine,
             label: 'Add note',
             onClick: () => {
@@ -52,13 +66,14 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
             icon: ExternalLink,
             label: 'View on Register',
             onClick: () => {
-                if (sourceRegisterUniqueId) {
-                    window.open(`https://app.companiesoffice.govt.nz/companies/app/ui/pages/companies/${sourceRegisterUniqueId}`, '_blank');
+                if (nzbn || sourceRegisterUniqueId) {
+                    window.open(registerLink(sourceRegister || '', sourceRegisterUniqueId || '').url, '_blank', 'noopener,noreferrer');
                 }
                 onClose();
             },
-            disabled: !sourceRegisterUniqueId,
-            description: 'Open company page on Companies Office website'
+            disabled: !nzbn && !sourceRegisterUniqueId,
+            hide: nodeType === 'personNode',
+            description: 'Open the relevant source register'
         },
         {
             icon: Eye,
@@ -75,7 +90,7 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
                 if (nzbn) onShowDirectors(nodeId, nzbn, nodeLabel);
                 onClose();
             },
-            disabled: !nzbn,
+            disabled: !nzbn || simpleSearch,
         },
         {
             icon: Maximize2,
@@ -84,7 +99,7 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
                 if (nzbn) onExpandStructure(nodeId, nzbn, nodeLabel);
                 onClose();
             },
-            disabled: !nzbn,
+            disabled: !nzbn || simpleSearch,
         },
         {
             icon: Minimize2,

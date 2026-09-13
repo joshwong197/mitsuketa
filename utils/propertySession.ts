@@ -8,9 +8,8 @@
 //   reload, new tab, or close and reopen       -> fresh module, locked again
 //
 // sessionStorage would survive a reload and localStorage would survive
-// everything, so neither is used. It also means the acknowledgement cannot be
-// forged: there is no cookie or storage key a user can set by hand to skip the
-// privacy notice, because the flag only ever exists in memory.
+// everything, so neither is used. This acknowledgement is a browser UX gate,
+// not proof of reading or an authorisation boundary. The API enforces access.
 //
 // The server keeps its own httpOnly session cookie for actual authorisation —
 // this state is the client's view of it, not the credential.

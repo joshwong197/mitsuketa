@@ -160,9 +160,9 @@ export async function logout(): Promise<void> {
 }
 
 export function searchAddress(
-    query: string, addressId?: number, reference?: string,
+    query: string, addressId: number | undefined, reference: string, operationId: string,
 ): Promise<AddressResult> {
-    const params: Record<string, string> = { mode: 'address' };
+    const params: Record<string, string> = { mode: 'address', search_id: operationId };
     if (addressId !== undefined) params.address_id = String(addressId);
     // Sent alongside address_id too, so the audit line records what was typed
     // rather than just the id that got picked from the candidate list.
@@ -171,12 +171,13 @@ export function searchAddress(
     return request<AddressResult>(params);
 }
 
-export function searchOwner(query: string, reference = ''): Promise<OwnerResult> {
-    return request<OwnerResult>({ mode: 'owner', q: query, ref: reference });
+export function searchOwner(query: string, reference: string, operationId: string): Promise<OwnerResult> {
+    return request<OwnerResult>({ mode: 'owner', q: query, ref: reference, search_id: operationId });
 }
 
-export function fetchTitleReport(titleNo: string, reference = ''): Promise<TitleReport> {
-    return request<TitleReport>({ mode: 'title', title_no: titleNo, ref: reference });
+export function fetchTitleReport(titleNo: string, reference: string, operationId: string, startsSearch = false): Promise<TitleReport> {
+    return request<TitleReport>({ mode: 'title', title_no: titleNo, ref: reference,
+        search_id: operationId, ...(startsSearch ? { search_start: '1' } : {}) });
 }
 
 export interface SearchAuditRow {
@@ -185,7 +186,9 @@ export interface SearchAuditRow {
     mode: string;
     query: string;
     title_no: string | null;
+    opened_titles: string[];
     actor: string | null;
+    searcher: string | null;
     matter_ref: string | null;
     ip: string | null;
 }

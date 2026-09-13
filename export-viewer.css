@@ -4,6 +4,7 @@
    (design/SUMI_SPEC.md is the source of truth) — no imports from the app. */
 @import "tailwindcss" source(none);
 @import "reactflow/dist/style.css";
+@import "./components/entity-record.css";
 /* Note: components/ must be a directory @source — "./components/CustomNodes.tsx" silently matched nothing */
 @source "./export-viewer.entry.tsx";
 @source "./components";
@@ -117,3 +118,31 @@ body {
   /* Let the chart spill onto as many sheets as it needs rather than clipping. */
   .w-screen, .h-screen { width: auto !important; height: auto !important; }
 }
+.export-report-bar {height:64px;display:flex;align-items:center;gap:24px;padding:0 24px;border-bottom:1px solid var(--rule);color:var(--ink);}
+.export-report-bar strong {font-family:var(--serif);font-size:20px;white-space:nowrap;}
+.export-report-bar strong span {font-size:12px;margin-left:8px;}
+.export-report-bar nav {display:flex;align-self:stretch;}
+.export-report-bar button {padding:8px 14px;cursor:pointer;}
+.export-report-bar nav button[aria-pressed=true] {border-bottom:3px solid var(--accent);color:var(--accent);}
+.export-scope {margin-left:auto;color:var(--ink-mid);font-size:12px;}
+.export-network {position:absolute;inset:64px 0 0;}
+.export-network-panel {position:absolute;top:16px;left:16px;z-index:10;width:min(420px,calc(100% - 32px));color:var(--ink);}
+.export-network-panel > summary {display:inline-flex;align-items:center;gap:8px;min-height:38px;padding:7px 12px;border:1px solid var(--rule);background:var(--paper);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;box-shadow:3px 3px 0 var(--paper2);}
+.export-network-panel > summary::-webkit-details-marker {display:none;}
+.export-network-panel > summary::before {content:'+';display:grid;place-items:center;width:18px;height:18px;border:1px solid var(--accent);color:var(--accent);font-size:15px;line-height:1;}
+.export-network-panel[open] > summary::before {content:'\2212';}
+.export-network-panel-body {margin-top:8px;padding:14px 16px;border:1px solid var(--rule);background:var(--paper);box-shadow:4px 4px 0 var(--paper2);}
+.export-network-panel h1 {font-size:14px;font-weight:700;}
+.export-network-nzbn {font:11px/1.6 var(--mono);color:var(--ink-mid);font-variant-numeric:tabular-nums;}
+.export-network-generated {margin-top:4px;font-size:11px;font-weight:600;color:var(--ink-mid);}
+.export-network-explainer,.export-network-count {font-size:10px;color:var(--ink-pale);}
+.export-network-explainer {margin-top:2px;}
+.export-network-count {margin-top:4px;}
+.export-network-actions {display:flex;gap:8px;margin-top:10px;}
+.export-network-actions button {padding:5px 9px;border:1px solid var(--rule);color:var(--ink-mid);font-size:11px;cursor:pointer;}
+.export-network-actions button:first-child {border-color:var(--ink);background:var(--ink);color:var(--paper);}
+.export-network-actions button:hover {border-color:var(--accent);color:var(--accent);}
+.export-network-actions button:first-child:hover {background:var(--accent);color:var(--accent-ink);}
+.export-record {position:absolute;inset:64px 0 0;z-index:1;overflow:auto;padding:24px 32px 64px;background:var(--paper);}
+.export-snapshot {max-width:1240px;margin:0 auto 20px;font-size:12px;color:var(--ink-mid);}
+@media(max-width:600px){.export-report-bar{padding:0 10px;gap:8px}.export-report-bar strong span,.export-scope{display:none}.export-report-bar strong{font-size:16px}.export-report-bar button{padding:8px 10px}.export-record{padding:16px 12px 40px}.export-network-panel{top:10px;left:10px;width:calc(100% - 20px)}}

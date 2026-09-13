@@ -57,6 +57,7 @@ const COOKIE = 'mitsuketa_property';
 const SESSION_HOURS = 12;
 const MAX_QUERY = 200;
 const MAX_REFERENCE = 100;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 // --------------------------------------------------------------------------- //
 // Login throttle
@@ -388,7 +389,12 @@ return async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const query = str(req.query.q).slice(0, MAX_QUERY);
+    const operationId = str(req.query.search_id);
+    if (!UUID.test(operationId)) {
+        return res.status(400).json({ error: 'search_id_required', message: 'Start this search again.' });
+    }
     const base = { reference, searcher: session.searcher, ip,
+        operationId,
         ...(member ? { accountId: member.id, actor: `clerk:${member.issuer}#${member.subject}`, verified: true } : {}) };
 
     try {
@@ -407,7 +413,8 @@ return async function handler(req: VercelRequest, res: VercelResponse) {
             if (!query && addressId === undefined) {
                 return res.status(400).json({ error: 'query_required' });
             }
-            const auditReference = await add({ ...base, action: 'search-address', query: query || `address_id=${addressId}` });
+            const auditReference = await add({ ...base, action: 'search-address',
+                query: query || `address_id=${addressId}`, continuation: addressId !== undefined });
             res.setHeader('X-Search-Reference', auditReference!);
             return res.status(200).json({ ...await searchAddress(client, query, addressId),
                 audit_reference: auditReference, matter_reference: reference });
@@ -426,7 +433,9 @@ return async function handler(req: VercelRequest, res: VercelResponse) {
             if (!titleNo) return res.status(400).json({ error: 'title_no_required' });
             const metered = !!member && billingEnabled();
             if (metered && await balance(member!.id) < 1) throw new AccessError(402, 'passes_required', 'Add sandbox report passes from your account panel.');
-            const auditReference = await add({ ...base, action: 'report-opened', query: titleNo });
+            const startsSearch = str(req.query.search_start) === '1';
+            const auditReference = await add({ ...base, action: 'report-opened', query: titleNo,
+                titleNo, continuation: !startsSearch });
             res.setHeader('X-Search-Reference', auditReference!);
             const report = await titleReport(client, titleNo);
             // No debit for upstream failure or a missing title. Recheck approval

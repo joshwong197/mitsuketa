@@ -7,6 +7,7 @@ export enum NodeType {
 }
 
 export interface ApiConfig {
+  companySearchScope?: 'simple' | 'comprehensive';
   nzbnKey: string;
   companiesKey: string;
   disqualifiedDirectorsKey: string;
@@ -41,6 +42,8 @@ export interface NodeData {
   type: NodeType;
   status?: string;
   entityTypeCode?: string; // e.g. "LimitedPartnershipNz"
+  sourceRegister?: string;
+  reportedRole?: string;
   entityTypeDescription?: string; // e.g. "Limited Partnership"
   isTarget?: boolean; // To identify the center of the "butterfly"
   isHighlighted?: boolean;
@@ -48,6 +51,7 @@ export interface NodeData {
   // Visibility/collapse tracking
   isVisible?: boolean;          // Should this node be rendered?
   isDirectLineage?: boolean;    // Is this in direct path from search root?
+  companySearchScope?: 'simple' | 'comprehensive'; // Recorded on the search target
   isBranchExpanded?: boolean;   // Has this node's hidden branch been expanded?
   hiddenDescendantCount?: number; // Total hidden descendants (for badge)
   isCapped?: boolean;           // Node was truncated during crawl (mega-node trustee)
@@ -253,6 +257,7 @@ export interface PropertyTab {
 
 // From /entities search response
 export interface EntitySearchResultItem {
+  entityTypeDescription?: string;
   nzbn: string;
   entityName: string;
   entityStatusDescription: string;
@@ -274,6 +279,9 @@ export interface EntitySearchResponse {
 // From /entities/{nzbn} (FullEntity schema)
 // Updated to use "company-details" as per JSON definition
 export interface NZBNFullEntity {
+  entityTypeCode?: string;
+  entityTypeDescription?: string;
+  sourceRegister?: string;
   nzbn: string;
   entityName: string;
   entityStatusDescription: string;
@@ -281,6 +289,7 @@ export interface NZBNFullEntity {
   "company-details"?: {
     extensiveShareholding?: boolean;
     shareholding?: {
+      numberOfShares?: number;
       shareAllocation: Array<{
         allocation: number;
         shareholder: Array<{
@@ -305,12 +314,15 @@ export interface NZBNFullEntity {
     };
   };
   roles?: Array<{
+    startDate?: string;
+    endDate?: string;
     roleType: string;
     roleStatus: string;
     rolePerson?: {
       firstName?: string;
       lastName?: string;
       middleName?: string;
+      middleNames?: string;
       fullName?: string;
     };
     roleEntity?: {

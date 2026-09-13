@@ -63,6 +63,8 @@ export const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
   if (layoutedNodes.length > 0 && edges.length > 0) {
     // Create a map of node ID to node for quick lookup
     const nodeMap = new Map(layoutedNodes.map(n => [n.id, n]));
+    const incomingCount = new Map<string, number>();
+    edges.forEach(edge => incomingCount.set(edge.target, (incomingCount.get(edge.target) || 0) + 1));
 
     // Calculate depth for each node (distance from leaves)
     // Leaves have depth 0, their parents have depth 1, etc.
@@ -119,6 +121,10 @@ export const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
         nodesAtDepth.forEach(nodeId => {
           const childrenIds = edges.filter(e => e.source === nodeId).map(e => e.target);
           if (childrenIds.length === 0) return; // Skip leaf nodes
+          // Multiple owners/directors can point to the same company. Dagre has
+          // already spaced those peers; centring every parent over their shared
+          // child would collapse them onto one another.
+          if (childrenIds.some(id => (incomingCount.get(id) || 0) > 1)) return;
 
           const parent = nodeMap.get(nodeId);
           if (!parent) return;
@@ -187,6 +193,7 @@ export const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
         nodesAtDepth.forEach(nodeId => {
           const childrenIds = edges.filter(e => e.source === nodeId).map(e => e.target);
           if (childrenIds.length === 0) return;
+          if (childrenIds.some(id => (incomingCount.get(id) || 0) > 1)) return;
 
           const parent = nodeMap.get(nodeId);
           if (!parent) return;

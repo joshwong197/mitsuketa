@@ -30,18 +30,27 @@ export interface AuditEvent {
     ip?: string;
     accountId?: string;
     actor?: string;
+    operationId?: string;
+    continuation?: boolean;
+    titleNo?: string;
 }
 
-import { recordSearch } from './propertyAudit.js';
+import { continueSearch, recordSearch } from './propertyAudit.js';
 
 export async function add(event: Omit<AuditEvent, 'at'>): Promise<string | undefined> {
     const mode = event.action === 'search-address' ? 'address'
         : event.action === 'search-owner' ? 'owner'
         : event.action === 'report-opened' ? 'title' : null;
     if (mode) {
-        if (!event.searcher || !event.query) throw new Error('Search audit input is incomplete');
+        if (!event.searcher || !event.query || !event.operationId) throw new Error('Search audit input is incomplete');
+        if (event.continuation) {
+            return continueSearch({ searcher: event.searcher, reference: event.reference,
+                accountId: event.accountId, actor: event.actor, operationId: event.operationId,
+                titleNo: event.titleNo });
+        }
         return recordSearch({ mode, query: event.query, searcher: event.searcher,
-            reference: event.reference, ip: event.ip, accountId: event.accountId, actor: event.actor });
+            reference: event.reference, ip: event.ip, accountId: event.accountId, actor: event.actor,
+            operationId: event.operationId, titleNo: event.titleNo });
     }
     const record: AuditEvent = { at: new Date().toISOString(), verified: false, ...event };
     // Access events remain platform logs. Searches above must reach Neon before

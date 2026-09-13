@@ -11,6 +11,7 @@ import {
 } from '../utils/titleReport';
 import { ringsToPaths, scaleBar, tileGrid } from '../utils/tiles';
 import { tileUrl } from './propertyService';
+import type { EntityProfile } from './entityProfile';
 
 const esc = (s: unknown): string =>
     String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -41,6 +42,8 @@ export async function downloadInteractiveGraphHtml(opts: {
     nodes: GraphNode[];
     edges: GraphEdge[];
     notes?: CaseNote[]; // Case notes for this tab — viewer stamps dog-ears + lists them
+    record?: EntityProfile;
+    recordUnavailable?: string;
 }): Promise<void> {
     const [jsRes, cssRes] = await Promise.all([fetch('/export-viewer.js'), fetch('/export-viewer.css')]);
     if (!jsRes.ok || !cssRes.ok) throw new Error('Export viewer assets not found — run npm run build:export-viewer');
@@ -56,6 +59,9 @@ export async function downloadInteractiveGraphHtml(opts: {
         nodes: opts.nodes,
         edges: opts.edges,
         notes: opts.notes ?? [],
+        record: opts.record,
+        recordUnavailable: opts.recordUnavailable,
+        scope: opts.nodes.find(n=>n.data.isTarget)?.data.companySearchScope || 'comprehensive',
     };
     // < escaping keeps embedded JSON from terminating the script tag.
     const json = JSON.stringify(payload).replace(/</g, '\\u003c');

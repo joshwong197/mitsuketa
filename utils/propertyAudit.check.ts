@@ -1,22 +1,28 @@
 import assert from 'node:assert/strict';
-import { recordSearch, normalizeIp, canReadAudit, recentSearches, AuditUnavailableError } from './propertyAudit';
+import { recordSearch, continueSearch, normalizeIp, canReadAudit, recentSearches, AuditUnavailableError } from './propertyAudit';
 import { createPropertyHandler } from '../api/property';
 
 const calls: { sql: string; params: unknown[] }[] = [];
 const sql = async (text: string, params: unknown[]) => {
     calls.push({ sql: text, params }); return [{ audit_reference: '18ae328b-966c-4371-aa48-ad5c73694462' }];
 };
+const operationId = 'be243f64-76e5-44a5-983f-15545ae223bb';
 assert.equal(await recordSearch({ mode: 'address', query: 'Example road', searcher: 'operator',
-    reference: "CASE-'123", ip: '127.0.0.1, 10.0.0.1', owners: ['must never be stored'] } as any, sql), '18ae328b-966c-4371-aa48-ad5c73694462');
-assert.deepEqual(calls[0].params, ['address', 'Example road', null, 'password:operator', "CASE-'123", '127.0.0.1', null]);
+    reference: "CASE-'123", ip: '127.0.0.1, 10.0.0.1', operationId,
+    owners: ['must never be stored'] } as any, sql), '18ae328b-966c-4371-aa48-ad5c73694462');
+assert.deepEqual(calls[0].params, ['address', 'Example road', null, 'password:operator', "CASE-'123", '127.0.0.1', null, operationId]);
 assert.ok(!calls[0].sql.includes("CASE-'123"));
+assert.match(calls[0].sql, /ON CONFLICT \(actor, operation_id\)/);
+assert.equal(await continueSearch({ searcher: 'operator', reference: "CASE-'123", operationId,
+    titleNo: 'NA123/4' }, sql), '18ae328b-966c-4371-aa48-ad5c73694462');
+assert.deepEqual(calls[1].params, [operationId, 'password:operator', null, "CASE-'123", 'NA123/4']);
 assert.equal(normalizeIp('testclient'), null);
 assert.equal(normalizeIp('::1'), '::1');
-await assert.rejects(recordSearch({ mode: 'title', query: 'EXAMPLE', searcher: 'operator' },
+await assert.rejects(recordSearch({ mode: 'title', query: 'EXAMPLE', searcher: 'operator', operationId },
     async () => { throw new Error('sensitive database detail'); }), AuditUnavailableError);
 await recentSearches(' Operator ', sql);
-assert.deepEqual(calls[1].params, ['password:operator', 'operator']);
-assert.match(calls[1].sql, /LIMIT 200/);
+assert.deepEqual(calls[2].params, ['password:operator', 'operator']);
+assert.match(calls[2].sql, /LIMIT 200/);
 
 process.env.PROPERTY_PW_OPERATOR = 'test-only-operator';
 process.env.PROPERTY_PW_ADMIN = 'test-only-admin';
@@ -61,14 +67,22 @@ assert.equal((await request({ mode: 'audit', searcher: 'admin' }, cookie)).statu
 assert.equal(reads, 0);
 assert.equal((await request({ mode: 'address', q: 'Example', ref: 'x'.repeat(101) }, cookie)).status, 400);
 assert.equal(upstream, 0);
-const search = await request({ mode: 'address', q: 'Example', ref: 'CASE-123', searcher: 'admin' }, cookie);
+const search = await request({ mode: 'address', q: 'Example', ref: 'CASE-123', search_id: operationId, searcher: 'admin' }, cookie);
 assert.equal(search.status, 200);
 assert.equal(search.body.audit_reference, 'AUD-123');
 assert.equal(search.body.matter_reference, 'CASE-123');
 assert.equal(search.headers['cache-control'], 'no-store');
 assert.equal(events.at(-1).searcher, 'operator');
 assert.equal(events.at(-1).reference, 'CASE-123');
+assert.equal(events.at(-1).operationId, operationId);
+assert.notEqual(events.at(-1).continuation, true);
 assert.equal(upstream, 1);
+const continuation = await request({ mode: 'address', q: 'Example', address_id: '17', ref: 'CASE-123', search_id: operationId }, cookie);
+assert.equal(continuation.status, 200);
+assert.equal(events.at(-1).continuation, true);
+assert.equal(events.at(-1).operationId, operationId);
+assert.equal(upstream, 2);
+assert.equal((await request({ mode: 'owner', q: 'Example', ref: 'CASE-123', search_id: 'not-a-uuid' }, cookie)).body.error, 'search_id_required');
 for (const mode of ['address', 'owner', 'title']) {
     for (const ref of [undefined, '', '   ']) {
         const before = events.length;
@@ -76,12 +90,12 @@ for (const mode of ['address', 'owner', 'title']) {
         assert.equal(result.status, 400);
         assert.equal(result.body.error, 'reference_required');
         assert.equal(events.length, before, 'Missing matter must not create a search audit');
-        assert.equal(upstream, 1, 'Missing matter must stop LINZ');
+        assert.equal(upstream, 2, 'Missing matter must stop LINZ');
     }
 }
 failAudit = true;
-assert.equal((await request({ mode: 'title', title_no: 'EXAMPLE', ref: 'CASE-123' }, cookie)).status, 503);
-assert.equal(upstream, 1, 'Audit failure must stop the LINZ request');
+assert.equal((await request({ mode: 'title', title_no: 'EXAMPLE', ref: 'CASE-123', search_id: operationId }, cookie)).status, 503);
+assert.equal(upstream, 2, 'Audit failure must stop the LINZ request');
 failAudit = false;
 const admin = await request({ mode: 'login' }, undefined, { searcher: 'admin', password: 'test-only-admin' });
 const adminCookie = admin.headers['set-cookie'].split(';')[0].split('=')[1];
@@ -91,5 +105,5 @@ process.env.PROPERTY_AUDIT_ADMINS = '';
 assert.equal((await request({ mode: 'audit' }, adminCookie)).status, 403, 'Revoking admin permission takes effect immediately');
 delete process.env.DATABASE_URL;
 assert.equal((await request({ mode: 'address', q: 'Example' }, cookie)).status, 503);
-assert.equal(upstream, 1);
-console.log('PASS: durable reference, input-only SQL, credential attribution, admin isolation, fail-closed audit');
+assert.equal(upstream, 2);
+console.log('PASS: one-row search operations, durable reference, readable attribution, admin isolation, fail-closed audit');

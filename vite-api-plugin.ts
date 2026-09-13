@@ -33,8 +33,10 @@ const API_ROUTES: Record<string, string> = {
     '/api/proxy': '/api/proxy.ts',
     '/api/consent-forms': '/api/consent-forms.ts',
     '/api/documents': '/api/documents.ts',
+    '/api/entity-record': '/api/entity-record.ts',
     '/api/property': '/api/property.ts',
     '/api/property-account': '/api/property-account.ts',
+    '/api/property-applications': '/api/property-applications.ts',
     '/api/stripe-webhook': '/api/stripe-webhook.ts',
 };
 

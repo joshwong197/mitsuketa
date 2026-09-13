@@ -23,6 +23,8 @@ import { StatusLegend } from './components/StatusLegend';
 import { NodeContextMenu } from './components/NodeContextMenu';
 import { NoteEditor } from './components/NoteEditor';
 import { DirectorPanel } from './components/DirectorPanel';
+import { EntityDetailsPanel } from './components/EntityDetailsPanel';
+import { GraphScopeControl } from './components/GraphScopeControl';
 import { PersonSearchResults } from './components/PersonSearchResults';
 import { ConfirmOrgChartDialog } from './components/ConfirmOrgChartDialog';
 import { TabBar } from './components/TabBar';
@@ -276,6 +278,8 @@ function App() {
 
   // Person Search State (legacy - kept for active tab)
   const [searchMode, setSearchMode] = useState<'company' | 'person'>('company');
+  const [companySearchScope, setCompanySearchScope] = useState<'simple' | 'comprehensive'>('comprehensive');
+  const [entityDetailsNzbn, setEntityDetailsNzbn] = useState<string | null>(null);
   const [personSearchResults, setPersonSearchResults] = useState<PersonCompanyResult[]>([]);
   const [personSearchName, setPersonSearchName] = useState('');
   const [disqualifiedMatches, setDisqualifiedMatches] = useState<DisqualifiedDirector[]>([]);
@@ -529,7 +533,7 @@ function App() {
     try {
       const response = await searchEntities(query, config, handleLog, 0);
       if (response.items.length === 0) {
-        setError("No companies found with that name/NZBN.");
+        setError("No entities found with that name or NZBN. Entities without an NZBN will not appear in this search.");
       } else {
         setSearchResults(response.items);
       }
@@ -940,6 +944,11 @@ function App() {
   useEffect(() => {
     if (bootRestoredRef.current) return;
     bootRestoredRef.current = true;
+    if (new URLSearchParams(window.location.search).get('property') === '1') {
+      setActiveMainTab('property'); setSearchViewOpen(true);
+      window.history.replaceState(null, '', '/#/app');
+      return;
+    }
     if (activeCompanyTabId && graphTabs.some(t => t.id === activeCompanyTabId)) {
       handleSubTabClick(activeCompanyTabId);
     }
@@ -1104,7 +1113,8 @@ function App() {
   // forTabId: the company tab this load belongs to. If the user switches away
   // before the fetch resolves, results are stamped into that tab's stored
   // entry instead of the live canvas (which by then shows a different tab).
-  const handleSelectEntity = async (entity: EntitySearchResultItem, forTabId?: string) => {
+  const handleSelectEntity = async (entity: EntitySearchResultItem, forTabId?: string, scope = companySearchScope) => {
+    if (scope === 'simple') setHideDirectors(false);
     setSearchQuery(entity.entityName);
     setIsGraphLoading(true);
     setError(null);
@@ -1115,7 +1125,7 @@ function App() {
       // Pass debug callback and logger
       const graph = await generateOrgChart(
         entity.nzbn,
-        { ...config, includeInactive: true },
+        { ...config, includeInactive: true, companySearchScope: scope },
         (type, data, message) => {
           setDebugData(prev => {
             if (type === 'audit') {
@@ -1270,6 +1280,13 @@ function App() {
         });
       } else if (allNodesInMemory.length > 0) {
         const target = allNodesInMemory.find(n => n.data.isTarget) || allNodesInMemory[0];
+        const { loadEntityRecord } = await import('./services/entityRecordService');
+        let record;
+        let recordUnavailable;
+        if (target.data.nzbn) {
+          try { record = await loadEntityRecord(target.data.nzbn, config); }
+          catch { recordUnavailable = 'The register record could not be retrieved when this file was exported.'; }
+        }
         await downloadInteractiveGraphHtml({
           title: target.data.entityName || target.data.label,
           nzbn: target.data.nzbn,
@@ -1277,6 +1294,7 @@ function App() {
           nodes: allNodesInMemory,
           edges: edges as unknown as GraphEdge[],
           notes: caseNotes.filter((n) => n.tabId === activeCompanyTabId),
+          record, recordUnavailable,
         });
       }
     } catch (err) {
@@ -2026,6 +2044,7 @@ function App() {
     [nodes]);
 
   // Case-file derived values
+  useEffect(() => { setEntityDetailsNzbn(null); }, [activeCompanyTabId, activeMainTab, searchViewOpen]);
   const graphLoaded = allNodesInMemory.length > 0;
   const caseTarget = allNodesInMemory.find(n => n.data.isTarget) || allNodesInMemory[0];
   const caseDepth = allNodesInMemory.reduce((m, n) => Math.max(m, n.data.depth ?? 0), 0);
@@ -2236,6 +2255,8 @@ function App() {
                   onResultSelect={handleSelectEntityInTab}
                   isLoading={isLoading}
                   searchMode={searchMode}
+                  companySearchScope={companySearchScope}
+                  onCompanySearchScopeChange={setCompanySearchScope}
                   onSearchModeChange={(m) => {
                     setSearchMode(m);
                     setActiveMainTab(m === 'person' ? 'individual' : 'company');
@@ -2274,8 +2295,26 @@ function App() {
                   setSearchQuery('');
                 }}
               />
+            ) : entityDetailsNzbn ? (
+              <EntityDetailsPanel key={entityDetailsNzbn} nzbn={entityDetailsNzbn} config={config} onClose={() => setEntityDetailsNzbn(null)} />
             ) : (
-              <ReactFlow
+              <div className="absolute inset-0 flex min-h-0 flex-col bg-paper">
+                {caseTarget?.data.nzbn && <div className="sumi-graph-tools">
+                  {caseTarget.data.companySearchScope ? <GraphScopeControl key={activeCompanyTabId}
+                    scope={caseTarget.data.companySearchScope} name={caseTarget.data.label} busy={isGraphLoading}
+                    onRun={async () => {
+                      const entity = { nzbn: caseTarget.data.nzbn!, entityName: caseTarget.data.label,
+                        entityStatusDescription: caseTarget.data.status || '', entityTypeCode: caseTarget.data.entityTypeCode || '' };
+                      setCompanySearchScope('comprehensive');
+                      await handleSelectEntity(entity, activeCompanyTabId || undefined, 'comprehensive');
+                    }} /> : <span />}
+                  <div className="sumi-view-switch" role="group" aria-label="Entity view">
+                    <span aria-current="page"><span aria-hidden="true">網</span> Network</span>
+                    <button aria-label="Entity details" onClick={() => setEntityDetailsNzbn(caseTarget.data.nzbn!)}><span aria-hidden="true">簿</span> Record</button>
+                  </div>
+                </div>}
+                <div className="relative min-h-0 flex-1">
+                <ReactFlow
                 nodes={visibleNodes}
                 edges={visibleEdges}
                 onNodesChange={onNodesChange}
@@ -2285,13 +2324,13 @@ function App() {
                 onPaneClick={handlePaneClick}
                 nodeTypes={nodeTypes}
                 fitView
+                fitViewOptions={{ padding: 0.18 }}
                 className="bg-paper"
                 minZoom={0.1}
               >
                 {/* No dot grid — the sumi canvas is plain washi paper (bg-paper
                     on the pane), with the washi grain overlay from index.css. */}
                 <Controls />
-
                 {/* Tidy Up controls — styled to match the mockup .replay button
                     (1px rule border, paper bg, ~12px, ink-mid text, hover to ink). */}
                 {nodes.length > 0 && (
@@ -2328,7 +2367,9 @@ function App() {
                     <StatusLegend />
                   </Panel>
                 )}
-              </ReactFlow>
+                </ReactFlow>
+                </div>
+              </div>
             )}
 
             {/* Error banner (search / graph failures surface here now the panel search is gone) */}
@@ -2349,6 +2390,9 @@ function App() {
             {/* Context Menu */}
             {contextMenu && (
               <NodeContextMenu
+                onEntityDetails={setEntityDetailsNzbn}
+                sourceRegister={allNodesInMemory.find(n => n.id === contextMenu.nodeId)?.data.sourceRegister}
+                simpleSearch={caseTarget?.data.companySearchScope === 'simple'}
                 nodeId={contextMenu.nodeId}
                 nodeLabel={contextMenu.nodeLabel}
                 nodeType={contextMenu.nodeType}

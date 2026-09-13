@@ -23,7 +23,8 @@ const property = createPropertyHandler({ member: resolve, balance: async () => b
 async function request(handler: any, mode: string, body?: object, origin = 'http://localhost:3000') {
     const res: any = { code: 200, setHeader() {}, status(code: number) { this.code = code; return this; }, json(body: any) { this.body = body; return this; } };
     await handler({ method: body ? 'POST' : 'GET', headers: { origin }, cookies: {}, body,
-        query: { mode, title_no: 'SAMPLE', ref: 'MATTER-TEST', accountId: 'spoofed', canAudit: 'true' } }, res);
+        query: { mode, title_no: 'SAMPLE', ref: 'MATTER-TEST', search_id: crypto.randomUUID(), search_start: '1',
+            accountId: 'spoofed', canAudit: 'true' } }, res);
     return res;
 }
 for (const status of ['pending', 'rejected', 'suspended'] as const) {

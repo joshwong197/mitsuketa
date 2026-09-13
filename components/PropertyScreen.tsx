@@ -3,6 +3,7 @@ import { ArrowRight, Loader2, Lock, Search as SearchIcon } from 'lucide-react';
 import { PropertyStyles } from './PropertyStyles';
 import { PropertyAudit } from './PropertyAudit';
 import { MatterReference } from './MatterReference';
+import { NoticeAcceptance } from './NoticeAcceptance';
 import { usesClerk } from '../utils/propertyAuthClient';
 const ClerkPropertyAccess = React.lazy(() => import('./ClerkPropertyAccess'));
 import {
@@ -238,13 +239,13 @@ const Notice: React.FC<{ searcher: string }> = ({ searcher }) => {
                     <>The data is a <strong className="text-ink">reference copy, not a title search</strong>.
                         It may lag the register and is not legal advice. Obtain a formal search from
                         LINZ before relying on it.</>,
-                    <><strong className="text-ink">Every search attempt is logged</strong> — your account,
+                    <><strong className="text-ink">Every submitted search is logged once</strong> — your account,
                         time, search mode, search text or title number, matter reference, audit ID and IP address
-                        where available. Authorised administrators can view the log in Neon. Returned report
-                        contents are not stored in the audit.</>,
+                        where available. Address choices and title references opened from the result stay on that
+                        search record. Authorised administrators can view the log in Neon. Returned report contents
+                        are not stored in the audit.</>,
                     <>Use a case or file code as your required matter reference. Saved references stay in this
-                        browser. Read the <a href="/#/privacy" target="_blank" rel="noreferrer" className="text-accent underline">privacy notice</a> and{' '}
-                        <a href="/#/terms" target="_blank" rel="noreferrer" className="text-accent underline">terms</a>.</>,
+                        browser. Review the privacy notice and terms below.</>,
                 ].map((item, i) => (
                     <li key={i} style={{ display: 'flex', gap: 10, marginBottom: 9 }}>
                         <span className="text-accent" style={{ fontFamily: 'var(--serif)', flexShrink: 0 }}>—</span>
@@ -253,22 +254,7 @@ const Notice: React.FC<{ searcher: string }> = ({ searcher }) => {
                 ))}
             </ul>
 
-            <label
-                className="flex items-start gap-3"
-                style={{ marginTop: 18, fontSize: 12.5, cursor: 'pointer' }}
-            >
-                <input
-                    type="checkbox"
-                    checked={agreed}
-                    onChange={(e) => setAgreed(e.target.checked)}
-                    style={{ marginTop: 2, width: 15, height: 15, accentColor: 'var(--accent)', flexShrink: 0 }}
-                />
-                <span>
-                    I have read the above and confirm my searches will be for a lawful
-                    property-related purpose, consistent with the Privacy Act 2020 and the LINZ
-                    Licence for Personal Data.
-                </span>
-            </label>
+            <NoticeAcceptance accepted={agreed} onChange={setAgreed} />
 
             <div style={{ marginTop: 18 }}>
                 <Button disabled={!agreed} onClick={acknowledge}>Agree and continue</Button>
@@ -286,11 +272,14 @@ const ResultRow: React.FC<{
     main: string;
     meta?: string;
     onClick: () => void;
-}> = ({ left, main, meta, onClick }) => (
+    disabled?: boolean;
+}> = ({ left, main, meta, onClick, disabled }) => (
     <button
         onClick={onClick}
+        disabled={disabled}
         className="property-row w-full flex items-center gap-3.5 text-left transition-colors duration-150"
-        style={{ borderTop: '1px solid var(--rule)', padding: '11px 13px' }}
+        style={{ borderTop: '1px solid var(--rule)', padding: '11px 13px',
+            opacity: disabled ? 0.55 : 1, cursor: disabled ? 'wait' : 'pointer' }}
     >
         <span
             className="text-accent flex-shrink-0"
@@ -324,17 +313,21 @@ const Search: React.FC<{
     const [query, setQuery] = useState('');
     const [reference, setReference] = useState('');
     const [submittedReference, setSubmittedReference] = useState('');
+    const [submittedSearchId, setSubmittedSearchId] = useState('');
     const [showAudit, setShowAudit] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [address, setAddress] = useState<AddressResult | null>(null);
     const [owner, setOwner] = useState<OwnerResult | null>(null);
+    const busyRef = useRef(false);
 
     // A report is no longer a face of this screen — it opens as its own tab, so
     // it survives switching to a company or an individual and gets its own chip.
     const clear = () => { setAddress(null); setOwner(null); setError(null); };
 
     const run = async (fn: () => Promise<void>) => {
+        if (busyRef.current) return;
+        busyRef.current = true;
         setBusy(true);
         setError(null);
         try {
@@ -343,31 +336,35 @@ const Search: React.FC<{
             // A 401 already re-locked the screen via propertyService.
             setError(err instanceof PropertyError ? err.message : 'Something went wrong.');
         } finally {
+            busyRef.current = false;
             setBusy(false);
         }
     };
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!query.trim() || !reference.trim() || busy) return;
+        if (!query.trim() || !reference.trim() || busyRef.current) return;
         clear();
         const matter = reference.trim();
+        const operationId = crypto.randomUUID();
         setSubmittedReference(matter);
+        setSubmittedSearchId(operationId);
         run(async () => {
             // A title reference identifies exactly one record, so there is nothing
             // to choose between — open the report rather than listing one result.
-            if (mode === 'title') { await openTitle(query.trim().toUpperCase(), matter); return; }
-            if (mode === 'address') setAddress(await searchAddress(query.trim(), undefined, matter));
-            else setOwner(await searchOwner(query.trim(), matter));
+            if (mode === 'title') { await openTitle(query.trim().toUpperCase(), matter, operationId, true); return; }
+            if (mode === 'address') setAddress(await searchAddress(query.trim(), undefined, matter, operationId));
+            else setOwner(await searchOwner(query.trim(), matter, operationId));
         });
     };
 
     const pickCandidate = (addressId: number) => run(async () => {
-        setAddress(await searchAddress(address?.query || query.trim(), addressId, submittedReference));
+        setAddress(await searchAddress(address?.query || query.trim(), addressId, submittedReference, submittedSearchId));
     });
 
-    const openTitle = async (titleNo: string, matter = submittedReference) => {
-        onOpenReport(await fetchTitleReport(titleNo, matter), titleNo);
+    const openTitle = async (titleNo: string, matter = submittedReference,
+        operationId = submittedSearchId, startsSearch = false) => {
+        onOpenReport(await fetchTitleReport(titleNo, matter, operationId, startsSearch), titleNo);
     };
 
     const titleRow = (t: TitleSummary) => (
@@ -377,6 +374,7 @@ const Search: React.FC<{
             main={t.owners || [t.type, t.status].filter(Boolean).join(' · ')}
             meta={t.owners ? [t.type, t.status, t.land_district].filter(Boolean).join(' · ') : (t.land_district ?? undefined)}
             onClick={() => run(() => openTitle(t.title_no))}
+            disabled={busy}
         />
     );
 
@@ -464,7 +462,7 @@ const Search: React.FC<{
                             {i > 0 && <span className="text-ink-wash">·</span>}
                             <button
                                 type="button"
-                                onClick={() => { setMode(m.id); clear(); }}
+                                onClick={() => { setMode(m.id); setSubmittedSearchId(''); clear(); }}
                                 aria-current={mode === m.id}
                                 className="inline-flex items-baseline gap-1.5 transition-colors duration-150"
                                 style={{
@@ -509,6 +507,7 @@ const Search: React.FC<{
                                 meta={[c.suburb_locality, c.town_city, c.territorial_authority]
                                     .filter(Boolean).join(' · ')}
                                 onClick={() => pickCandidate(c.address_id)}
+                                disabled={busy}
                             />
                         ))}
                     </ResultList>
@@ -572,6 +571,7 @@ const Search: React.FC<{
                                                 r.title?.land_district ?? r.land_district]
                                                 .filter(Boolean).join(' · ')}
                                             onClick={() => run(() => openTitle(r.title_no!))}
+                                            disabled={busy}
                                         />
                                     ))}
                                 </ResultList>

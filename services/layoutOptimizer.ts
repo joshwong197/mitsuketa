@@ -71,6 +71,8 @@ export function tidyUpLayout(nodes: Node[], edges: Edge[]): { nodes: Node[], edg
     // Clone nodes to avoid mutation
     const optimizedNodes = nodes.map(n => ({ ...n, position: { ...n.position } }));
     const nodeMap = new Map(optimizedNodes.map(n => [n.id, n]));
+    const incomingCount = new Map<string, number>();
+    edges.forEach(edge => incomingCount.set(edge.target, (incomingCount.get(edge.target) || 0) + 1));
 
     // Calculate depths
     const depthMap = calculateDepthMap(optimizedNodes, edges);
@@ -160,6 +162,9 @@ export function tidyUpLayout(nodes: Node[], edges: Edge[]): { nodes: Node[], edg
 
         parentsAtLevel.forEach(parent => {
             const childrenIds = edges.filter(e => e.source === parent.id).map(e => e.target);
+            // Owners and directors often share the same child company. Keep the
+            // peer spacing from step 1 instead of stacking every parent over it.
+            if (childrenIds.some(id => (incomingCount.get(id) || 0) > 1)) return;
             const children = childrenIds.map(id => nodeMap.get(id)).filter(Boolean) as Node[];
 
             if (children.length === 0) return;

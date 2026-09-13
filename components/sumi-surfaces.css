@@ -1,0 +1,129 @@
+:root { --mitsuketa-accent:var(--accent); }
+.sumi-eyebrow { display:flex; align-items:center; gap:12px; color:var(--accent); font-size:10px; letter-spacing:.16em; text-transform:uppercase; }
+.sumi-eyebrow::after { content:''; width:36px; height:1px; background:var(--rule); }
+.sumi-primary { display:inline-flex; justify-content:space-between; align-items:center; gap:24px; min-height:44px; padding:12px 18px; background:var(--accent); color:var(--accent-ink); border:1px solid var(--accent); font-size:13px; cursor:pointer; transition:background .18s ease,color .18s ease; }
+.sumi-primary:hover { background:var(--ink); border-color:var(--ink); color:var(--paper); }
+.sumi-text-action { min-height:44px; padding:8px 0; color:var(--ink-mid); text-decoration:underline; text-decoration-color:var(--rule); text-underline-offset:5px; font-size:12px; cursor:pointer; }
+.sumi-text-action:hover { color:var(--accent); text-decoration-color:var(--accent); }
+.sumi-primary:disabled,.sumi-graph-tool:disabled { opacity:.55; cursor:wait; }
+.sumi-graph-tools { position:relative; z-index:10; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-start; gap:12px 16px; padding:12px 16px; border-bottom:1px solid var(--rule); background:var(--paper); }
+.sumi-graph-tool { display:flex; align-items:center; gap:12px; padding:10px 14px 10px 10px; min-height:56px; background:var(--paper); color:var(--ink); border:1px solid var(--rule); text-align:left; }
+button.sumi-graph-tool { cursor:pointer; transition:border-color .18s ease; }
+button.sumi-graph-tool:hover { border-color:var(--accent); }
+.sumi-tool-mark { width:32px; height:32px; display:grid; place-items:center; font-family:var(--serif); font-size:21px; color:var(--accent); border:1px solid var(--accent); }
+.sumi-graph-tool strong { display:block; font-family:var(--serif); font-size:15px; font-weight:500; line-height:1.35; }
+.sumi-graph-tool small { display:block; color:var(--ink-mid); font-size:10px; margin-top:3px; letter-spacing:.025em; }
+.sumi-tool-arrow { margin-left:10px; color:var(--accent); font-size:19px; transition:transform .18s ease; }
+button.sumi-graph-tool:hover .sumi-tool-arrow { transform:translate(2px,-2px); }
+.sumi-scope { position:relative; }
+.sumi-scope-prompt { position:absolute; z-index:12; top:calc(100% + 8px); left:0; width:min(340px,calc(100vw - 52px)); padding:24px; border:1px solid var(--ink-mid); background:var(--paper); color:var(--ink); }
+.sumi-scope-prompt h3 { font-family:var(--serif); font-size:24px; line-height:1.4; margin:16px 0 12px; }
+.sumi-scope-prompt > p:not(.sumi-eyebrow) { font-size:13px; line-height:1.7; color:var(--ink-mid); overflow-wrap:anywhere; }
+.sumi-prompt-actions { display:flex; flex-direction:column; align-items:stretch; gap:6px; margin-top:20px; }
+.sumi-dossier { animation:sumi-dossier-enter .22s ease-out; }
+.sumi-record-workspace { position:absolute; inset:0; display:flex; flex-direction:column; font-size:13px; }
+.sumi-view-switch { display:flex; align-items:stretch; background:var(--paper); border:1px solid var(--rule); font-size:12px; }
+.sumi-view-switch > button,.sumi-view-switch > span { display:flex; align-items:center; gap:8px; min-height:44px; padding:10px 16px; }
+.sumi-view-switch > span[aria-current] { background:var(--ink); color:var(--paper); }
+.sumi-view-switch button { cursor:pointer; color:var(--ink-mid); }
+.sumi-view-switch button:hover { color:var(--accent); background:var(--paper2); }
+.sumi-view-switch > * > span { font-family:var(--serif); font-size:16px; }
+@media(max-width:640px) {
+  .sumi-graph-tools { padding:8px; gap:8px; }
+  .sumi-graph-tool { min-height:44px; padding:6px 9px 6px 6px; gap:8px; }
+  .sumi-graph-tool small { display:none; }
+  .sumi-tool-mark { width:30px; height:30px; font-size:19px; }
+  .sumi-tool-arrow { margin-left:2px; }
+  .sumi-view-switch > button,.sumi-view-switch > span { min-height:44px; padding:8px 10px; }
+}
+.sumi-record-intro { display:grid; grid-template-columns:1.15fr 1fr; gap:48px; padding:12px 0 32px; align-items:start; }
+.sumi-record-intro .sumi-entity-heading { max-width:650px; font-size:36px; }
+.sumi-record-sections { display:grid; grid-template-columns:1fr 1fr; gap:16px 48px; align-items:start; counter-reset:folio; }
+.sumi-dossier-header { padding:20px 28px; display:flex; align-items:center; justify-content:space-between; gap:20px; border-bottom:1px solid var(--rule); }
+.sumi-dossier-title { display:flex; align-items:center; gap:16px; }
+.sumi-dossier-title .sumi-tool-mark { width:42px; height:48px; font-size:27px; }
+.sumi-dossier-header h2 { font-family:var(--serif); font-size:24px; line-height:1.4; }
+.sumi-dossier-header p { font-size:10px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-mid); margin-top:4px; }
+.sumi-dossier-body { padding:32px 28px 48px; overflow-y:auto; flex:1; counter-reset:folio; }
+.sumi-entity-heading { font-family:var(--serif); font-size:30px; font-weight:500; line-height:1.45; overflow-wrap:anywhere; margin:18px 0 12px; }
+.sumi-entity-meta { display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center; font-size:12px; color:var(--ink-mid); margin-bottom:20px; }
+.sumi-entity-meta span:last-child { border-bottom:1px solid var(--rule); padding-bottom:3px; }
+.sumi-record-sections > details { padding-top:20px!important; min-width:0; }
+.sumi-record-sections > details > summary { display:flex; align-items:center; gap:12px; list-style:none; font-family:var(--serif); font-size:18px; font-weight:500!important; min-height:40px; }
+.sumi-record-sections > details > summary::-webkit-details-marker { display:none; }
+.sumi-record-sections > details > summary::before { counter-increment:folio; content:counter(folio,decimal-leading-zero); font-family:var(--gothic); font-size:10px; color:var(--accent); letter-spacing:.1em; }
+.sumi-record-sections > details > summary::after { content:'＋'; margin-left:auto; color:var(--ink-mid); font-family:var(--gothic); font-size:16px; }
+.sumi-record-sections > details[open] > summary::after { content:'−'; }
+.sumi-dossier-body dl { line-height:1.7; }
+.sumi-dossier-body dl dt { font-size:11px; }
+.sumi-dossier-body dl dd { font-size:13px; font-variant-numeric:tabular-nums; }
+.sumi-property-entry { position:relative; isolation:isolate; text-align:left; padding:32px 0 12px; border-top:1px solid var(--rule); }
+.sumi-property-entry::before { content:'地'; position:absolute; z-index:-1; top:24px; right:0; font-family:var(--serif); font-size:148px; line-height:1; color:var(--rule); opacity:.55; pointer-events:none; }
+.sumi-property-entry h3 { font-family:var(--serif); font-size:36px; line-height:1.4; font-weight:500; max-width:390px; margin:24px 0 16px; }
+.sumi-property-entry .sumi-property-copy { max-width:360px; color:var(--ink-mid); font-size:14px; line-height:1.8; }
+.sumi-property-actions { display:flex; align-items:center; flex-wrap:wrap; gap:12px 28px; margin:28px 0; }
+.sumi-property-foot { display:flex; flex-wrap:wrap; justify-content:space-between; gap:12px; border-top:1px solid var(--rule); padding-top:16px; color:var(--ink-mid); font-size:11px; }
+.sumi-access-page { min-height:100vh; padding:24px clamp(20px,5vw,80px); }
+.sumi-access-page > header { display:flex; align-items:center; gap:24px; border-bottom:1px solid var(--rule); padding-bottom:20px; }
+.sumi-access-brand { margin-right:auto; color:var(--accent); font-family:var(--serif); font-size:24px; }
+.sumi-access-brand span { color:var(--ink); margin-left:12px; }
+.sumi-access-layout { display:grid; grid-template-columns:1fr 1fr; gap:clamp(24px,7vw,100px); max-width:1100px; margin:64px auto; align-items:start; }
+.sumi-access-layout > section:first-child h1 { font-family:var(--serif); font-size:clamp(32px,4vw,52px); line-height:1.4; margin:24px 0; }
+.sumi-access-layout > section:first-child p,.sumi-access-form > p,.sumi-application > p { line-height:1.8; color:var(--ink-mid); margin:12px 0; }
+.sumi-access-form { min-width:0; }
+.sumi-access-form h2,.sumi-application h3 { font-family:var(--serif); font-size:25px; }
+.sumi-application { text-align:left; }
+.sumi-application > label { display:block; margin:14px 0; font-size:12px; }
+.sumi-application input:not([type=checkbox]),.sumi-application textarea { display:block; width:100%; border:1px solid var(--rule); background:var(--paper); padding:10px; margin-top:6px; font-size:14px; }
+.sumi-application p[role],.sumi-access-form p[role=alert] { border-left:2px solid var(--accent); padding-left:12px; }
+.sumi-access-page > footer { border-top:1px solid var(--rule); padding:20px 0; color:var(--ink-mid); font-size:12px; }
+.sumi-notice-acceptance { margin:24px 0; text-align:left; min-width:0; }
+.sumi-notice-progress { font-size:12px; line-height:1.7; color:var(--ink-mid); margin-bottom:12px; }
+.sumi-notice-document { border:1px solid var(--rule); margin-top:12px; }
+.sumi-notice-document > summary { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px; padding:14px 16px; min-height:48px; cursor:pointer; font-family:var(--serif); font-size:18px; }
+.sumi-notice-document > summary small { font-family:var(--gothic); font-size:11px; color:var(--accent); }
+.sumi-notice-document > summary::after { content:'＋'; font-family:var(--gothic); color:var(--ink-mid); }
+.sumi-notice-document[open] > summary::after { content:'−'; }
+.sumi-notice-reader { max-height:360px; max-height:min(48vh,360px); overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; border-top:1px solid var(--rule); padding:20px; background:var(--paper); }
+.sumi-notice-reader:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+.sumi-notice-text { max-width:68ch; margin:auto; font-size:14px; line-height:1.85; overflow-wrap:anywhere; }
+.sumi-notice-text h1 { font-family:var(--serif); font-size:24px; line-height:1.4; margin:0 0 16px; }
+.sumi-notice-text h3 { font-family:var(--serif); font-size:18px; line-height:1.5; margin:24px 0 10px; }
+.sumi-notice-text p { margin:12px 0; color:var(--ink); }
+.sumi-notice-text ul { list-style:disc; padding-left:22px; margin:12px 0; }
+.sumi-notice-text li { margin:8px 0; }
+.sumi-notice-text a { color:var(--accent); text-decoration:underline; text-underline-offset:3px; }
+.sumi-notice-text .clause { padding-top:12px; margin-top:24px; border-top:1px solid var(--rule); }
+.sumi-notice-text .cn,.sumi-notice-text .mk { color:var(--accent); font-size:11px; }
+.sumi-notice-text .src { color:var(--ink-mid); font-size:12px; }
+.sumi-notice-text .draftbar { background:var(--paper2); padding:12px; font-size:13px; }
+.sumi-notice-end { max-width:68ch; margin:24px auto 0; padding-top:16px; border-top:1px solid var(--rule); font-size:12px; color:var(--accent); }
+.sumi-notice-confirm { display:flex; align-items:flex-start; gap:10px; margin:18px 0; font-size:13px; line-height:1.75; }
+.sumi-notice-confirm input { flex-shrink:0; margin-top:5px; accent-color:var(--accent); }
+.sumi-notice-confirm:has(input:disabled) { color:var(--ink-mid); }
+.sumi-reader-tools { padding:0 16px 12px; text-align:right; font-size:12px; color:var(--accent); }
+.sumi-reader-tools button { cursor:pointer; text-decoration:underline; text-underline-offset:4px; min-height:32px; }
+.sumi-reading-dialog { width:min(920px,calc(100vw - 32px)); height:min(880px,calc(100dvh - 32px)); max-height:calc(100dvh - 32px); margin:auto; padding:0; border:1px solid var(--ink-mid); background:var(--paper); color:var(--ink); }
+.sumi-reading-dialog[open] { display:flex; flex-direction:column; }
+.sumi-reading-dialog::backdrop { background:rgb(15 19 25 / .65); }
+.sumi-reading-dialog header { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:20px 28px; }
+.sumi-reading-dialog h2 { font-family:var(--serif); font-size:28px; margin-top:6px; }
+.sumi-reading-dialog .sumi-notice-reader { flex:1; max-height:none; min-height:0; padding:28px clamp(20px,5vw,72px); }
+.sumi-reading-dialog .sumi-notice-text { font-size:16px; line-height:1.85; }
+.sumi-reading-dialog footer { padding:14px 28px; border-top:1px solid var(--rule); font-size:12px; color:var(--accent); }
+@media(max-width:760px) { .sumi-access-layout { grid-template-columns:1fr; margin:32px auto; } .sumi-access-page > header { gap:12px; } }
+@keyframes sumi-dossier-enter { from { transform:translateX(18px); opacity:0; } to { transform:translateX(0); opacity:1; } }
+@media(max-width:600px) {
+  .sumi-graph-tools { gap:8px; }
+  .sumi-graph-tool { padding:8px; gap:8px; }
+  .sumi-graph-tool small { max-width:100px; font-size:9px; }
+  .sumi-tool-arrow { margin-left:0; }
+  .sumi-dossier-header { padding:16px 20px; }
+  .sumi-dossier-body { padding:24px 20px 40px; }
+  .sumi-entity-heading { font-size:26px; }
+  .sumi-property-entry h3 { font-size:30px; }
+  .sumi-dossier-header { flex-wrap:wrap; }
+  .sumi-view-switch > button,.sumi-view-switch > span { padding:8px 10px; }
+}
+@media(max-width:1100px) { .sumi-record-intro,.sumi-record-sections { grid-template-columns:1fr; gap:16px; } .sumi-record-intro .sumi-entity-heading { font-size:28px; } }
+@media(prefers-reduced-motion:reduce) { .sumi-dossier { animation:none; } .sumi-tool-arrow,.sumi-primary,button.sumi-graph-tool { transition:none; } }

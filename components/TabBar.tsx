@@ -64,7 +64,7 @@ export const TabBar: React.FC<TabBarProps> = ({
             <div className="flex items-center">
                 {/* Single-character kanji, matching the find screen's mode line
                     (社 · 人 · 比 · 地) so the app has one convention. */}
-                {modeBtn('company', '社', 'Company')}
+                {modeBtn('company', '社', 'Companies & entities')}
                 {modeBtn('individual', '人', 'Individual')}
                 {modeBtn('property', '地', 'Property')}
             </div>

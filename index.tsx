@@ -1,6 +1,8 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
+import './components/sumi-surfaces.css';
+import './components/entity-record.css';
 import 'reactflow/dist/style.css';
 import '@fontsource/shippori-mincho/500.css';
 import '@fontsource/shippori-mincho/700.css';
@@ -14,6 +16,8 @@ import Terms from './components/Terms';
 import Privacy from './components/Privacy';
 import { usesClerk } from './utils/propertyAuthClient';
 const ClerkRoot = lazy(() => import('./components/ClerkRoot'));
+const AccessPage = lazy(() => import('./components/AccessPage'));
+const ReviewOverlay = import.meta.env.DEV ? lazy(() => import('./components/ReviewOverlay')) : null;
 
 // Marketing pages route off the URL hash (#/about, #/terms); everything else is
 // Home. "Start searching" leaves the marketing site and mounts the app.
@@ -37,6 +41,8 @@ function Root() {
   }, []);
   useEffect(() => { window.scrollTo(0, 0); }, [page]);
 
+  const access = new URLSearchParams(window.location.search).get('access');
+  if (usesClerk() && access) return <Suspense fallback={<p>Loading Mitsuketa…</p>}><AccessPage mode={access} /></Suspense>;
   if (entered) return <App />;
   const onEnter = () => { window.location.hash = '/app'; setEntered(true); };
   if (page === 'about') return <About onEnter={onEnter} />;
@@ -53,6 +59,7 @@ if (!rootElement) {
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
+    {ReviewOverlay && <Suspense fallback={null}><ReviewOverlay /></Suspense>}
     {usesClerk() && import.meta.env.VITE_CLERK_PUBLISHABLE_KEY
       ? <Suspense fallback={<p>Loading Mitsuketa…</p>}><ClerkRoot><Root /></ClerkRoot></Suspense>
       : <Root />}

@@ -36,8 +36,17 @@ const replace = (to: string) => navigate(to, true);
 
 export default function ClerkRoot({ children }: { children: React.ReactNode }) {
     return <ClerkProvider publishableKey={import.meta.env.VITE_CLERK_PUBLISHABLE_KEY}
+        localization={{ signUp: { continue: { title: 'Set up your account', subtitle: 'Choose a password for Mitsuketa.' } } }}
+        appearance={{ variables: { colorPrimary: 'var(--mitsuketa-accent)', colorPrimaryForeground: 'var(--accent-ink)', colorBackground: 'var(--paper)',
+            colorForeground: 'var(--ink)', colorMutedForeground: 'var(--ink-mid)', colorInput: 'var(--paper)',
+            colorInputForeground: 'var(--ink)', fontFamily: 'var(--gothic)', borderRadius: '0px' },
+            elements: { cardBox: { boxShadow: 'none', width: '100%' },
+                card: { border: '1px solid var(--rule)', boxShadow: 'none' },
+                headerTitle: { fontFamily: 'var(--serif)', fontSize: '26px', lineHeight: '1.4' },
+                formButtonPrimary: { background: 'var(--mitsuketa-accent)', color: 'var(--accent-ink)' } } }}
         routerPush={push} routerReplace={replace}
-        signInForceRedirectUrl="/#/app" signUpForceRedirectUrl="/#/app">
+        signInUrl="/?access=signin" signUpUrl="/?access=request"
+        signInForceRedirectUrl="/?access=complete" signUpForceRedirectUrl="/?access=complete">
         <Bridge>{children}</Bridge>
     </ClerkProvider>;
 }

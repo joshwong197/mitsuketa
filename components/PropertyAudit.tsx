@@ -17,7 +17,7 @@ export function PropertyAudit({ onBack }: { onBack: () => void }) {
         <button onClick={onBack} className="text-accent" style={{ fontSize: 12 }}>← Back to property search</button>
         <h3 style={{ fontFamily: 'var(--serif)', fontSize: 24, margin: '16px 0 6px' }}>Search audit</h3>
         <p className="text-ink-mid" style={{ fontSize: 12, marginBottom: 16 }}>
-            Latest 200 search attempts. Inputs only; returned property data is not stored here.
+            Latest 200 submitted searches. Candidate selection and title opening stay within the original search record.
         </p>
         <form onSubmit={e => { e.preventDefault(); void refresh(searcher); }} className="flex flex-wrap gap-2" style={{ marginBottom: 16 }}>
             <input aria-label="Filter by username" placeholder="Email or username (optional)" value={searcher}
@@ -28,11 +28,11 @@ export function PropertyAudit({ onBack }: { onBack: () => void }) {
         <div role="status" style={{ fontSize: 12, marginBottom: 12 }}>{busy ? 'Loading searches…' : error || `${rows.length} records`}</div>
         <div style={{ overflowX: 'auto', border: '1px solid var(--rule)' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                <thead><tr>{['Search ID', 'Time', 'Credential', 'Matter reference', 'Mode', 'Query', 'Title', 'IP'].map(label =>
+                <thead><tr>{['Search ID', 'Time', 'User', 'Matter reference', 'Mode', 'Searched', 'Titles opened', 'IP'].map(label =>
                     <th key={label} style={{ textAlign: 'left', padding: 10, borderBottom: '1px solid var(--rule)' }}>{label}</th>)}</tr></thead>
                 <tbody>{rows.map(row => <tr key={row.audit_reference}>
-                    {[row.audit_reference, new Date(row.created_at).toLocaleString(), row.actor, row.matter_ref,
-                        row.mode, row.query, row.title_no, row.ip].map((value, index) =>
+                    {[row.audit_reference, new Date(row.created_at).toLocaleString(), row.searcher || row.actor, row.matter_ref,
+                        row.mode, row.query, row.opened_titles?.join(', ') || row.title_no, row.ip].map((value, index) =>
                         <td key={index} style={{ padding: 10, borderBottom: '1px solid var(--rule)', overflowWrap: 'anywhere', minWidth: 95 }}>{value || '—'}</td>)}
                 </tr>)}</tbody>
             </table>
