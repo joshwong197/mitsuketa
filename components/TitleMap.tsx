@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { tileUrl } from '../services/propertyService.js';
 import {
-    MAX_ZOOM, MIN_ZOOM, type View,
-    bboxCentre, gridAt, panBy, ringsToPaths, scaleBar, tileGrid, zoomAbout,
+    MAX_ZOOM, MIN_ZOOM, TILE_FALLBACK_LEVELS, type TileRef, type View,
+    bboxCentre, gridAt, panBy, ringsToPaths, scaleBar, tileFallback, tileGrid, zoomAbout,
 } from '../utils/tiles.js';
 
 /**
@@ -45,6 +45,53 @@ const WHEEL_PIXELS = 0.004;
 
 const keyOf = (t: { z: number; x: number; y: number }) => `${t.z}/${t.x}/${t.y}`;
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+
+const ResilientTile: React.FC<{
+    tile: TileRef & { left: number; top: number };
+    iw: number;
+    ih: number;
+    onLoad: () => void;
+    onUnavailable: () => void;
+}> = ({ tile, iw, ih, onLoad, onUnavailable }) => {
+    const [depth, setDepth] = useState(0);
+    const source = tileFallback(tile, depth);
+
+    return (
+        <span
+            style={{
+                position: 'absolute', overflow: 'hidden',
+                left: `${(tile.left / iw) * 100}%`,
+                top: `${(tile.top / ih) * 100}%`,
+                width: `${(256 / iw) * 100}%`,
+                height: `${(256 / ih) * 100}%`,
+            }}
+        >
+            <img
+                src={tileUrl(source.z, source.x, source.y)}
+                alt=""
+                aria-hidden="true"
+                draggable={false}
+                onLoad={onLoad}
+                onError={() => {
+                    if (source.depth < TILE_FALLBACK_LEVELS && source.z > MIN_ZOOM) {
+                        setDepth(value => value + 1);
+                    } else {
+                        onUnavailable();
+                    }
+                }}
+                style={{
+                    position: 'absolute',
+                    left: `${-source.offsetX * 100}%`,
+                    top: `${-source.offsetY * 100}%`,
+                    width: `${source.scale * 100}%`,
+                    height: `${source.scale * 100}%`,
+                    maxWidth: 'none',
+                    userSelect: 'none',
+                }}
+            />
+        </span>
+    );
+};
 
 export const TitleMap: React.FC<TitleMapProps> = ({
     geometry, bbox, width = 640, height = 300,
@@ -244,29 +291,16 @@ export const TitleMap: React.FC<TitleMapProps> = ({
                         const key = keyOf(t);
                         if (failed.has(key)) return null;
                         return (
-                            <img
+                            <ResilientTile
                                 key={key}
-                                src={tileUrl(t.z, t.x, t.y)}
-                                alt=""
-                                aria-hidden="true"
-                                draggable={false}
+                                tile={t}
+                                iw={iw}
+                                ih={ih}
                                 onLoad={() => setAnyLoaded(true)}
-                                onError={() => setFailed(prev => {
+                                onUnavailable={() => setFailed(prev => {
                                     if (prev.has(key)) return prev;
                                     return new Set(prev).add(key);
                                 })}
-                                style={{
-                                    // Percentages, not pixels: the mosaic then
-                                    // scales with the container in step with the
-                                    // SVG's viewBox, with no resize listener to
-                                    // leak and nothing to drift out of register.
-                                    position: 'absolute',
-                                    left: `${(t.left / iw) * 100}%`,
-                                    top: `${(t.top / ih) * 100}%`,
-                                    width: `${(256 / iw) * 100}%`,
-                                    height: `${(256 / ih) * 100}%`,
-                                    userSelect: 'none',
-                                }}
                             />
                         );
                     })}

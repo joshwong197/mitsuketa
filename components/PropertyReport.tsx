@@ -374,6 +374,8 @@ export const PropertyReport: React.FC<PropertyReportProps> = ({
                             <p className="text-ink-mid" style={{ fontSize: 12.5, margin: 0, maxWidth: '64ch' }}>
                                 {view.ratingValuation.status === 'ambiguous'
                                     ? 'More than one council rating unit may cover this title. Check the official council record to choose the correct property.'
+                                    : view.ratingValuation.note?.includes('unavailable')
+                                        ? 'The council valuation service did not respond in time. Reopen this report to try again, or use the official council search.'
                                     : 'Open the official council property search to view the current rating valuation for this address.'}
                             </p>
                         )}

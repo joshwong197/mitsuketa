@@ -9,7 +9,7 @@ import {
     buildTitleView, closedVerb, formatDate, markFor, yearOf,
     type TitleReportData, type TitleView,
 } from '../utils/titleReport';
-import { ringsToPaths, scaleBar, tileGrid } from '../utils/tiles';
+import { ringsToPaths, scaleBar, TILE_FALLBACK_LEVELS, tileFallback, tileGrid } from '../utils/tiles';
 import { tileUrl } from './propertyService';
 import type { EntityProfile } from './entityProfile';
 
@@ -597,8 +597,8 @@ ${THEME_TOGGLE_JS}
 /**
  * The parcel map, rendered to a standalone SVG with its aerial tiles inlined as
  * data URIs — the export has to survive being emailed, so it cannot reference
- * /api/property for imagery. Tiles that fail are simply omitted; the outline and
- * the rest of the mosaic still read.
+ * /api/property for imagery. A missing high-resolution tile is filled from the
+ * corresponding crop of a lower-resolution ancestor tile.
  */
 async function buildMapSvg(report: TitleReportData & {
     geometry?: { type: string; coordinates: any } | null;
@@ -610,22 +610,42 @@ async function buildMapSvg(report: TitleReportData & {
     const width = 640;
     const height = 300;
 
-    const fetchTiles = async (grid: ReturnType<typeof tileGrid>) =>
-        Promise.all(grid.tiles.map(async t => {
+    const cache = new Map<string, Promise<string | null>>();
+    const fetchData = (z: number, x: number, y: number): Promise<string | null> => {
+        const key = `${z}/${x}/${y}`;
+        const existing = cache.get(key);
+        if (existing) return existing;
+        const pending = (async () => {
             try {
-                const resp = await fetch(tileUrl(t.z, t.x, t.y), { credentials: 'same-origin' });
-                if (!resp.ok) return '';
+                const resp = await fetch(tileUrl(z, x, y), { credentials: 'same-origin' });
+                if (!resp.ok) return null;
                 const blob = await resp.blob();
-                const data = await new Promise<string>((resolve, reject) => {
+                return await new Promise<string>((resolve, reject) => {
                     const reader = new FileReader();
                     reader.onload = () => resolve(String(reader.result));
                     reader.onerror = () => reject(reader.error);
                     reader.readAsDataURL(blob);
                 });
-                return `<image x="${t.left}" y="${t.top}" width="256" height="256" href="${esc(data)}"/>`;
             } catch {
-                return '';
+                return null;
             }
+        })();
+        cache.set(key, pending);
+        return pending;
+    };
+
+    const fetchTiles = async (grid: ReturnType<typeof tileGrid>) =>
+        Promise.all(grid.tiles.map(async t => {
+            for (let depth = 0; depth <= TILE_FALLBACK_LEVELS; depth++) {
+                const source = tileFallback(t, depth);
+                const data = await fetchData(source.z, source.x, source.y);
+                if (!data) continue;
+                if (source.depth === 0) {
+                    return `<image x="${t.left}" y="${t.top}" width="256" height="256" href="${esc(data)}"/>`;
+                }
+                return `<svg x="${t.left}" y="${t.top}" width="256" height="256" viewBox="${source.offsetX * 256} ${source.offsetY * 256} 256 256" preserveAspectRatio="none"><image x="0" y="0" width="${256 * source.scale}" height="${256 * source.scale}" href="${esc(data)}"/></svg>`;
+            }
+            return '';
         }));
 
     // Same zoom-out search as TitleMap: LINZ holds imagery to different depths
@@ -816,6 +836,8 @@ export function buildTitleReportHtml(view: TitleView, now: Date, mapSvg = ''): s
               <p class="hint rating-note">Official council rating data matched to this address. For rating purposes; this is not a current market valuation.</p>`
             : `<p class="note">${rating.status === 'ambiguous'
                 ? 'More than one council rating unit may cover this title. Check the official council record to choose the correct property.'
+                : rating.note?.includes('unavailable')
+                    ? 'The council valuation service did not respond in time. Reopen the report in Mitsuketa to try again, or use the official council search.'
                 : 'Open the official council property search to view the current rating valuation for this address.'}</p>`)
         + `<p class="source-links"><a href="${esc(rating.officialUrl)}" target="_blank" rel="noopener noreferrer"${rating.status === 'matched' ? '' : ' data-council-search'}>${rating.status === 'matched' ? 'Open official council valuation' : 'Copy address & open council search'} ↗</a>
              ${rating.sourceUrl ? ` · <a href="${esc(rating.sourceUrl)}" target="_blank" rel="noopener noreferrer">Source data ↗</a>` : ''}

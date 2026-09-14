@@ -129,6 +129,11 @@ const WAIKATO_LAYER = 'https://services.arcgis.com/2bzQ0Ix3iO7MItUa/arcgis/rest/
 const CANTERBURY_LAYER = 'https://gis.ecan.govt.nz/arcgis/rest/services/Public/Property_Details/MapServer/2';
 const GISBORNE_LAYER = 'https://maps.gdc.govt.nz/hosting/rest/services/Data/rating_ext/MapServer/0';
 const CC_BY = 'https://creativecommons.org/licenses/by/4.0/';
+// The partner ArcGIS services are noticeably slower than LINZ on some requests.
+// Three seconds caused valid Canterbury, Gisborne and Waikato matches to fall
+// back to their council links during ordinary use. This still leaves ample room
+// inside the property handler's 30-second execution budget.
+const COUNCIL_QUERY_TIMEOUT_MS = 10_000;
 
 interface ArcFeature { attributes?: Record<string, any> }
 
@@ -166,7 +171,7 @@ async function arcQuery(url: string, params: Record<string, string>, fetchImpl: 
     for (const [key, value] of Object.entries({ where: '1=1', returnGeometry: 'false', f: 'json', ...params })) {
         query.searchParams.set(key, value);
     }
-    const response = await fetchImpl(query, { signal: AbortSignal.timeout(3_000), headers: { accept: 'application/json' } });
+    const response = await fetchImpl(query, { signal: AbortSignal.timeout(COUNCIL_QUERY_TIMEOUT_MS), headers: { accept: 'application/json' } });
     if (!response.ok) throw new Error(`Council valuation source returned ${response.status}`);
     const body = await response.json() as { features?: ArcFeature[]; error?: { message?: string } };
     if (body.error) throw new Error(body.error.message || 'Council valuation query failed');
@@ -330,8 +335,9 @@ export async function lookupCouncilRating(
             queried = true;
             if (result === 'ambiguous') return { ...base, status: 'ambiguous', note: 'More than one council rating unit matched this title.' };
             if (result) return { ...base, ...result, status: 'matched', officialUrl: result.officialUrl ?? base.officialUrl };
-        } catch {
+        } catch (error) {
             unavailable = true;
+            console.warn(`[council valuation] ${adapter} lookup failed: ${error instanceof Error ? error.message : 'unknown error'}`);
         }
     }
     return unavailable && !queried

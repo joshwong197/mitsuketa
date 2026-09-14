@@ -4,7 +4,7 @@
 // checked here: the grid must stay inside its tile budget and the world bounds,
 // and the outline must land inside the visible box at a sane zoom.
 import {
-    tileGrid, ringsToPaths, scaleBar,
+    tileGrid, ringsToPaths, scaleBar, tileFallback,
     gridAt, lonLatToPixel, pixelToLonLat, panBy, zoomAbout,
 } from './tiles.ts';
 import assert from 'node:assert';
@@ -33,6 +33,15 @@ assert.ok(bar.px > 0 && bar.px <= 90, `px ${bar.px}`);
 // A tiny parcel must not blow past max zoom.
 const tiny = tileGrid([174.8160, -36.9100, 174.81605, -36.90995] as [number, number, number, number], 640, 300);
 assert.ok(tiny.z <= 22, `tiny zoom ${tiny.z}`);
+
+// A missing z20 tile can be reconstructed from the correct quadrant of its
+// z19 parent, and the crop continues to line up through deeper fallbacks.
+assert.deepEqual(tileFallback({ z: 20, x: 13, y: 10 }, 1), {
+  z: 19, x: 6, y: 5, depth: 1, scale: 2, offsetX: 1, offsetY: 0,
+});
+assert.deepEqual(tileFallback({ z: 20, x: 13, y: 10 }, 2), {
+  z: 18, x: 3, y: 2, depth: 2, scale: 4, offsetX: 1, offsetY: 2,
+});
 
 // --- interactive map arithmetic -------------------------------------------
 // Pan and cursor-anchored zoom both work by moving a point in pixel space and
