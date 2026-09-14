@@ -359,7 +359,7 @@ export const PropertyReport: React.FC<PropertyReportProps> = ({
                                 <dl className="ledger">
                                     <dt>Capital value</dt><dd style={{ fontFamily: 'var(--mono)' }}>{money(view.ratingValuation.capitalValue)}</dd>
                                     <dt>Land value</dt><dd style={{ fontFamily: 'var(--mono)' }}>{money(view.ratingValuation.landValue)}</dd>
-                                    <dt>Improvements</dt><dd style={{ fontFamily: 'var(--mono)' }}>{money(view.ratingValuation.improvementsValue)}</dd>
+                                    <dt>{view.ratingValuation.improvementsValueSource === 'calculated_cv_minus_lv' ? 'Improvements (CV − LV)' : 'Improvements'}</dt><dd style={{ fontFamily: 'var(--mono)' }}>{money(view.ratingValuation.improvementsValue)}</dd>
                                     {view.ratingValuation.valuationNumber && <><dt>Valuation reference</dt><dd style={{ fontFamily: 'var(--mono)' }}>{view.ratingValuation.valuationNumber}</dd></>}
                                     {view.ratingValuation.valuationDate && <><dt>Valuation date</dt><dd style={{ fontFamily: 'var(--mono)' }}>{sourceDate(view.ratingValuation.valuationDate)}</dd></>}
                                     {view.ratingValuation.sourceUpdatedAt && <><dt>Source updated</dt><dd style={{ fontFamily: 'var(--mono)' }}>{sourceDate(view.ratingValuation.sourceUpdatedAt)}</dd></>}

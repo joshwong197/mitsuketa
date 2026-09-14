@@ -16,6 +16,7 @@ export interface CouncilRatingValuation {
     capitalValue?: number;
     landValue?: number;
     improvementsValue?: number;
+    improvementsValueSource?: 'reported' | 'calculated_cv_minus_lv';
     valuationDate?: string;
     sourceUpdatedAt?: string;
     retrievedAt: string;
@@ -28,12 +29,12 @@ export interface CouncilRatingValuation {
     note?: string;
 }
 
-type Adapter = 'waimakariri' | 'horizons';
+type Adapter = 'waimakariri' | 'horizons' | 'waikato' | 'canterbury' | 'gisborne';
 
 export interface CouncilSource {
     council: string;
     officialUrl: string;
-    adapter?: Adapter;
+    adapter?: Adapter | Adapter[];
 }
 
 const COUNCILS: Array<[string[], CouncilSource]> = [
@@ -41,23 +42,23 @@ const COUNCILS: Array<[string[], CouncilSource]> = [
     [['whangarei'], { council: 'Whangarei District Council', officialUrl: 'https://www.wdc.govt.nz/' }],
     [['kaipara'], { council: 'Kaipara District Council', officialUrl: 'https://www.kaipara.govt.nz/' }],
     [['auckland'], { council: 'Auckland Council', officialUrl: 'https://www.aucklandcouncil.govt.nz/en/property-rates-valuations/find-property-rates-valuation.html' }],
-    [['thames coromandel'], { council: 'Thames-Coromandel District Council', officialUrl: 'https://www.tcdc.govt.nz/' }],
-    [['hauraki'], { council: 'Hauraki District Council', officialUrl: 'https://www.hauraki-dc.govt.nz/' }],
-    [['waikato'], { council: 'Waikato District Council', officialUrl: 'https://www.waikatodistrict.govt.nz/' }],
-    [['matamata piako'], { council: 'Matamata-Piako District Council', officialUrl: 'https://www.mpdc.govt.nz/' }],
-    [['hamilton'], { council: 'Hamilton City Council', officialUrl: 'https://hamilton.govt.nz/property-rates-and-building/property/property-search/' }],
-    [['waipa'], { council: 'Waipa District Council', officialUrl: 'https://www.waipadc.govt.nz/' }],
-    [['otorohanga'], { council: 'Otorohanga District Council', officialUrl: 'https://www.otodc.govt.nz/' }],
-    [['south waikato'], { council: 'South Waikato District Council', officialUrl: 'https://www.southwaikato.govt.nz/' }],
-    [['waitomo'], { council: 'Waitomo District Council', officialUrl: 'https://www.waitomo.govt.nz/', adapter: 'horizons' }],
-    [['taupo'], { council: 'Taupo District Council', officialUrl: 'https://www.taupodc.govt.nz/property-and-rates/property-search', adapter: 'horizons' }],
+    [['thames coromandel'], { council: 'Thames-Coromandel District Council', officialUrl: 'https://www.tcdc.govt.nz/', adapter: 'waikato' }],
+    [['hauraki'], { council: 'Hauraki District Council', officialUrl: 'https://www.hauraki-dc.govt.nz/', adapter: 'waikato' }],
+    [['waikato'], { council: 'Waikato District Council', officialUrl: 'https://www.waikatodistrict.govt.nz/', adapter: 'waikato' }],
+    [['matamata piako'], { council: 'Matamata-Piako District Council', officialUrl: 'https://www.mpdc.govt.nz/', adapter: 'waikato' }],
+    [['hamilton'], { council: 'Hamilton City Council', officialUrl: 'https://hamilton.govt.nz/property-rates-and-building/property/property-search/', adapter: 'waikato' }],
+    [['waipa'], { council: 'Waipa District Council', officialUrl: 'https://www.waipadc.govt.nz/', adapter: 'waikato' }],
+    [['otorohanga'], { council: 'Otorohanga District Council', officialUrl: 'https://www.otodc.govt.nz/', adapter: 'waikato' }],
+    [['south waikato'], { council: 'South Waikato District Council', officialUrl: 'https://www.southwaikato.govt.nz/', adapter: 'waikato' }],
+    [['waitomo'], { council: 'Waitomo District Council', officialUrl: 'https://www.waitomo.govt.nz/', adapter: ['waikato', 'horizons'] }],
+    [['taupo'], { council: 'Taupo District Council', officialUrl: 'https://www.taupodc.govt.nz/property-and-rates/property-search', adapter: ['waikato', 'horizons'] }],
     [['western bay of plenty'], { council: 'Western Bay of Plenty District Council', officialUrl: 'https://www.westernbay.govt.nz/property-rates-and-building/property-and-rates-search' }],
     [['tauranga'], { council: 'Tauranga City Council', officialUrl: 'https://www.tauranga.govt.nz/property-and-rates/property-search' }],
-    [['rotorua lakes', 'rotorua'], { council: 'Rotorua Lakes Council', officialUrl: 'https://www.rotorualakescouncil.nz/property-building-bins/rating-information-database-rid' }],
+    [['rotorua lakes', 'rotorua'], { council: 'Rotorua Lakes Council', officialUrl: 'https://www.rotorualakescouncil.nz/property-building-bins/rating-information-database-rid', adapter: 'waikato' }],
     [['whakatane'], { council: 'Whakatane District Council', officialUrl: 'https://www.whakatane.govt.nz/' }],
     [['kawerau'], { council: 'Kawerau District Council', officialUrl: 'https://www.kaweraudc.govt.nz/' }],
     [['opotiki'], { council: 'Opotiki District Council', officialUrl: 'https://www.odc.govt.nz/' }],
-    [['gisborne'], { council: 'Gisborne District Council', officialUrl: 'https://www.gdc.govt.nz/' }],
+    [['gisborne'], { council: 'Gisborne District Council', officialUrl: 'https://www.gdc.govt.nz/', adapter: 'gisborne' }],
     [['wairoa'], { council: 'Wairoa District Council', officialUrl: 'https://www.wairoadc.govt.nz/' }],
     [['hastings'], { council: 'Hastings District Council', officialUrl: 'https://www.hastingsdc.govt.nz/services/properties-and-rates/my-property/' }],
     [['napier'], { council: 'Napier City Council', officialUrl: 'https://www.hbrc.govt.nz/services/properties-and-rates/rates/' }],
@@ -83,19 +84,19 @@ const COUNCILS: Array<[string[], CouncilSource]> = [
     [['tasman'], { council: 'Tasman District Council', officialUrl: 'https://www.tasman.govt.nz/my-property/rates/search' }],
     [['nelson'], { council: 'Nelson City Council', officialUrl: 'https://www.nelson.govt.nz/3rates/rates-search' }],
     [['marlborough'], { council: 'Marlborough District Council', officialUrl: 'https://www.marlborough.govt.nz/services/rates/rates-search' }],
-    [['kaikoura'], { council: 'Kaikoura District Council', officialUrl: 'https://www.kaikoura.govt.nz/' }],
-    [['hurunui'], { council: 'Hurunui District Council', officialUrl: 'https://www.hurunui.govt.nz/' }],
-    [['waimakariri'], { council: 'Waimakariri District Council', officialUrl: 'https://gisservices.waimakariri.govt.nz/apps/YourRates/index.html', adapter: 'waimakariri' }],
-    [['christchurch'], { council: 'Christchurch City Council', officialUrl: 'https://ccc.govt.nz/services/rates-and-valuations/rates-and-valuation-search' }],
-    [['selwyn'], { council: 'Selwyn District Council', officialUrl: 'https://online.selwyn.magiqcloud.com/rates/properties/search' }],
-    [['ashburton'], { council: 'Ashburton District Council', officialUrl: 'https://www.ashburtondc.govt.nz/' }],
-    [['timaru'], { council: 'Timaru District Council', officialUrl: 'https://www.timaru.govt.nz/services/rates-and-property/property-search' }],
-    [['mackenzie'], { council: 'Mackenzie District Council', officialUrl: 'https://www.mackenzie.govt.nz/' }],
-    [['waimate'], { council: 'Waimate District Council', officialUrl: 'https://www.waimatedc.govt.nz/' }],
+    [['kaikoura'], { council: 'Kaikoura District Council', officialUrl: 'https://www.kaikoura.govt.nz/', adapter: 'canterbury' }],
+    [['hurunui'], { council: 'Hurunui District Council', officialUrl: 'https://www.hurunui.govt.nz/', adapter: 'canterbury' }],
+    [['waimakariri'], { council: 'Waimakariri District Council', officialUrl: 'https://gisservices.waimakariri.govt.nz/apps/YourRates/index.html', adapter: ['waimakariri', 'canterbury'] }],
+    [['christchurch'], { council: 'Christchurch City Council', officialUrl: 'https://ccc.govt.nz/services/rates-and-valuations/rates-and-valuation-search', adapter: 'canterbury' }],
+    [['selwyn'], { council: 'Selwyn District Council', officialUrl: 'https://online.selwyn.magiqcloud.com/rates/properties/search', adapter: 'canterbury' }],
+    [['ashburton'], { council: 'Ashburton District Council', officialUrl: 'https://www.ashburtondc.govt.nz/', adapter: 'canterbury' }],
+    [['timaru'], { council: 'Timaru District Council', officialUrl: 'https://www.timaru.govt.nz/services/rates-and-property/property-search', adapter: 'canterbury' }],
+    [['mackenzie'], { council: 'Mackenzie District Council', officialUrl: 'https://www.mackenzie.govt.nz/', adapter: 'canterbury' }],
+    [['waimate'], { council: 'Waimate District Council', officialUrl: 'https://www.waimatedc.govt.nz/', adapter: 'canterbury' }],
     [['buller'], { council: 'Buller District Council', officialUrl: 'https://bullerdc.govt.nz/' }],
     [['grey'], { council: 'Grey District Council', officialUrl: 'https://www.greydc.govt.nz/' }],
     [['westland'], { council: 'Westland District Council', officialUrl: 'https://www.westlanddc.govt.nz/' }],
-    [['waitaki'], { council: 'Waitaki District Council', officialUrl: 'https://www.waitaki.govt.nz/' }],
+    [['waitaki'], { council: 'Waitaki District Council', officialUrl: 'https://www.waitaki.govt.nz/', adapter: 'canterbury' }],
     [['central otago'], { council: 'Central Otago District Council', officialUrl: 'https://www.codc.govt.nz/' }],
     [['queenstown lakes'], { council: 'Queenstown Lakes District Council', officialUrl: 'https://www.qldc.govt.nz/services/rates-property/property-information-search' }],
     [['dunedin'], { council: 'Dunedin City Council', officialUrl: 'https://www.dunedin.govt.nz/services/rates-information/rates' }],
@@ -124,12 +125,16 @@ export function councilSourceFor(territorialAuthority?: string | null): CouncilS
 
 const WDC_LAYER = 'https://gisservices.waimakariri.govt.nz/arcgis/rest/services/Property/PropertyandLand/MapServer/5';
 const HORIZONS_LAYER = 'https://maps.horizons.govt.nz/arcgis/rest/services/LocalMapsPublic/Public_Property/MapServer/1';
+const WAIKATO_LAYER = 'https://services.arcgis.com/2bzQ0Ix3iO7MItUa/arcgis/rest/services/WDP_PROPERTIES_WRC_EXT/FeatureServer/0';
+const CANTERBURY_LAYER = 'https://gis.ecan.govt.nz/arcgis/rest/services/Public/Property_Details/MapServer/2';
+const GISBORNE_LAYER = 'https://maps.gdc.govt.nz/hosting/rest/services/Data/rating_ext/MapServer/0';
 const CC_BY = 'https://creativecommons.org/licenses/by/4.0/';
 
 interface ArcFeature { attributes?: Record<string, any> }
 
 function numberOrUndefined(value: unknown): number | undefined {
-    const n = Number(value);
+    if (value === null || value === undefined || value === '') return undefined;
+    const n = Number(typeof value === 'string' ? value.replace(/[$,\s]/g, '') : value);
     return Number.isFinite(n) ? n : undefined;
 }
 
@@ -176,6 +181,10 @@ function chooseAddress(features: ArcFeature[], field: string, address: string): 
     return ranked[0].feature;
 }
 
+function chooseSpatial(features: ArcFeature[], field: string, address: string): ArcFeature | null | 'ambiguous' {
+    return features.length === 1 ? features[0] : chooseAddress(features, field, address);
+}
+
 async function waimakariri(address: ResolvedPropertyAddress, fetchImpl: typeof fetch): Promise<Partial<CouncilRatingValuation> | 'ambiguous' | null> {
     const features = await arcQuery(WDC_LAYER, {
         geometry: `${address.longitude},${address.latitude}`,
@@ -183,14 +192,15 @@ async function waimakariri(address: ResolvedPropertyAddress, fetchImpl: typeof f
         distance: '120', units: 'esriSRUnit_Meter',
         outFields: 'LOCATION,VNZ,PROPERTY_NO,CapitalValue,LANDVALUE,ImprovementsValue,VALNDATE',
     }, fetchImpl);
-    const picked = chooseAddress(features, 'LOCATION', address.full_address || '');
+    const picked = chooseSpatial(features, 'LOCATION', address.full_address || '');
     if (picked === 'ambiguous') return 'ambiguous';
     if (!picked) return null;
     const a = picked.attributes ?? {};
     return {
         valuationNumber: a.VNZ ? String(a.VNZ) : undefined,
         capitalValue: numberOrUndefined(a.CapitalValue), landValue: numberOrUndefined(a.LANDVALUE),
-        improvementsValue: numberOrUndefined(a.ImprovementsValue), valuationDate: isoDate(a.VALNDATE),
+        improvementsValue: numberOrUndefined(a.ImprovementsValue), improvementsValueSource: 'reported',
+        valuationDate: isoDate(a.VALNDATE),
         sourceUrl: WDC_LAYER, licenceUrl: CC_BY, matchMethod: 'address', matchConfidence: 'high',
         sourceName: 'Waimakariri District Council',
     };
@@ -202,7 +212,7 @@ async function horizons(address: ResolvedPropertyAddress, fetchImpl: typeof fetc
         geometryType: 'esriGeometryPoint', inSR: '4326', spatialRel: 'esriSpatialRelIntersects',
         outFields: 'VnzLand,VnzLocation,VnzCapitalValue,VnzLandValue,ValuationNumber,TerritorialAuthority,RatesSearchLink,DataLastUpdated',
     }, fetchImpl);
-    let picked: ArcFeature | null | 'ambiguous' = features.length === 1 ? features[0] : chooseAddress(features, 'VnzLocation', address.full_address || '');
+    const picked = chooseSpatial(features, 'VnzLocation', address.full_address || '');
     if (picked === 'ambiguous' || (features.length > 1 && !picked)) return 'ambiguous';
     if (!picked) return null;
     const a = picked.attributes ?? {};
@@ -212,10 +222,87 @@ async function horizons(address: ResolvedPropertyAddress, fetchImpl: typeof fetc
         valuationNumber: String(a.ValuationNumber ?? a.VnzLand ?? '') || undefined,
         capitalValue: capital, landValue: land,
         improvementsValue: capital !== undefined && land !== undefined && capital >= land ? capital - land : undefined,
+        improvementsValueSource: 'calculated_cv_minus_lv',
         sourceUpdatedAt: isoDate(a.DataLastUpdated),
         officialUrl: typeof a.RatesSearchLink === 'string' && /^https:\/\//.test(a.RatesSearchLink) ? a.RatesSearchLink : undefined,
         sourceUrl: HORIZONS_LAYER, licenceUrl: CC_BY, matchMethod: 'spatial', matchConfidence: 'high',
         sourceName: 'Horizons Regional Council',
+    };
+}
+
+
+async function waikato(address: ResolvedPropertyAddress, fetchImpl: typeof fetch): Promise<Partial<CouncilRatingValuation> | 'ambiguous' | null> {
+    const features = await arcQuery(WAIKATO_LAYER, {
+        geometry: `${address.longitude},${address.latitude}`,
+        geometryType: 'esriGeometryPoint', inSR: '4326', spatialRel: 'esriSpatialRelIntersects',
+        outFields: 'VG_NUMBER,SITUATION_ADDRESS,CAPITAL_VALUE,LAND_VALUE', resultRecordCount: '10',
+    }, fetchImpl);
+    const picked = chooseSpatial(features, 'SITUATION_ADDRESS', address.full_address || '');
+    if (picked === 'ambiguous') return 'ambiguous';
+    if (!picked) return null;
+    const a = picked.attributes ?? {};
+    const capital = numberOrUndefined(a.CAPITAL_VALUE);
+    const land = numberOrUndefined(a.LAND_VALUE);
+    if (capital === undefined && land === undefined) return null;
+    return {
+        valuationNumber: a.VG_NUMBER ? String(a.VG_NUMBER) : undefined,
+        capitalValue: capital, landValue: land,
+        improvementsValue: capital !== undefined && land !== undefined && capital >= land ? capital - land : undefined,
+        improvementsValueSource: 'calculated_cv_minus_lv',
+        sourceUrl: WAIKATO_LAYER, licenceUrl: CC_BY, matchMethod: 'spatial', matchConfidence: 'high',
+        sourceName: 'Waikato Regional Council',
+        note: 'Rating valuation data is sourced from territorial authority district valuation rolls and published by Waikato Regional Council under CC BY 4.0.',
+    };
+}
+
+async function canterbury(address: ResolvedPropertyAddress, fetchImpl: typeof fetch): Promise<Partial<CouncilRatingValuation> | 'ambiguous' | null> {
+    const features = await arcQuery(CANTERBURY_LAYER, {
+        geometry: `${address.longitude},${address.latitude}`,
+        geometryType: 'esriGeometryPoint', inSR: '4326', spatialRel: 'esriSpatialRelIntersects',
+        outFields: 'LocalCouncil,ValuationNo,StreetAddress,CapitalValue,LandValue,ImprovementsValue,PublicURL,DataSource,PublishDate,ProcessDate',
+        resultRecordCount: '10',
+    }, fetchImpl);
+    const picked = chooseSpatial(features, 'StreetAddress', address.full_address || '');
+    if (picked === 'ambiguous') return 'ambiguous';
+    if (!picked) return null;
+    const a = picked.attributes ?? {};
+    const capital = numberOrUndefined(a.CapitalValue);
+    const land = numberOrUndefined(a.LandValue);
+    const improvements = numberOrUndefined(a.ImprovementsValue);
+    if (capital === undefined && land === undefined && improvements === undefined) return null;
+    return {
+        valuationNumber: a.ValuationNo ? String(a.ValuationNo) : undefined,
+        capitalValue: capital, landValue: land, improvementsValue: improvements,
+        improvementsValueSource: 'reported', sourceUpdatedAt: isoDate(a.PublishDate ?? a.ProcessDate),
+        officialUrl: typeof a.PublicURL === 'string' && /^https:\/\//.test(a.PublicURL) ? a.PublicURL : undefined,
+        sourceUrl: CANTERBURY_LAYER, licenceUrl: CC_BY, matchMethod: 'spatial', matchConfidence: 'high',
+        sourceName: a.LocalCouncil ? `${a.LocalCouncil} via Canterbury Maps` : 'Canterbury Maps and partner councils',
+        note: 'Contains data sourced from Canterbury Maps and partners licensed for reuse under CC BY 4.0.',
+    };
+}
+
+async function gisborne(address: ResolvedPropertyAddress, fetchImpl: typeof fetch): Promise<Partial<CouncilRatingValuation> | 'ambiguous' | null> {
+    const features = await arcQuery(GISBORNE_LAYER, {
+        geometry: `${address.longitude},${address.latitude}`,
+        geometryType: 'esriGeometryPoint', inSR: '4326', spatialRel: 'esriSpatialRelIntersects',
+        outFields: 'ASSESSMNT,ValuationLocation,Suburb,LandValue,ImprovementsValue,CapitalValue',
+        resultRecordCount: '10',
+    }, fetchImpl);
+    const picked = chooseSpatial(features, 'ValuationLocation', address.full_address || '');
+    if (picked === 'ambiguous') return 'ambiguous';
+    if (!picked) return null;
+    const a = picked.attributes ?? {};
+    const capital = numberOrUndefined(a.CapitalValue);
+    const land = numberOrUndefined(a.LandValue);
+    const improvements = numberOrUndefined(a.ImprovementsValue);
+    if (capital === undefined && land === undefined && improvements === undefined) return null;
+    return {
+        valuationNumber: a.ASSESSMNT ? String(a.ASSESSMNT) : undefined,
+        capitalValue: capital, landValue: land, improvementsValue: improvements,
+        improvementsValueSource: 'reported',
+        sourceUrl: GISBORNE_LAYER, licenceUrl: CC_BY, matchMethod: 'spatial', matchConfidence: 'high',
+        sourceName: 'Gisborne District Council',
+        note: 'Gisborne District Council rating valuation data licensed for reuse under CC BY 4.0.',
     };
 }
 
@@ -230,14 +317,24 @@ export async function lookupCouncilRating(
         retrievedAt: new Date().toISOString(),
     };
     if (!source.adapter || address?.longitude == null || address.latitude == null || !address.full_address) return base;
-    try {
-        const result = source.adapter === 'waimakariri'
-            ? await waimakariri(address, fetchImpl)
-            : await horizons(address, fetchImpl);
-        if (result === 'ambiguous') return { ...base, status: 'ambiguous', note: 'More than one council rating unit matched this title.' };
-        if (!result) return base;
-        return { ...base, ...result, status: 'matched', officialUrl: result.officialUrl ?? base.officialUrl };
-    } catch {
-        return { ...base, note: 'The council data service was unavailable when this report was generated.' };
+    const adapters = Array.isArray(source.adapter) ? source.adapter : [source.adapter];
+    let unavailable = false;
+    let queried = false;
+    for (const adapter of adapters) {
+        try {
+            const result = adapter === 'waimakariri' ? await waimakariri(address, fetchImpl)
+                : adapter === 'horizons' ? await horizons(address, fetchImpl)
+                : adapter === 'waikato' ? await waikato(address, fetchImpl)
+                : adapter === 'canterbury' ? await canterbury(address, fetchImpl)
+                : await gisborne(address, fetchImpl);
+            queried = true;
+            if (result === 'ambiguous') return { ...base, status: 'ambiguous', note: 'More than one council rating unit matched this title.' };
+            if (result) return { ...base, ...result, status: 'matched', officialUrl: result.officialUrl ?? base.officialUrl };
+        } catch {
+            unavailable = true;
+        }
     }
+    return unavailable && !queried
+        ? { ...base, note: 'The council data service was unavailable when this report was generated.' }
+        : base;
 }

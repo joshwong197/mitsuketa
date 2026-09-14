@@ -806,7 +806,7 @@ export function buildTitleReportHtml(view: TitleView, now: Date, mapSvg = ''): s
             ? `<dl>
                 <dt>Capital value</dt><dd class="mono">${esc(nzMoney(rating.capitalValue))}</dd>
                 <dt>Land value</dt><dd class="mono">${esc(nzMoney(rating.landValue))}</dd>
-                <dt>Improvements</dt><dd class="mono">${esc(nzMoney(rating.improvementsValue))}</dd>
+                <dt>${rating.improvementsValueSource === 'calculated_cv_minus_lv' ? 'Improvements (CV − LV)' : 'Improvements'}</dt><dd class="mono">${esc(nzMoney(rating.improvementsValue))}</dd>
                 ${rating.valuationNumber ? `<dt>Valuation reference</dt><dd class="mono">${esc(rating.valuationNumber)}</dd>` : ''}
                 ${rating.valuationDate ? `<dt>Valuation date</dt><dd class="mono">${esc(displayDate(rating.valuationDate) ?? '—')}</dd>` : ''}
                 ${rating.sourceUpdatedAt ? `<dt>Source updated</dt><dd class="mono">${esc(displayDate(rating.sourceUpdatedAt) ?? '—')}</dd>` : ''}

@@ -29,14 +29,22 @@ For a title with no usable address, use the title geometry to determine the terr
 
 | Coverage | Official source | Data | Licence/readiness | Recommendation |
 |---|---|---|---|---|
-| Waimakariri District | [Property Values ArcGIS layer](https://gisservices.waimakariri.govt.nz/arcgis/rest/services/Property/PropertyandLand/MapServer/5) | CV, LV, IV, valuation date, valuation number, property ID, location | CC BY 4.0; JSON/GeoJSON query support | First pilot |
-| Horizons region | [Public Property ArcGIS layer](https://maps.horizons.govt.nz/arcgis/rest/services/LocalMapsPublic/Public_Property/MapServer/1) | CV, LV, valuation number, TA, update date, official rates link | CC BY 4.0; JSON/GeoJSON query support | First pilot; useful multi-district coverage |
-| Christchurch | [Current Rating Unit Value layer](https://gis.ccc.govt.nz/server/rest/services/OpenData/Property/FeatureServer/21) | CV, LV, IV, valuation reference and dates | Public official query layer; confirm the applicable reuse terms before release | Technically excellent; approve licence before production |
+| Waimakariri District | [Property Values ArcGIS layer](https://gisservices.waimakariri.govt.nz/arcgis/rest/services/Property/PropertyandLand/MapServer/5) | CV, LV, IV, valuation date, valuation number, property ID, location | CC BY 4.0; JSON query support | Implemented; retained as the preferred Waimakariri source |
+| Horizons region | [Public Property ArcGIS layer](https://maps.horizons.govt.nz/arcgis/rest/services/LocalMapsPublic/Public_Property/MapServer/1) | CV, LV, valuation number, TA, update date, official rates link | CC BY 4.0; JSON query support | Implemented across the regional boundary |
+| Waikato region | [Waikato property layer](https://services.arcgis.com/2bzQ0Ix3iO7MItUa/arcgis/rest/services/WDP_PROPERTIES_WRC_EXT/FeatureServer/0) | CV, LV, valuation number and address; IV calculated as CV minus LV | CC BY 4.0; sourced from territorial authority district valuation rolls | Implemented across the regional boundary |
+| Canterbury region | [Canterbury Maps property details](https://gis.ecan.govt.nz/arcgis/rest/services/Public/Property_Details/MapServer/2) | CV, LV, IV, valuation number, source dates and official property URL | CC BY 4.0 through Canterbury Maps and partners | Implemented across ten territorial authorities |
+| Gisborne District | [GDC rating layer](https://maps.gdc.govt.nz/hosting/rest/services/Data/rating_ext/MapServer/0) | CV, LV, IV, assessment number and address | CC BY 4.0; council states monthly updates | Implemented |
 | New Plymouth/Taranaki | [Property Rating layer](https://services.arcgis.com/MMPHUPU6MnEt0lEK/ArcGIS/rest/services/Property_Rating/FeatureServer/0) | Address, assessment, CV, LV, rates and valuation date | Public official query layer; confirm licence | Next candidate |
 | Whangarei | [Public property layer](https://geo.wdc.govt.nz/server/rest/services/Property__Land__Roads_and_Rail_public_view/FeatureServer/12) | Address, CV, LV, property/assessment IDs and parcel IDs | Public query layer; no clear reuse licence found | Ask Council before embedding values |
 | Southland District | [Property layer](https://gis.southlanddc.govt.nz/server/rest/services/PROPERTY/MapServer/3) | Address, valuation number, CV, LV, legal/title description and rates | Public query layer; no clear reuse licence found | Ask Council before embedding values |
 
-Waimakariri and Horizons are the safest first adapters because the official service metadata expressly states CC BY 4.0. Christchurch is a strong technical source but should not be treated as licensed merely because its REST endpoint is public.
+The five implemented sources have official reuse terms or metadata supporting CC BY 4.0 reuse. The regional adapters query one property point at a time, carry source attribution, and fall back to the council link when the point is outside the dataset, ambiguous, or unavailable.
+
+## Coverage snapshot
+
+On 14 September 2026, the four non-overlapping regional/unitary datasets contained 718,213 rating-unit records: Waikato 239,078, Canterbury 331,623, Gisborne 24,183 and Horizons 123,329. Compared with Cotality's national universe of more than 2.4 million properties, this is about 29.9%. Rating units and Cotality property records are not identical, so treat that percentage as directional rather than audited coverage.
+
+The adapters cover all or part of 29 of New Zealand's 67 territorial authorities, or 43.3% by authority name. Waitomo, Taupo and Rotorua cross regional boundaries, so this measure overstates complete district coverage. Auckland's absence is the main reason the property-record percentage is lower.
 
 ## Link-first council examples
 
@@ -113,9 +121,10 @@ Display **Council rating valuation (CV/RV)**, the valuation date, source and ret
 1. Preserve the full LINZ resolved address on title reports.
 2. Add the national territorial-authority-to-council registry and official lookup action.
 3. Add the same link to the property report and HTML export.
-4. Pilot Waimakariri and Horizons automated adapters.
-5. Validate title/rating-unit ambiguity with unit titles, cross-leases and multi-title properties.
-6. Add more adapters only after source and licence review.
+4. Pilot Waimakariri and Horizons automated adapters. Completed.
+5. Add the licensed Waikato, Canterbury Maps and Gisborne adapters. Completed.
+6. Validate title/rating-unit ambiguity with unit titles, cross-leases and multi-title properties.
+7. Add more adapters only after source and licence review.
 
 ## Primary sources
 
@@ -125,3 +134,8 @@ Display **Council rating valuation (CV/RV)**, the valuation date, source and ret
 - [LINZ NZ Addresses](https://data.linz.govt.nz/layer/123113-nz-addresses/)
 - [Local Government (Rating) Act 2002](https://www.legislation.govt.nz/act/public/2002/6/en/latest/)
 - [Rating Valuations Act 1998](https://www.legislation.govt.nz/act/public/1998/69/en/latest/)
+- [DIA: 67 territorial authorities](https://www.dia.govt.nz/Resource-material-Our-Policy-Advice-Areas-Local-Government-Policy)
+- [Cotality: 2.4 million NZ properties](https://www.cotality.com/nz/our-data)
+- [Waikato Regional Council map terms](https://www.waikatoregion.govt.nz/services/maps/terms-of-use/)
+- [Canterbury Maps open-data terms](https://canterburymaps.govt.nz/help/open-data/)
+- [Gisborne District Council rating layer](https://maps.gdc.govt.nz/hosting/rest/services/Data/rating_ext/MapServer/0)

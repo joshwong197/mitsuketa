@@ -3,7 +3,7 @@
 ## Current branch
 
 - Branch: `feature/monetization`
-- Pushed commit: `e414091` (`Add scoped entity reports and Clerk property access`)
+- The branch includes the scoped entity reports, Clerk property access, council-link flow and expanded licensed valuation adapters.
 - Preview: <https://mitsuketa-git-feature-monetization-joshwong197s-projects.vercel.app/#/app>
 - Latest Vercel redeploy is ready and uses the updated branch environment variables.
 - Working tree was clean before this handoff file was created.
@@ -50,7 +50,7 @@ Research is complete in `design/COUNCIL_VALUATION_SPIKE.md`.
 
 - There is no free public national CV/RV feed available to a private app; LINZ restricts National DVR access.
 - A national official-council link layer is practical using the `territorial_authority` that Mitsuketa already receives from LINZ.
-- Waimakariri and Horizons expose official CC BY 4.0 ArcGIS valuation data and are the safest automated pilots.
+- Waimakariri, Horizons, Waikato, Canterbury Maps and Gisborne expose official CC BY 4.0 ArcGIS valuation data and now have automated adapters.
 - Other official council APIs can be allowlisted after their reuse rights and matching behaviour are confirmed.
 - Do not scrape undocumented council HTML applications. Fall back to the official council search.
 - Preserve the structured LINZ address in title reports; `addressOf()` currently discards the address ID and territorial authority.
@@ -62,7 +62,10 @@ Implemented on `feature/monetization` after the research spike:
 
 - Title reports preserve the selected LINZ address ID, territorial authority and point coordinates.
 - Every recognised territorial authority receives an official council website/property-search link.
-- Waimakariri and Horizons-region properties query the official CC BY 4.0 ArcGIS sources for CV, LV, improvements, valuation reference/date and source metadata.
+- Waimakariri, Horizons, Waikato, Canterbury and Gisborne properties query official CC BY 4.0 ArcGIS sources for available CV, LV, improvements, valuation references, source dates and links.
+- Cross-boundary Waitomo and Taupo searches try both Waikato and Horizons; Waimakariri retains its council source and falls back to Canterbury Maps.
+- Where a source does not publish IV, the report labels the derived figure as `Improvements (CV − LV)`.
+- The four non-overlapping regional/unitary datasets currently expose 718,213 rating-unit rows, about 29.9% of Cotality's 2.4 million-property national universe. This is a directional comparison because the record models differ.
 - Multiple/weak matches and council API failures fall back to the official council link.
 - The report and standalone HTML export show the same valuation block, source, retrieval date, licence and rating-purpose wording.
 - Live end-to-end checks passed for `30 Canterbury Street, Ashley` and `10 The Square, Palmerston North`.
