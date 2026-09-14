@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowLeft, Download } from 'lucide-react';
+import { ArrowLeft, Download, ExternalLink } from 'lucide-react';
 import { PropertyStyles } from './PropertyStyles';
 import { TitleMap } from './TitleMap';
 import type { TitleReport } from '../services/propertyService.js';
@@ -91,6 +91,16 @@ const State: React.FC<{ children: React.ReactNode; live?: boolean }> = ({ childr
         {children}
     </span>
 );
+
+const money = (value?: number) => value === undefined
+    ? '—'
+    : new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', maximumFractionDigits: 0 }).format(value);
+
+const sourceDate = (value?: string) => {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : formatDate(date);
+};
 
 const EventRow: React.FC<{ event: MemorialEvent; onJump: (id: string) => void }> = ({ event, onJump }) => {
     const [open, setOpen] = useState(false);
@@ -308,6 +318,61 @@ export const PropertyReport: React.FC<PropertyReportProps> = ({
                         ))}
                     </dl>
                 </Section>
+
+                {view.ratingValuation && (
+                    <Section
+                        mark="評価"
+                        title="Council rating valuation"
+                        aside={<span className="count">{view.ratingValuation.council}</span>}
+                    >
+                        {view.ratingValuation.status === 'matched' ? (
+                            <>
+                                <dl className="ledger">
+                                    <dt>Capital value</dt><dd style={{ fontFamily: 'var(--mono)' }}>{money(view.ratingValuation.capitalValue)}</dd>
+                                    <dt>Land value</dt><dd style={{ fontFamily: 'var(--mono)' }}>{money(view.ratingValuation.landValue)}</dd>
+                                    <dt>Improvements</dt><dd style={{ fontFamily: 'var(--mono)' }}>{money(view.ratingValuation.improvementsValue)}</dd>
+                                    {view.ratingValuation.valuationNumber && <><dt>Valuation reference</dt><dd style={{ fontFamily: 'var(--mono)' }}>{view.ratingValuation.valuationNumber}</dd></>}
+                                    {view.ratingValuation.valuationDate && <><dt>Valuation date</dt><dd style={{ fontFamily: 'var(--mono)' }}>{sourceDate(view.ratingValuation.valuationDate)}</dd></>}
+                                    {view.ratingValuation.sourceUpdatedAt && <><dt>Source updated</dt><dd style={{ fontFamily: 'var(--mono)' }}>{sourceDate(view.ratingValuation.sourceUpdatedAt)}</dd></>}
+                                    <dt>Retrieved</dt><dd style={{ fontFamily: 'var(--mono)' }}>{sourceDate(view.ratingValuation.retrievedAt)}</dd>
+                                    {view.ratingValuation.sourceName && <><dt>Source</dt><dd>{view.ratingValuation.sourceName}</dd></>}
+                                </dl>
+                                <p className="text-ink-pale" style={{ fontSize: 11.5, margin: '10px 0 0', maxWidth: '64ch' }}>
+                                    Official council rating data matched to this address. For rating purposes; this is not a current market valuation.
+                                </p>
+                            </>
+                        ) : (
+                            <p className="text-ink-mid" style={{ fontSize: 12.5, margin: 0, maxWidth: '64ch' }}>
+                                {view.ratingValuation.status === 'ambiguous'
+                                    ? 'More than one council rating unit may cover this title. Check the official council record to choose the correct property.'
+                                    : 'Open the official council property search to view the current rating valuation for this address.'}
+                            </p>
+                        )}
+                        <div className="flex flex-wrap items-center" style={{ gap: '6px 18px', marginTop: 12 }}>
+                            <a
+                                href={view.ratingValuation.officialUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="property-link text-accent"
+                            >
+                                {view.ratingValuation.status === 'matched' ? 'Open official council valuation' : 'Open official council property site'} <ExternalLink size={11} strokeWidth={1.6} />
+                            </a>
+                            {view.ratingValuation.sourceUrl && (
+                                <a href={view.ratingValuation.sourceUrl} target="_blank" rel="noopener noreferrer" className="property-link text-ink-pale">
+                                    Source data <ExternalLink size={10} strokeWidth={1.6} />
+                                </a>
+                            )}
+                            {view.ratingValuation.licenceUrl && (
+                                <a href={view.ratingValuation.licenceUrl} target="_blank" rel="noopener noreferrer" className="property-link text-ink-pale">
+                                    CC BY 4.0 <ExternalLink size={10} strokeWidth={1.6} />
+                                </a>
+                            )}
+                        </div>
+                        {view.ratingValuation.note && (
+                            <p className="text-ink-pale" style={{ fontSize: 10.5, margin: '8px 0 0' }}>{view.ratingValuation.note}</p>
+                        )}
+                    </Section>
+                )}
 
                 {view.owners.length > 0 && (
                     <Section

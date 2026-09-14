@@ -364,7 +364,10 @@ const Search: React.FC<{
 
     const openTitle = async (titleNo: string, matter = submittedReference,
         operationId = submittedSearchId, startsSearch = false) => {
-        onOpenReport(await fetchTitleReport(titleNo, matter, operationId, startsSearch), titleNo);
+        const addressId = mode === 'address'
+            ? Number(address?.resolved_address?.address_id) || undefined
+            : undefined;
+        onOpenReport(await fetchTitleReport(titleNo, matter, operationId, startsSearch, addressId), titleNo);
     };
 
     const titleRow = (t: TitleSummary) => (

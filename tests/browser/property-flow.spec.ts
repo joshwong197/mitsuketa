@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
 
-test('Mitsuketa entry, Property tab, reference, report and admin audit stay connected', async ({ page }) => {
+test('Mitsuketa entry, Property tab, reference, report and admin audit stay connected', async ({ page }, testInfo) => {
     const requests: URL[] = [];
     // Synthetic responses only: this test never queries LINZ or writes Neon.
     await page.route('**/api/property?**', async route => {
@@ -10,9 +11,19 @@ test('Mitsuketa entry, Property tab, reference, report and admin audit stay conn
         const body = mode === 'login' ? { searcher: 'example', canAudit: true }
             : mode === 'address' ? { resolution_status: 'ok', query: url.searchParams.get('q'),
                 titles: [{ title_no: 'SAMPLE-1', type: 'Freehold', status: 'Live' }],
+                resolved_address: { address_id: 123, full_address: 'Example commercial address',
+                    territorial_authority: 'Waimakariri District' },
                 audit_reference: 'AUD-101', matter_reference: url.searchParams.get('ref') }
             : mode === 'title' ? { title: { title_no: 'SAMPLE-1', status: 'Live', type: 'Freehold' },
                 owners: [], memorials: [], estates: [], address: 'Example commercial address',
+                rating_valuation: { status: 'matched', council: 'Waimakariri District Council',
+                    valuationNumber: '2144002401', capitalValue: 500000, landValue: 290000,
+                    improvementsValue: 210000, valuationDate: '2025-06-01T00:00:00.000Z',
+                    retrievedAt: '2026-09-14T01:00:00.000Z',
+                    officialUrl: 'https://gisservices.waimakariri.govt.nz/apps/YourRates/index.html',
+                    sourceName: 'Waimakariri District Council',
+                    licenceUrl: 'https://creativecommons.org/licenses/by/4.0/',
+                    sourceUrl: 'https://gisservices.waimakariri.govt.nz/arcgis/rest/services/Property/PropertyandLand/MapServer/5' },
                 geometry: null, bbox: null, audit_reference: 'AUD-101', matter_reference: url.searchParams.get('ref') }
             : { rows: [{ audit_reference: 'AUD-101', created_at: '2026-09-12T00:00:00Z',
                 mode: 'address', query: 'Example commercial address', title_no: 'SAMPLE-1',
@@ -61,6 +72,19 @@ test('Mitsuketa entry, Property tab, reference, report and admin audit stay conn
     expect(titleRequest.searchParams.get('ref')).toBe('CASE-BROWSER');
     expect(titleRequest.searchParams.get('search_id')).toBe(addressRequest.searchParams.get('search_id'));
     expect(titleRequest.searchParams.has('search_start')).toBe(false);
+    expect(titleRequest.searchParams.get('address_id')).toBe('123');
+    await expect(page.getByRole('heading', { name: /^Council rating valuation/ })).toBeVisible();
+    await expect(page.getByText('$500,000', { exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: /Open official council valuation/ })).toHaveAttribute('href', /waimakariri/);
+    const download = page.waitForEvent('download');
+    await page.getByRole('button', { name: /Export report/ }).click();
+    const file = testInfo.outputPath('property-report.html');
+    await (await download).saveAs(file);
+    const exported = await readFile(file, 'utf8');
+    expect(exported).toContain('Council rating valuation');
+    expect(exported).toContain('$500,000');
+    expect(exported).toContain('Open official council valuation');
+    expect(exported).toContain('CC BY 4.0');
     await page.getByRole('button', { name: /Back to property search/ }).click();
     await page.getByLabel('Saved matter references').selectOption('CASE-BROWSER');
     await page.getByRole('button', { name: 'Remove saved reference', exact: true }).click();

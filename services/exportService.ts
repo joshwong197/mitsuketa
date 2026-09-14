@@ -726,6 +726,13 @@ const mark = (e: MemorialEvent): string => {
 // Pure — also used to preview the report outside the app
 export function buildTitleReportHtml(view: TitleView, now: Date, mapSvg = ''): string {
     const isLive = (view.status ?? '').toLowerCase().startsWith('live');
+    const nzMoney = (value?: number) => value === undefined ? '—'
+        : new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', maximumFractionDigits: 0 }).format(value);
+    const displayDate = (value?: string) => {
+        if (!value) return null;
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? null : formatDate(date);
+    };
 
     const eventRow = (e: MemorialEvent) => `
     <article class="ev" data-ts="${e.date ? e.date.getTime() : ''}" data-cat="${esc(e.category)}"
@@ -792,6 +799,28 @@ export function buildTitleReportHtml(view: TitleView, now: Date, mapSvg = ''): s
       <h3 class="sec-head"><span>${esc(title)}</span>${count ? `<b>${count}</b>` : ''}</h3>
       ${body}
     </section>`;
+
+    const rating = view.ratingValuation;
+    const ratingSection = !rating ? '' : section('評価', 'Council rating valuation', rating.council,
+        (rating.status === 'matched'
+            ? `<dl>
+                <dt>Capital value</dt><dd class="mono">${esc(nzMoney(rating.capitalValue))}</dd>
+                <dt>Land value</dt><dd class="mono">${esc(nzMoney(rating.landValue))}</dd>
+                <dt>Improvements</dt><dd class="mono">${esc(nzMoney(rating.improvementsValue))}</dd>
+                ${rating.valuationNumber ? `<dt>Valuation reference</dt><dd class="mono">${esc(rating.valuationNumber)}</dd>` : ''}
+                ${rating.valuationDate ? `<dt>Valuation date</dt><dd class="mono">${esc(displayDate(rating.valuationDate) ?? '—')}</dd>` : ''}
+                ${rating.sourceUpdatedAt ? `<dt>Source updated</dt><dd class="mono">${esc(displayDate(rating.sourceUpdatedAt) ?? '—')}</dd>` : ''}
+                <dt>Retrieved</dt><dd class="mono">${esc(displayDate(rating.retrievedAt) ?? '—')}</dd>
+                ${rating.sourceName ? `<dt>Source</dt><dd>${esc(rating.sourceName)}</dd>` : ''}
+              </dl>
+              <p class="hint rating-note">Official council rating data matched to this address. For rating purposes; this is not a current market valuation.</p>`
+            : `<p class="note">${rating.status === 'ambiguous'
+                ? 'More than one council rating unit may cover this title. Check the official council record to choose the correct property.'
+                : 'Open the official council property search to view the current rating valuation for this address.'}</p>`)
+        + `<p class="source-links"><a href="${esc(rating.officialUrl)}" target="_blank" rel="noopener noreferrer">${rating.status === 'matched' ? 'Open official council valuation' : 'Open official council property site'} ↗</a>
+             ${rating.sourceUrl ? ` · <a href="${esc(rating.sourceUrl)}" target="_blank" rel="noopener noreferrer">Source data ↗</a>` : ''}
+             ${rating.licenceUrl ? ` · <a href="${esc(rating.licenceUrl)}" target="_blank" rel="noopener noreferrer">CC BY 4.0 ↗</a>` : ''}</p>
+           ${rating.note ? `<p class="hint">${esc(rating.note)}</p>` : ''}`);
 
     return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8">
@@ -906,6 +935,9 @@ dt:first-of-type,dt:first-of-type + dd{border-top:none}
 .map svg{display:block;border:1px solid var(--rule);background:#e9e6e0}
 .map figcaption{font-size:10.5px;color:var(--ink-pale);margin-top:5px;line-height:1.5}
 .map a{color:inherit}
+.rating-note{margin-top:10px}
+.source-links{font-size:11.5px;margin:10px 0 0}
+.source-links a{color:var(--accent);text-underline-offset:3px}
 .colophon{font-size:11px;line-height:1.65;color:var(--ink-pale);margin-top:40px;
  border-top:1px solid var(--ink-wash);padding-top:14px;max-width:78ch}
 .colophon em{font-family:"Shippori Mincho","Yu Mincho",serif;font-style:normal;letter-spacing:.18em;
@@ -955,6 +987,8 @@ ${mapSvg ? section('地図', 'Parcel', '', mapSvg) : ''}
 
 ${section('登記', 'Register detail', '', `<dl>${view.facts.map(f =>
     `<dt>${esc(f.label)}</dt><dd${f.mono ? ' class="mono"' : ''}>${esc(f.value)}</dd>`).join('')}</dl>`)}
+
+${ratingSection}
 
 ${view.owners.length === 0 ? '' : section('所有',
     `Registered owner${view.owners.length === 1 ? '' : 's'}`, String(view.owners.length),

@@ -1,6 +1,7 @@
 import type { MemorialRow } from '../utils/memorials.js';
 import { signOut, sessionGeneration } from '../utils/propertySession.js';
 import { propertyAuthHeaders, exitPropertyAuth, usesClerk } from '../utils/propertyAuthClient';
+import type { CouncilRatingValuation, ResolvedPropertyAddress } from '../utils/councilValuation.js';
 
 /**
  * Client for /api/property — the LINZ Title Register feature (家族).
@@ -73,6 +74,8 @@ export interface TitleReport extends AuditReference {
     memorials: MemorialRow[];
     estates: Record<string, any>[];
     address: string | null;
+    address_details?: ResolvedPropertyAddress | null;
+    rating_valuation?: CouncilRatingValuation | null;
     /** Parcel outline for the aerial map; null when the title carries none. */
     geometry?: { type: string; coordinates: any } | null;
     bbox?: [number, number, number, number] | null;
@@ -175,9 +178,11 @@ export function searchOwner(query: string, reference: string, operationId: strin
     return request<OwnerResult>({ mode: 'owner', q: query, ref: reference, search_id: operationId });
 }
 
-export function fetchTitleReport(titleNo: string, reference: string, operationId: string, startsSearch = false): Promise<TitleReport> {
+export function fetchTitleReport(titleNo: string, reference: string, operationId: string,
+    startsSearch = false, addressId?: number): Promise<TitleReport> {
     return request<TitleReport>({ mode: 'title', title_no: titleNo, ref: reference,
-        search_id: operationId, ...(startsSearch ? { search_start: '1' } : {}) });
+        search_id: operationId, ...(startsSearch ? { search_start: '1' } : {}),
+        ...(addressId !== undefined ? { address_id: String(addressId) } : {}) });
 }
 
 export interface SearchAuditRow {

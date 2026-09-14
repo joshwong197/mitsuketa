@@ -12,6 +12,11 @@
 // containsPoint MUST include the boundary — an address sitting exactly on a
 // title edge still belongs to that title.
 import type { MemorialRow } from './memorials.js';
+import {
+    lookupCouncilRating,
+    type CouncilRatingValuation,
+    type ResolvedPropertyAddress,
+} from './councilValuation.js';
 
 const LDS_HOST = 'https://data.linz.govt.nz';
 const WFS_VERSION = '2.0.0';
@@ -547,6 +552,8 @@ export interface TitleReport {
     memorials: MemorialRow[];
     estates: Record<string, any>[];
     address: string | null;
+    address_details?: ResolvedPropertyAddress | null;
+    rating_valuation?: CouncilRatingValuation | null;
     /** Parcel outline, for the aerial map. Spatial only — carries no personal data. */
     geometry: GeoJsonGeometry | null;
     bbox: [number, number, number, number] | null;
@@ -556,20 +563,48 @@ export interface TitleReport {
  * LINZ ownership data has no address field, so intersect the title polygon
  * against the current address layer.
  */
-async function addressOf(client: LDSClient, titleFeature: Feature): Promise<string | null> {
+async function addressOf(client: LDSClient, titleFeature: Feature,
+                         addressId?: number): Promise<ResolvedPropertyAddress | null> {
     const poly = geomOf(titleFeature);
     if (isEmptyGeom(poly)) return null;
+    if (addressId !== undefined) {
+        const exact = await client.getFeatures(ADDRESSES_LAYER, {
+            cqlFilter: `address_id=${Math.trunc(addressId)}`, count: 1,
+        });
+        const selected = exact[0];
+        const point = selected && geomOf(selected);
+        if (selected && point && point.type === 'Point'
+            && containsPoint(poly!, point.coordinates[0], point.coordinates[1])) {
+            return addressDetails(selected);
+        }
+    }
     const [minx, miny, maxx, maxy] = bboxOf(poly!);
     const cands = await client.getFeatures(ADDRESSES_LAYER, {
         cqlFilter: cqlBbox(minx, miny, maxx, maxy), count: MAX_COUNT_PER_REQUEST,
     });
     const inside = featuresWithin(poly!, cands);
     if (inside.length === 0) return null;
-    return inside[0].properties?.full_address ?? null;
+    return addressDetails(inside[0]);
+}
+
+function addressDetails(feature: Feature): ResolvedPropertyAddress {
+    const p = feature.properties ?? {};
+    const point = geomOf(feature);
+    return {
+        address_id: p.address_id ?? null,
+        full_address: p.full_address ?? null,
+        full_road_name: p.full_road_name ?? null,
+        suburb_locality: p.suburb_locality ?? null,
+        town_city: p.town_city ?? null,
+        territorial_authority: p.territorial_authority ?? null,
+        longitude: point?.type === 'Point' ? point.coordinates[0] : null,
+        latitude: point?.type === 'Point' ? point.coordinates[1] : null,
+    };
 }
 
 /** Everything the report page needs for one title. */
-export async function titleReport(client: LDSClient, titleNo: string): Promise<TitleReport> {
+export async function titleReport(client: LDSClient, titleNo: string,
+                                  addressId?: number): Promise<TitleReport> {
     const quoted = cqlQuote(titleNo);
     const [titleFeats, ownerFeats, memorialFeats, estateFeats] = await Promise.all([
         client.getFeatures(TITLES_OWNERS_LAYER, { cqlFilter: `title_no=${quoted}` }),
@@ -585,13 +620,19 @@ export async function titleReport(client: LDSClient, titleNo: string): Promise<T
     // titles (unit titles carry none), so the map simply does not render.
     const geometry = titleFeats.length > 0 ? geomOf(titleFeats[0]) : null;
     const usable = geometry && !isEmptyGeom(geometry) ? geometry : null;
+    const addressDetails = titleFeats.length > 0
+        ? await addressOf(client, titleFeats[0], addressId)
+        : null;
+    const ratingValuation = await lookupCouncilRating(addressDetails);
 
     return {
         title: titleFeats.length > 0 ? titleSummary(titleFeats[0]) : null,
         owners: props(ownerFeats),
         memorials,
         estates: props(estateFeats),
-        address: titleFeats.length > 0 ? await addressOf(client, titleFeats[0]) : null,
+        address: addressDetails?.full_address ?? null,
+        address_details: addressDetails,
+        rating_valuation: ratingValuation,
         geometry: usable,
         bbox: usable ? bboxOf(usable) : null,
     };

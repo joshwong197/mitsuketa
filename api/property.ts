@@ -431,13 +431,18 @@ return async function handler(req: VercelRequest, res: VercelResponse) {
         if (mode === 'title') {
             const titleNo = str(req.query.title_no).slice(0, MAX_QUERY);
             if (!titleNo) return res.status(400).json({ error: 'title_no_required' });
+            const rawAddressId = str(req.query.address_id);
+            const addressId = rawAddressId ? Number(rawAddressId) : undefined;
+            if (addressId !== undefined && (!Number.isInteger(addressId) || addressId < 0)) {
+                return res.status(400).json({ error: 'bad_address_id' });
+            }
             const metered = !!member && billingEnabled();
             if (metered && await balance(member!.id) < 1) throw new AccessError(402, 'passes_required', 'Add sandbox report passes from your account panel.');
             const startsSearch = str(req.query.search_start) === '1';
             const auditReference = await add({ ...base, action: 'report-opened', query: titleNo,
                 titleNo, continuation: !startsSearch });
             res.setHeader('X-Search-Reference', auditReference!);
-            const report = await titleReport(client, titleNo);
+            const report = await titleReport(client, titleNo, addressId);
             // No debit for upstream failure or a missing title. Recheck approval
             // and the last pass atomically before returning a successful report.
             if (metered && report.title && !await consume(member!.id, auditReference!)) {

@@ -11,6 +11,7 @@
 // and none should be — the report's disclaimer promises exactly that, and it is
 // the reason the output is defensible.
 import { analyse, visible, type MemorialEvent, type MemorialRow } from './memorials.js';
+import type { CouncilRatingValuation, ResolvedPropertyAddress } from './councilValuation.js';
 
 export interface TitleReportData {
     title: Record<string, any> | null;
@@ -18,6 +19,8 @@ export interface TitleReportData {
     memorials: MemorialRow[];
     estates: Record<string, any>[];
     address: string | null;
+    address_details?: ResolvedPropertyAddress | null;
+    rating_valuation?: CouncilRatingValuation | null;
 }
 
 // --------------------------------------------------------------------------- //
@@ -226,6 +229,7 @@ export interface TitleView {
     /** All visible events, for filter counts and the export. */
     all: MemorialEvent[];
     counts: Record<FilterKey, number>;
+    ratingValuation: CouncilRatingValuation | null;
 }
 
 export function buildTitleView(report: TitleReportData): TitleView {
@@ -296,5 +300,6 @@ export function buildTitleView(report: TitleReportData): TitleView {
         burdens,
         all: events,
         counts,
+        ratingValuation: report.rating_valuation ?? null,
     };
 }
