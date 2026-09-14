@@ -48,6 +48,8 @@ Exclude the new homepage, annotation overlay and monetisation wording/features. 
 
 Research is complete in `design/COUNCIL_VALUATION_SPIKE.md`.
 
+A second source-and-licence audit is in `design/COUNCIL_VALUATION_LAWFUL_ROUTES.md`. It finds credible next routes for Taranaki and Whangārei, a free permission-request route for Dunedin, and confirms Hamilton is already covered through Waikato's CC BY source. Auckland, Tauranga and Southland remain link-first unless their commercial reuse position is clarified.
+
 - There is no free public national CV/RV feed available to a private app; LINZ restricts National DVR access.
 - A national official-council link layer is practical using the `territorial_authority` that Mitsuketa already receives from LINZ.
 - Waimakariri, Horizons, Waikato, Canterbury Maps and Gisborne expose official CC BY 4.0 ArcGIS valuation data and now have automated adapters.

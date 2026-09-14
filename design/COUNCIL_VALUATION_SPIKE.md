@@ -2,6 +2,8 @@
 
 Date: 14 September 2026
 
+See also `COUNCIL_VALUATION_LAWFUL_ROUTES.md` for the follow-up audit of Taranaki, Auckland, Whangārei, Hamilton, Tauranga, Southland and Dunedin.
+
 ## Decision
 
 Do not abandon this feature. Build it as a hybrid:
