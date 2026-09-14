@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Download, ExternalLink } from 'lucide-react';
 import { PropertyStyles } from './PropertyStyles';
 import { TitleMap } from './TitleMap';
@@ -183,8 +183,11 @@ export const PropertyReport: React.FC<PropertyReportProps> = ({
 }) => {
     const view = useMemo(() => buildTitleView(report), [report]);
     const [filter, setFilter] = useState<FilterKey>('all');
+    const [councilCopyState, setCouncilCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
     // Oldest first, the way a title is read. The toggle flips it.
     const [newestFirst, setNewestFirst] = useState(false);
+
+    useEffect(() => setCouncilCopyState('idle'), [view.address]);
 
     const rows = useMemo(() => {
         const kept = view.chronology.filter(e => matchesFilter(e, filter));
@@ -209,6 +212,32 @@ export const PropertyReport: React.FC<PropertyReportProps> = ({
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         el.classList.add('ev-flash');
         setTimeout(() => el.classList.remove('ev-flash'), 1400);
+    };
+
+    const copyCouncilAddress = async () => {
+        if (!view.address) {
+            setCouncilCopyState('failed');
+            return;
+        }
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(view.address);
+            } else {
+                const field = document.createElement('textarea');
+                field.value = view.address;
+                field.setAttribute('readonly', '');
+                field.style.position = 'fixed';
+                field.style.opacity = '0';
+                document.body.appendChild(field);
+                field.select();
+                const copied = document.execCommand('copy');
+                field.remove();
+                if (!copied) throw new Error('Clipboard unavailable');
+            }
+            setCouncilCopyState('copied');
+        } catch {
+            setCouncilCopyState('failed');
+        }
     };
 
     const shownBurdens = view.burdens.filter(e => matchesFilter(e, filter));
@@ -354,8 +383,13 @@ export const PropertyReport: React.FC<PropertyReportProps> = ({
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="property-link text-accent"
+                                onClick={view.ratingValuation.status === 'matched' ? undefined : () => { void copyCouncilAddress(); }}
                             >
-                                {view.ratingValuation.status === 'matched' ? 'Open official council valuation' : 'Open official council property site'} <ExternalLink size={11} strokeWidth={1.6} />
+                                {view.ratingValuation.status === 'matched'
+                                    ? 'Open official council valuation'
+                                    : councilCopyState === 'copied'
+                                        ? 'Address copied · open council search'
+                                        : 'Copy address & open council search'} <ExternalLink size={11} strokeWidth={1.6} />
                             </a>
                             {view.ratingValuation.sourceUrl && (
                                 <a href={view.ratingValuation.sourceUrl} target="_blank" rel="noopener noreferrer" className="property-link text-ink-pale">
@@ -368,6 +402,15 @@ export const PropertyReport: React.FC<PropertyReportProps> = ({
                                 </a>
                             )}
                         </div>
+                        {view.ratingValuation.status !== 'matched' && (
+                            <p aria-live="polite" className="text-ink-pale" style={{ fontSize: 10.5, margin: '8px 0 0' }}>
+                                {councilCopyState === 'copied'
+                                    ? 'Paste the copied address into the council search.'
+                                    : councilCopyState === 'failed'
+                                        ? `Clipboard access was blocked. Copy this address: ${view.address ?? 'Address unavailable'}`
+                                        : 'The exact report address will be copied before the council site opens.'}
+                            </p>
+                        )}
                         {view.ratingValuation.note && (
                             <p className="text-ink-pale" style={{ fontSize: 10.5, margin: '8px 0 0' }}>{view.ratingValuation.note}</p>
                         )}

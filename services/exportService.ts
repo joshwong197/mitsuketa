@@ -817,9 +817,10 @@ export function buildTitleReportHtml(view: TitleView, now: Date, mapSvg = ''): s
             : `<p class="note">${rating.status === 'ambiguous'
                 ? 'More than one council rating unit may cover this title. Check the official council record to choose the correct property.'
                 : 'Open the official council property search to view the current rating valuation for this address.'}</p>`)
-        + `<p class="source-links"><a href="${esc(rating.officialUrl)}" target="_blank" rel="noopener noreferrer">${rating.status === 'matched' ? 'Open official council valuation' : 'Open official council property site'} ↗</a>
+        + `<p class="source-links"><a href="${esc(rating.officialUrl)}" target="_blank" rel="noopener noreferrer"${rating.status === 'matched' ? '' : ' data-council-search'}>${rating.status === 'matched' ? 'Open official council valuation' : 'Copy address & open council search'} ↗</a>
              ${rating.sourceUrl ? ` · <a href="${esc(rating.sourceUrl)}" target="_blank" rel="noopener noreferrer">Source data ↗</a>` : ''}
              ${rating.licenceUrl ? ` · <a href="${esc(rating.licenceUrl)}" target="_blank" rel="noopener noreferrer">CC BY 4.0 ↗</a>` : ''}</p>
+           ${rating.status === 'matched' ? '' : `<p class="hint" id="councilCopyStatus">The exact report address will be copied before the council site opens.</p>`}
            ${rating.note ? `<p class="hint">${esc(rating.note)}</p>` : ''}`);
 
     return `<!DOCTYPE html>
@@ -1031,6 +1032,32 @@ ${view.burdens.length === 0 ? '' : section('負担', 'Standing burdens', String(
    Year separators are regenerated after every change, because sorting or
    filtering makes the server-rendered ones wrong. */
 (function () {
+  var councilLink = document.querySelector('[data-council-search]');
+  var councilStatus = document.getElementById('councilCopyStatus');
+  if (councilLink) councilLink.addEventListener('click', function () {
+    var address = document.querySelector('.addr');
+    var value = address ? address.textContent.trim() : '';
+    if (!value) return;
+    function done() {
+      councilLink.firstChild.textContent = 'Address copied · open council search ';
+      if (councilStatus) councilStatus.textContent = 'Paste the copied address into the council search.';
+    }
+    function fallback() {
+      var field = document.createElement('textarea');
+      field.value = value;
+      field.setAttribute('readonly', '');
+      field.style.position = 'fixed'; field.style.opacity = '0';
+      document.body.appendChild(field); field.select();
+      var copied = false;
+      try { copied = document.execCommand('copy'); } catch (_) {}
+      field.remove();
+      if (copied) done();
+      else if (councilStatus) councilStatus.textContent = 'Clipboard access was blocked. Copy the address shown at the top of this report.';
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(value).then(done, fallback);
+    else fallback();
+  });
+
   var ctl = document.getElementById('ctl'), chron = document.getElementById('chron');
   if (!ctl || !chron) return;
   var rows = [].slice.call(chron.querySelectorAll('.ev'));
