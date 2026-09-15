@@ -138,6 +138,7 @@ export interface GraphSnapshot {
   hideDirectors?: boolean;
   disqualifiedMatches?: any[];
   insolvencyMatches?: any[];
+  registerChecks?: PersonRegisterChecks;
 }
 
 export interface CaseTrailEntry { time: string; text: string }
@@ -256,6 +257,13 @@ export interface IndividualTab {
   openedAt?: number;
   trail?: CaseTrailEntry[];
   restoredSnapshotId?: string;
+  registerChecks?: PersonRegisterChecks;
+}
+
+export interface PersonRegisterChecks {
+  disqualified: 'complete' | 'unavailable';
+  insolvency: 'complete' | 'unavailable';
+  checkedAt?: number;
 }
 
 /**

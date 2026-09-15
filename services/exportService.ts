@@ -1,7 +1,7 @@
 // Proper export: self-contained interactive HTML for org charts,
 // static print-friendly HTML report for person searches.
 
-import { GraphNode, GraphEdge, PersonCompanyResult, CaseNote } from '../types';
+import { GraphNode, GraphEdge, PersonCompanyResult, CaseNote, type PersonRegisterChecks } from '../types';
 import { DisqualifiedDirector } from '../src/api/disqualifiedDirectorsApi';
 import { InsolvencyRecord, isInsolvencyRecordCurrent, formatBirth } from '../src/api/insolvencyApi';
 import { heldFor, type MemorialEvent } from '../utils/memorials';
@@ -190,6 +190,7 @@ export async function downloadPersonReportHtml(opts: {
     results: PersonCompanyResult[];
     disqualified: DisqualifiedDirector[];
     insolvency: InsolvencyRecord[];
+    registerChecks?: PersonRegisterChecks;
 }): Promise<void> {
     const signatures = await fetchKydData(opts.results);
     const now = new Date();
@@ -203,23 +204,36 @@ export function buildPersonReportHtml(opts: {
     results: PersonCompanyResult[];
     disqualified: DisqualifiedDirector[];
     insolvency: InsolvencyRecord[];
+    registerChecks?: PersonRegisterChecks;
     signatures: SignatureCapture[];
     generatedAt: Date;
 }): string {
-    const { personName, results, disqualified, insolvency, signatures, generatedAt: now } = opts;
+    const { personName, results, disqualified, insolvency, registerChecks, signatures, generatedAt: now } = opts;
     const addresses = groupAddresses(results);
 
     const anyInsolvencyCurrent = insolvency.some(r => isInsolvencyRecordCurrent(r));
     const anyDisqCurrent = disqualified.some(d => d.disqualificationCriteria?.criteria?.some(c => !c.endDate));
+    const anyInsolvencyHistorical = insolvency.some(r => !isInsolvencyRecordCurrent(r));
+    const checksComplete = registerChecks?.disqualified === 'complete' && registerChecks?.insolvency === 'complete';
+    const checkedAt = checksComplete && Number.isFinite(registerChecks?.checkedAt)
+        ? new Intl.DateTimeFormat('en-NZ', { dateStyle: 'medium', timeStyle: 'short' }).format(registerChecks!.checkedAt!)
+        : null;
+    const findingState = (current: boolean, historical: boolean) => current && historical
+        ? 'current and historical records returned'
+        : current ? 'current records returned'
+            : historical ? 'historical records returned' : 'records returned';
+    const findingLines = [
+        disqualified.length ? `Disqualification name match${disqualified.length === 1 ? '' : 'es'} · ${disqualified.length}${anyDisqCurrent ? ' · Current finding returned' : ''}` : '',
+        insolvency.length ? `Insolvency name match${insolvency.length === 1 ? '' : 'es'} · ${insolvency.length} · ${findingState(anyInsolvencyCurrent, anyInsolvencyHistorical)}` : '',
+    ].filter(Boolean);
+    const registerSummary = findingLines.length
+        ? findingLines.map(line => `<p>${esc(line)}</p>`).join('')
+            + `<small>Review identifying details below.${checksComplete ? '' : ' Register check completion not available.'}</small>`
+        : `<p>${checksComplete ? 'No insolvency or disqualification name matches returned.' : 'Register check completion not available.'}</p>`;
 
-    const flagBlock = (disqualified.length === 0 && insolvency.length === 0)
-        ? `<div class="flag"><span class="sq green" aria-hidden="true">青</span><div>
-             <h3>Register checks · clear</h3>
-             <p>No records for "${esc(personName)}" in the Disqualified Directors or Insolvency
-                registers at the time of generation.</p></div></div>`
-        : `
+    const flagBlock = `
         ${insolvency.length ? `<div class="flag"><span class="sq crit" aria-hidden="true">紅</span><div>
-             <h3>Insolvency<span class="st">${insolvency.length} record${insolvency.length === 1 ? '' : 's'}${anyInsolvencyCurrent ? ' · current' : ' · none current'}</span></h3>
+             <h3>Insolvency<span class="st">${insolvency.length} record${insolvency.length === 1 ? '' : 's'} · ${findingState(anyInsolvencyCurrent, anyInsolvencyHistorical)}</span></h3>
              ${insolvency.some(r => r.multipleInsolvencies) ? '<p>Multiple insolvencies on record.</p>' : ''}
              ${insolvency.map((r) => `
              <table class="kv">
@@ -234,7 +248,7 @@ export function buildPersonReportHtml(opts: {
              </table>`).join('')}
            </div></div>` : ''}
         ${disqualified.length ? `<div class="flag"><span class="sq crit" aria-hidden="true">紅</span><div>
-             <h3>Disqualified director<span class="st">${disqualified.length} record${disqualified.length === 1 ? '' : 's'}${anyDisqCurrent ? ' · current' : ''}</span></h3>
+             <h3>Disqualified director<span class="st">${disqualified.length} record${disqualified.length === 1 ? '' : 's'}${anyDisqCurrent ? ' · current finding returned' : ''}</span></h3>
              ${disqualified.map((d) => `
              <p><b>${esc(d.firstName)} ${esc(d.middleName || '')} ${esc(d.lastName)}</b>${d.aliases?.aliases?.length ? ` · also known as ${esc(d.aliases.aliases.join(', '))}` : ''}</p>
              ${(d.disqualificationCriteria?.criteria || []).map((c) => `
@@ -244,7 +258,9 @@ export function buildPersonReportHtml(opts: {
                  ${c.comments ? `<tr><td>Comments</td><td>${esc(c.comments)}</td></tr>` : ''}
              </table>`).join('')}
              ${d.associations?.associations?.length ? `<p>Associated companies: ${esc(d.associations.associations.map((a) => a.associatedCompanyName).filter(Boolean).join(', '))}</p>` : ''}`).join('')}
-           </div></div>` : ''}`;
+           </div></div>` : ''}
+        ${registerChecks?.disqualified === 'unavailable' ? '<p class="check-unavailable">Disqualified directors check unavailable.</p>' : ''}
+        ${registerChecks?.insolvency === 'unavailable' ? '<p class="check-unavailable">Insolvency check unavailable.</p>' : ''}`;
 
     // Sort/filter is a VIEW: every company is in the document, exactly as the
     // title report carries the full memorial set. A report that silently omits
@@ -280,9 +296,9 @@ export function buildPersonReportHtml(opts: {
               <div class="nzbn mono">${esc(r.nzbn)}</div>
               ${marks.length ? `<div class="rowflag">${marks.join('<span style="width:6px"></span>')}</div>` : ''}
             </td>
-            <td class="role-cell">${esc(roles) || '—'}${r.isInactive ? ' <span class="ceased">· ceased</span>' : ''}</td>
-            <td class="mono" style="white-space:nowrap;color:var(--ink-pale);font-size:11px">${esc(r.resignationDate || '—')}</td>
-            <td class="st-cell ${stCls}">${esc(status)}</td>
+            <td class="role-cell" data-label="Role">${esc(roles) || '—'}${r.isInactive ? ' <span class="ceased">· ceased</span>' : ''}</td>
+            <td class="mono" data-label="Ceased" style="white-space:nowrap;color:var(--ink-pale);font-size:11px">${esc(r.resignationDate || '—')}</td>
+            <td class="st-cell ${stCls}" data-label="Status">${esc(status)}</td>
         </tr>`;
     }).join('');
 
@@ -293,8 +309,12 @@ export function buildPersonReportHtml(opts: {
     }).length;
     const directorCount = results.filter(r => r.isDirector).length;
     const shareholderCount = results.filter(r => r.shareholding > 0).length;
-    const flagCount = results.filter(r => r.isInExternalAdmin || r.hasHistoricInsolvency || r.removalCommenced).length
-        + insolvency.length + disqualified.length;
+    const directors = directorCount > 0;
+    const shareholders = shareholderCount > 0;
+    const roleLabel = [directors ? 'Director' : '', shareholders ? 'Shareholder' : ''].filter(Boolean).join(' · ') || 'Individual';
+    const roleSeal = directors && shareholders
+        ? '<span class="role-seal" aria-label="Director and shareholder"><span class="role-seal-inner"><span class="role-shareholder">株</span><span class="role-director">締</span><span class="role-divider"></span></span></span>'
+        : `<span class="role-seal" aria-label="${directors ? 'Director' : shareholders ? 'Shareholder' : 'Individual'}"><span class="role-seal-inner">${directors ? '締' : shareholders ? '株' : '人'}</span></span>`;
 
     const rosterControls = results.length < 2 ? '' : `
     <div class="ctl" id="ctl" hidden>
@@ -318,6 +338,7 @@ export function buildPersonReportHtml(opts: {
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Mitsuketa — Director Report: ${esc(personName)}</title>
 <style>
     /* Sumi tokens (mirror of design/SUMI_SPEC.md §1). Self-contained: this file
@@ -349,29 +370,31 @@ export function buildPersonReportHtml(opts: {
     html,body{margin:0}
     body{background:var(--paper);color:var(--ink);font-family:var(--gothic);
      font-size:14px;line-height:1.6}
-    .doc{max-width:880px;margin:0 auto;padding:34px 26px 72px}
-    .mono,.nzbn,b{font-family:var(--mono);font-variant-numeric:tabular-nums}
+    .doc{max-width:960px;margin:0 auto;padding:64px 26px 72px}
+    .mono,.nzbn{font-family:var(--mono);font-variant-numeric:tabular-nums}
 
-    /* Masthead — the register-extract idiom the title report uses. */
-    .mast{border-bottom:2px solid var(--ink);padding-bottom:14px}
-    .sup{font-size:11.5px;color:var(--ink-pale);margin:0 0 4px}
-    .sup em{font-family:var(--serif);font-style:normal;letter-spacing:.2em;
-     margin-right:8px;color:var(--ink-mid)}
-    h1{font-family:var(--serif);font-size:40px;font-weight:600;margin:0;line-height:1.06;
-     letter-spacing:.01em}
-    .role{font-size:10.5px;text-transform:uppercase;letter-spacing:.12em;
-     color:var(--ink-pale);margin:7px 0 0}
-    .rule2{border-top:1px solid var(--ink);margin-bottom:26px}
-    .stamp{font-size:11.5px;color:var(--ink-mid);margin:9px 0 0}
-
-    /* Stats strip — cells sharing hairlines, serif numerals. */
-    .stats{display:flex;border:1px solid var(--rule);margin:22px 0 30px}
-    .stat{flex:1;padding:10px 12px;border-right:1px solid var(--rule)}
-    .stat:last-child{border-right:0}
-    .stat b{display:block;font-family:var(--serif);font-size:22px;font-weight:600;
-     line-height:1.1;font-variant-numeric:tabular-nums}
-    .stat span{font-size:9.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--ink-pale)}
-    .stat.crit b{color:var(--crit)}
+    /* Search subject card — mirrors the wide on-screen card, without relying on
+       the application stylesheet or a React render at export time. */
+    .subject-card{display:flex;border:1px solid var(--ink);background:var(--paper);margin:0 0 30px;min-width:0}
+    .subject-spine{width:56px;flex:none;background:var(--accent);color:var(--accent-ink);display:flex;flex-direction:column;align-items:center;justify-content:space-between;padding:24px 0}
+    .subject-spine span{font-family:var(--serif);font-size:30px;line-height:1}
+    .subject-spine small{writing-mode:vertical-rl;font-family:var(--serif);letter-spacing:.15em;color:inherit}
+    .subject-card.current .subject-spine{background:var(--crit);color:var(--paper)}
+    .subject-main{padding:24px 28px;flex:1;min-width:0}
+    .subject-row{display:flex;gap:24px 32px;justify-content:space-between;align-items:center;flex-wrap:wrap}
+    .subject-identity{min-width:0;flex:1 1 280px}
+    .subject-source{font-size:11px;letter-spacing:.07em;text-transform:uppercase;color:var(--ink-mid);margin:0}
+    .subject-name-row{display:flex;align-items:center;gap:16px;margin:12px 0}
+    .subject-name-row h1{font-family:var(--gothic);font-size:32px;font-weight:700;line-height:1.2;margin:0;overflow-wrap:anywhere}
+    .subject-roles{font-size:15px;color:var(--accent);margin:6px 0 0}
+    .subject-qualification{font-size:14px;color:var(--ink-mid);margin:0}
+    .role-seal{width:44px;height:44px;display:grid;place-items:center;flex:none;border:1px solid var(--accent);border-radius:50%;position:relative}
+    .role-seal::before{content:'';position:absolute;inset:3px;border:1px solid color-mix(in oklch,var(--accent) 35%,transparent);border-radius:50%}
+    .role-seal-inner{width:20px;height:20px;position:relative;color:var(--accent);font-family:var(--serif);font-size:20px;line-height:1}
+    .role-seal-inner>span:not(.role-divider){position:absolute;inset:0;display:grid;place-items:center}
+    .role-shareholder{clip-path:inset(0 50% 0 0)}.role-director{clip-path:inset(0 0 0 50%)}.role-divider{position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--accent);opacity:.7}
+    .subject-counts{display:flex;gap:28px;margin:0;flex-wrap:wrap}.subject-counts>div{display:flex;flex-direction:column-reverse;justify-content:flex-end;gap:6px;min-width:70px}.subject-counts dt{font-size:12px;color:var(--ink-mid)}.subject-counts dd{font-family:var(--gothic);font-size:28px;font-variant-numeric:tabular-nums;line-height:1.2;margin:0}
+    .subject-footer{border-top:1px solid var(--rule);margin-top:22px;padding-top:16px;display:flex;justify-content:space-between;gap:12px 24px;flex-wrap:wrap;font-size:14px;color:var(--ink-mid)}.subject-findings p{margin:0 0 4px}.subject-footer small{font-size:12px;color:var(--ink-mid)}.subject-card.current .subject-findings>p{color:var(--crit);font-weight:600}.subject-count-note{font-size:11px;color:var(--ink-mid);margin:12px 0 0}
 
     /* Section marks — the kanji names the register the section draws on. */
     .sec{margin:0 0 30px}
@@ -396,6 +419,7 @@ export function buildPersonReportHtml(opts: {
     .kv td{padding:2px 12px 2px 0;vertical-align:top;color:var(--ink-mid)}
     .kv td:first-child{color:var(--crit);white-space:nowrap}
     .flag p{margin:4px 0 0;font-size:12px;color:var(--ink-mid)}
+    .check-unavailable{font-size:12px;color:var(--ink-mid);margin:8px 0 0}
 
     /* Addresses + signatures */
     .verdict{display:flex;align-items:center;gap:7px;margin:0 0 9px;
@@ -439,8 +463,8 @@ export function buildPersonReportHtml(opts: {
      font-size:10.5px;color:var(--ink-pale)}
 
     @media (max-width:640px){
-     .stats{flex-wrap:wrap}.stat{flex:1 1 40%;border-bottom:1px solid var(--rule)}
-     h1{font-size:30px}
+     .doc{padding:64px 18px 60px}.subject-spine{width:38px;padding:20px 0}.subject-spine span{font-size:26px}.subject-main{padding:18px}.subject-row{gap:20px}.subject-identity{flex-basis:100%}.subject-name-row{gap:10px}.subject-name-row h1{font-size:26px}.role-seal{width:36px;height:36px}.subject-counts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;width:100%}.subject-counts>div{min-width:0}
+     table.co thead{display:none}table.co tr{display:block;border-bottom:1px solid var(--rule);padding:14px 0}table.co td{display:block;border:0;white-space:normal;padding:4px 0}table.co td:not(:first-child)::before{content:attr(data-label) ': ';font-size:12px;color:var(--ink-mid)}
     }
     /* Print: white ground, ink outlines, and light even if dark was chosen — a
        dark document lays down a solid page of toner. Severity squares keep their
@@ -459,24 +483,31 @@ export function buildPersonReportHtml(opts: {
 </head>
 <body>
 <div class="doc">
-    <div class="mast">
-        <p class="sup"><em>個人調書</em>Individual record · Mitsuketa 見つけた</p>
-        <h1>${esc(personName)}</h1>
-        <p class="role">${esc([results.some(r => r.shareholding > 0) ? 'Shareholder' : null,
-                              results.some(r => r.isDirector) ? 'Director' : null]
-                              .filter(Boolean).join(' · ') || 'Individual')}</p>
-        <p class="stamp">Generated ${esc(nzTimestamp(now))} · point-in-time snapshot of NZ register
-           data (MBIE) as at that moment. Informational only — not a formal search.</p>
-    </div>
-    <div class="rule2"></div>
-
-    <div class="stats">
-        <div class="stat"><b>${results.length}</b><span>Companies</span></div>
-        <div class="stat"><b>${activeCount}</b><span>Active</span></div>
-        <div class="stat"><b>${directorCount}</b><span>Directorships</span></div>
-        <div class="stat"><b>${shareholderCount}</b><span>Shareholdings</span></div>
-        <div class="stat${flagCount > 0 ? ' crit' : ''}"><b>${flagCount}</b><span>Flags</span></div>
-    </div>
+    <section class="subject-card${anyInsolvencyCurrent || anyDisqCurrent ? ' current' : ''}" aria-label="Individual search subject">
+        <div class="subject-spine" aria-hidden="true"><span>人</span><small>見つけた</small></div>
+        <div class="subject-main">
+            <div class="subject-row">
+                <div class="subject-identity">
+                    <p class="subject-source">Individual search · Companies Office</p>
+                    <div class="subject-name-row">${roleSeal}<div><h1>${esc(personName)}</h1><p class="subject-roles">${esc(roleLabel)}</p></div></div>
+                    <p class="subject-qualification">Results for this name · Identity not confirmed</p>
+                </div>
+                <dl class="subject-counts">
+                    <div><dt>Company matches</dt><dd>${results.length}</dd></div>
+                    <div><dt>Directorships</dt><dd>${directorCount}</dd></div>
+                    <div><dt>Shareholdings</dt><dd>${shareholderCount}</dd></div>
+                </dl>
+            </div>
+            <div class="subject-footer">
+                <div class="subject-findings">${registerSummary}
+                    ${registerChecks?.disqualified === 'unavailable' ? '<p>Disqualified directors check unavailable.</p>' : ''}
+                    ${registerChecks?.insolvency === 'unavailable' ? '<p>Insolvency check unavailable.</p>' : ''}
+                </div>
+                ${checkedAt ? `<small>Checked ${esc(checkedAt)}</small>` : ''}
+            </div>
+            <p class="subject-count-note">Counts include historical roles where returned. Directorship and shareholding counts can overlap.</p>
+        </div>
+    </section>
 
     <section class="sec">
         <div class="sec-head"><i>険</i><span>Register checks</span><u></u></div>

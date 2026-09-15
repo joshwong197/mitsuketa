@@ -42,7 +42,7 @@ import { tidyUpLayout } from './services/layoutOptimizer';
 import { generateOrgChart, searchEntities, expandNodeDownstream } from './services/apiService';
 import { downloadInteractiveGraphHtml, downloadPersonReportHtml, downloadTitleReportHtml } from './services/exportService';
 import { extractDirectorsFromEntity } from './services/directorService';
-import { ApiConfig, EntitySearchResultItem, EntitySearchResponse, GraphSnapshot, GraphNode, GraphEdge, EdgeData, LogEntry, NodeData, NodeType, NZBNFullEntity, PersonCompanyResult, CompanyTab, IndividualTab, PropertyTab, CaseNote, PersistedCompanyTab } from './types';
+import { ApiConfig, EntitySearchResultItem, EntitySearchResponse, GraphSnapshot, GraphNode, GraphEdge, EdgeData, LogEntry, NodeData, NodeType, NZBNFullEntity, PersonCompanyResult, CompanyTab, IndividualTab, PersonRegisterChecks, PropertyTab, CaseNote, PersistedCompanyTab } from './types';
 import { loadSession, saveSession, loadSavePoints, saveSavePoints } from './utils/caseStore';
 import { diffStatuses, NodeDiff } from './utils/statusDiff';
 import { searchByPersonName } from './services/directorSearchService';
@@ -610,6 +610,7 @@ function App() {
     try {
       console.log(`🔍 Searching for person: "${personName}"`);
 
+      const registerChecks: PersonRegisterChecks = { disqualified: 'complete', insolvency: 'complete' };
       const searchPromises: Promise<any>[] = [
         searchByPersonName(personName, config.companiesKey, handleLog)
       ];
@@ -618,6 +619,7 @@ function App() {
       searchPromises.push(
         searchDisqualifiedDirectors(personName, config, handleLog)
           .catch(err => {
+            registerChecks.disqualified = 'unavailable';
             console.warn("Disqualified Search failed", err);
             return { roles: [] };
           })
@@ -627,20 +629,25 @@ function App() {
       searchPromises.push(
         searchInsolvency(personName, config, handleLog)
           .catch(err => {
+            registerChecks.insolvency = 'unavailable';
             console.warn("Insolvency Search failed", err);
             return { searchResults: [] };
           })
       );
 
       const [personResults, disqualifiedResults, insolvencyResults] = await Promise.all(searchPromises);
+      registerChecks.checkedAt = Date.now();
+      setIndividualTabs(prev => prev.map(tab => tab.id === tabId ? { ...tab, registerChecks } : tab));
 
       if (
         personResults.length === 0 &&
         (!disqualifiedResults.roles || disqualifiedResults.roles.length === 0) &&
         (!insolvencyResults.searchResults || insolvencyResults.searchResults.length === 0)
       ) {
-        if (activeCaseIdRef.current === tabId) setError(`No directorship, shareholding, disqualification, or insolvency records found for "${personName}".`);
-        logTrail('No matching records found', tabId);
+        if (activeCaseIdRef.current === tabId) setError(registerChecks.disqualified === 'unavailable' || registerChecks.insolvency === 'unavailable'
+          ? `No company matches returned for "${personName}". One or more register checks were unavailable; try again.`
+          : `No directorship, shareholding, disqualification, or insolvency records found for "${personName}".`);
+        logTrail(registerChecks.disqualified === 'unavailable' || registerChecks.insolvency === 'unavailable' ? 'No company matches returned; register checks incomplete' : 'No matching records found', tabId);
         setIndividualTabs(prev => prev.map(tab => tab.id === tabId ? { ...tab, isEnriching: false } : tab));
       } else {
         // Show results immediately; NZBN status enrichment (insolvency/admin flags)
@@ -1308,6 +1315,7 @@ function App() {
           results: personSearchResults,
           disqualified: disqualifiedMatches,
           insolvency: insolvencyMatches,
+          registerChecks: currentIndividualTab?.registerChecks,
         });
       } else if (allNodesInMemory.length > 0) {
         const target = allNodesInMemory.find(n => n.data.isTarget) || allNodesInMemory[0];
@@ -1498,7 +1506,7 @@ function App() {
         subjectId: currentIndividualTab.searchQuery, caseId: caseId || undefined,
         nodes: [], edges: [], personResults: currentIndividualTab.personResults,
         disqualifiedMatches: currentIndividualTab.disqualifiedMatches,
-        insolvencyMatches: currentIndividualTab.insolvencyMatches };
+        insolvencyMatches: currentIndividualTab.insolvencyMatches, registerChecks: currentIndividualTab.registerChecks };
     } else {
       if (activeMainTab !== 'company' || !allNodesInMemory.length) return;
       const target = allNodesInMemory.find(n => n.data.isTarget) || allNodesInMemory[0];
@@ -1536,7 +1544,7 @@ function App() {
         searchQuery: snap.searchQuery || snap.name, openedAt, trail: loadedTrail, restoredSnapshotId: snap.id,
         personResults: structuredClone(snap.personResults || []),
         disqualifiedMatches: structuredClone(snap.disqualifiedMatches || []),
-        insolvencyMatches: structuredClone(snap.insolvencyMatches || []), isEnriching: false };
+        insolvencyMatches: structuredClone(snap.insolvencyMatches || []), registerChecks: snap.registerChecks, isEnriching: false };
       setIndividualTabs(prev => [...prev, tab].slice(-MAX_TABS));
       setActiveIndividualTabId(tabId);
       setSearchMode('person'); setActiveMainTab('individual');
@@ -2330,6 +2338,7 @@ function App() {
                 results={personSearchResults}
                 disqualifiedDirectors={disqualifiedMatches}
                 insolvencyRecords={insolvencyMatches}
+                registerChecks={currentIndividualTab?.registerChecks}
                 onCompanyClick={handleCompanyCardClick}
                 onBack={() => {
                   setPersonSearchResults([]);

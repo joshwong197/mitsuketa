@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Building2, ChevronLeft, ChevronRight } from 'lucide-react';
-import { PersonCompanyResult } from '../types';
+import { PersonCompanyResult, PersonRegisterChecks } from '../types';
+import { PersonSubjectCard } from './PersonSubjectCard';
 import { KydVerificationPanel } from './KydVerificationPanel';
 import { DisqualifiedDirector } from '../src/api/disqualifiedDirectorsApi';
 import { InsolvencyRecord, isInsolvencyRecordCurrent, formatBirth } from '../src/api/insolvencyApi';
@@ -171,6 +172,7 @@ interface PersonSearchResultsProps {
     results: PersonCompanyResult[];
     disqualifiedDirectors?: DisqualifiedDirector[];
     insolvencyRecords?: InsolvencyRecord[];
+    registerChecks?: PersonRegisterChecks;
     onCompanyClick: (result: PersonCompanyResult) => void;
     onBack: () => void;
 }
@@ -216,74 +218,20 @@ const Marker: React.FC<{ kanji: string; label: string }> = ({ kanji, label }) =>
     </div>
 );
 
-/**
- * Identity spine — who this person is, held still while the findings scroll.
- *
- * Deliberately does NOT show date of birth, occupation or aliases. Those exist
- * only on the insolvency register, so presenting them as general identity facts
- * would be misleading twice over: absent for anyone with a clean record, and for
- * anyone else an implicit statement that they have been bankrupt, made outside
- * the register-checks section where that finding belongs. They stay on the
- * insolvency record cards, in context and attributed.
- *
- * The address summary is derived from results already in memory, so it costs
- * nothing. One signature is fetched lazily (see usePrimarySignature); the rest
- * stay in the KYD panel.
- */
-const IdentitySpine: React.FC<{
-    personName: string;
+// Identifying evidence uses the returned addresses and one lazy consent-form crop.
+const IdentifyingEvidence: React.FC<{
     results: PersonCompanyResult[];
     onOpenKyd: () => void;
-}> = ({ personName, results, onOpenKyd }) => {
+}> = ({ results, onOpenKyd }) => {
     const addresses = summariseAddresses(results);
     const top = addresses[0];
     const withAddress = addresses.reduce((n, a) => n + a.companies.length, 0);
     const signature = usePrimarySignature(results);
 
-    const isDirector = results.some(r => r.isDirector);
-    const isShareholder = results.some(r => r.shareholding > 0);
-    const roleLabel = isDirector && isShareholder ? 'Shareholder · Director'
-        : isDirector ? 'Director' : isShareholder ? 'Shareholder' : 'Individual';
-
     return (
-        <aside className="lg:sticky lg:top-0 lg:self-start lg:max-h-screen lg:overflow-y-auto lg:border-r border-rule lg:pr-6 pb-8">
-            <section className="entity-card">
-                <div className="entity-card-spine" aria-hidden="true"><span>人</span><small>対象</small></div>
-                <div className="entity-card-main">
-                    <div className="entity-card-top"><span>Mitsuketa · Search subject</span><span className="entity-status">{roleLabel}</span></div>
-                    <div className="flex items-start gap-3" style={{ marginTop: 18 }}>
-                {/* Inkan — the same split 株/締 seal the graph node uses */}
-                {/* Inkan. The glyph is a direct grid child with line-height 1 so the seal
-                    optically centres — a wrapper box sized to the glyph left the CJK
-                    character sitting high and off-centre inside the ring. */}
-                <span aria-hidden="true" className="relative shrink-0 grid place-items-center" style={{ width: 44, height: 44 }}>
-                    <span className="absolute inset-0 rounded-full" style={{ border: '1px solid var(--accent)' }} />
-                    <span className="absolute rounded-full" style={{ inset: 3, border: '1px solid oklch(from var(--accent) l c h / .35)' }} />
-                    {isDirector && isShareholder ? (
-                        <span className="relative block" style={{ width: 18, height: 18 }}>
-                            <span className="absolute inset-0 grid place-items-center" style={{ fontFamily: 'var(--serif)', fontSize: 18, lineHeight: 1, color: 'var(--accent)', clipPath: 'inset(0 50% 0 0)' }}>株</span>
-                            <span className="absolute inset-0 grid place-items-center" style={{ fontFamily: 'var(--serif)', fontSize: 18, lineHeight: 1, color: 'var(--accent)', clipPath: 'inset(0 0 0 50%)' }}>締</span>
-                            <span className="absolute" style={{ top: -2, bottom: -2, left: '50%', width: 1, background: 'var(--accent)', opacity: .7 }} />
-                        </span>
-                    ) : (
-                        <span className="block" style={{ fontFamily: 'var(--serif)', fontSize: 18, lineHeight: 1, color: 'var(--accent)' }}>
-                            {isDirector ? '締' : '株'}
-                        </span>
-                    )}
-                </span>
-                <div className="min-w-0">
-                    <h2 className="text-ink" style={{ fontFamily: 'var(--serif)', fontWeight: 500, fontSize: 27, lineHeight: 1.12 }}>
-                        {personName}
-                    </h2>
-                    <p className="text-ink-mid mt-1.5" style={{ fontSize: '11px', letterSpacing: '.06em' }}>Name returned by the Companies Register search</p>
-                </div>
-            </div>
-                    <div className="entity-identifiers" style={{ marginTop: 16 }}><span>Matched records <strong>{results.length}</strong></span><span>Role coverage <strong>{roleLabel}</strong></span></div>
-                </div>
-            </section>
-
-            <div className="mt-7 pt-1 border-t border-rule">
-                <Marker kanji="印" label="Verification" />
+        <section className="person-identifying-evidence" aria-label="Identifying evidence">
+            <div className="pt-1">
+                <Marker kanji="照" label="Identifying evidence" />
 
                 {top ? (
                     <>
@@ -296,9 +244,10 @@ const IdentitySpine: React.FC<{
                         <div className="border border-rule bg-paper2 px-2.5 py-2">
                             <p className="text-ink" style={{ fontSize: '12.5px', lineHeight: 1.45 }}>{top.fullAddress}</p>
                             <p className="text-ink-pale mt-1" style={{ fontSize: '11px' }}>
-                                Most used · {top.companies.length} of {withAddress} {withAddress === 1 ? 'company' : 'companies'}
+                                Most frequently supplied · {top.companies.length} of {withAddress} {withAddress === 1 ? 'company' : 'companies'}
                             </p>
                         </div>
+                        <p className="text-ink-mid mt-2" style={{ fontSize: '12px' }}>Register addresses do not establish a current residence or confirm identity.</p>
                         {addresses.length > 1 && (
                             <ul className="mt-2 pl-2.5 border-l border-rule text-ink-mid" style={{ fontSize: '11.5px', lineHeight: 1.7 }}>
                                 {addresses.slice(1, 5).map((a, i) => (
@@ -348,7 +297,7 @@ const IdentitySpine: React.FC<{
                     {signature.otherCount > 0 ? ` · ${signature.otherCount} more form${signature.otherCount === 1 ? '' : 's'} →` : ' →'}
                 </button>
             </div>
-        </aside>
+        </section>
     );
 };
 
@@ -397,8 +346,8 @@ const RosterRow: React.FC<{ result: PersonCompanyResult; onClick: () => void }> 
     const stampLabels = stamps.filter(s => s.label);
 
     return (
-        <tr onClick={onClick} className="cursor-pointer group hover:bg-paper2 transition-colors">
-            <td className="align-top py-2 pr-3 border-b border-rule">
+        <tr onClick={onClick} tabIndex={0} onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onClick(); } }} className="cursor-pointer group hover:bg-paper2 transition-colors">
+            <td data-label="Company" className="align-top py-2 pr-3 border-b border-rule">
                 <div className={`font-bold text-ink ${isCompanyRemoved && !isInExternalAdmin ? 'line-through text-ink-mid' : ''}`} style={{ fontSize: '12.5px' }}>
                     {companyName}
                 </div>
@@ -424,7 +373,7 @@ const RosterRow: React.FC<{ result: PersonCompanyResult; onClick: () => void }> 
                     </div>
                 )}
             </td>
-            <td className="align-top py-2 pr-3 border-b border-rule whitespace-nowrap" style={{ fontSize: '12px' }}>
+            <td data-label="Role" className="align-top py-2 pr-3 border-b border-rule whitespace-nowrap" style={{ fontSize: '12px' }}>
                 <span className={result.isInactive ? 'text-ink-mid' : 'text-accent'}>{roles || '—'}</span>
                 {/* A ceased role is a fact about the PERSON, not a mark against the
                     company — so it is an outlined neutral tag in the role column, never
@@ -437,10 +386,10 @@ const RosterRow: React.FC<{ result: PersonCompanyResult; onClick: () => void }> 
                     </span>
                 )}
             </td>
-            <td className="align-top py-2 pr-3 border-b border-rule text-ink-pale whitespace-nowrap tabular-nums" style={{ fontSize: '11px' }}>
+            <td data-label="Held" className="align-top py-2 pr-3 border-b border-rule text-ink-pale whitespace-nowrap tabular-nums" style={{ fontSize: '11px' }}>
                 {from ? `${from} — ${to}` : '—'}
             </td>
-            <td className="align-top py-2 border-b border-rule whitespace-nowrap">
+            <td data-label="Company status" className="align-top py-2 border-b border-rule whitespace-nowrap">
                 <span className={`uppercase ${isInExternalAdmin ? 'text-crit font-bold' : isRegistered ? 'text-green' : 'text-ink-pale'}`}
                       style={{ fontSize: '10px', letterSpacing: '.05em' }}>
                     {displayStatus}
@@ -458,6 +407,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
     results,
     disqualifiedDirectors,
     insolvencyRecords,
+    registerChecks,
     onCompanyClick,
     onBack
 }) => {
@@ -518,7 +468,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
 
     const hasDisqualified = !!(disqualifiedDirectors && disqualifiedDirectors.length > 0);
     const hasInsolvency = !!(insolvencyRecords && insolvencyRecords.length > 0);
-    const registersClear = !hasDisqualified && !hasInsolvency;
+    const registersClear = !hasDisqualified && !hasInsolvency && registerChecks?.disqualified === 'complete' && registerChecks?.insolvency === 'complete';
 
     // "Current" gates the auto-expand: a disqualification with no end date is
     // indefinite/current; an insolvency record counts as current when the
@@ -554,9 +504,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
 
     return (
         <div id="person-search-results" className="absolute inset-0 flex flex-col bg-paper overflow-hidden">
-            {/* Slim return bar. The masthead used to live here and grew unbounded with
-                the register records; identity now sits in the spine instead, so nothing
-                above the fold can push the roster off screen. */}
+            {/* Keep the return action outside the scrolling subject and findings. */}
             <div className="px-6 py-2.5 bg-paper border-b border-rule shrink-0 flex items-center gap-4">
                 <button
                     onClick={onBack}
@@ -565,7 +513,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                     <ChevronLeft size={16} strokeWidth={1.5} />
                     Back to search
                 </button>
-                <p className="ml-auto text-ink-pale" style={{ fontSize: '12px' }}>
+                <p className="person-return-summary ml-auto text-ink-pale" style={{ fontSize: '12px' }}>
                     {results.length} {results.length === 1 ? 'company' : 'companies'}
                     {' · '}{directorCount} directorship{directorCount === 1 ? '' : 's'}
                     {' · '}{shareholderCount} shareholding{shareholderCount === 1 ? '' : 's'}
@@ -573,21 +521,17 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                 </p>
             </div>
 
-            {/* 調書 — identity spine beside scrolling findings (design/individual-page-direction.html) */}
             <div className="flex-1 overflow-y-auto">
-              <div className="max-w-[1240px] mx-auto px-6 grid gap-x-7 lg:grid-cols-[300px_minmax(0,1fr)] pt-6">
-                <IdentitySpine
-                    personName={subjectName}
-                    results={results}
-                    onOpenKyd={() => setShowKyd(true)}
-                />
+              <div className="person-results-content">
+                <PersonSubjectCard name={subjectName} results={results} checks={registerChecks}
+                    currentDisqualification={disqualifiedCurrent} currentInsolvency={insolvencyCurrent}
+                    disqualificationCount={disqualifiedDirectors?.length || 0} insolvencyCount={insolvencyRecords?.length || 0} />
+                <p className="person-results-notice">Same-name notice: these results match the searched name. Compare the identifying details before treating the returned records as belonging to the same person.</p>
+                <div className="person-results-columns">
+                <IdentifyingEvidence results={results} onOpenKyd={() => setShowKyd(true)} />
 
                 <main className="min-w-0 pb-10">
                 <Marker kanji="険" label="Register checks" />
-
-                <p className="mb-3 border-l-2 border-amber bg-paper2 px-3 py-2 text-ink-mid" style={{ fontSize: '11.5px', lineHeight: 1.55 }}>
-                    Same-name notice: these are register findings for the searched name. They do not by themselves confirm that every finding belongs to this person; compare the identifying details shown in each register result.
-                </p>
 
                 {/* REGISTER CHECKS: one collapsed-by-default strip per register, not a
                     scrolling stack of full cards — a long record list used to push the
@@ -596,15 +540,18 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                     the one fact that matters most is never hidden behind a click
                     (design/HANDOVER.md §3e/§4.3/§4.6). */}
                 <div className="border border-rule">
+                    {!registersClear && !hasDisqualified && !hasInsolvency && <p className="p-3 text-ink-mid text-sm">Register check completion is not available. Do not treat this as a completed check with no matches.</p>}
+                    {registerChecks?.disqualified === 'unavailable' && <p className="p-3 text-ink-mid text-sm">Disqualified directors check unavailable.</p>}
+                    {registerChecks?.insolvency === 'unavailable' && <p className="p-3 text-ink-mid text-sm">Insolvency check unavailable.</p>}
                     {registersClear && (
                         <div className="flex items-start gap-3 p-3 bg-paper2">
                             <CheckSquare tone="green" glyph="青" />
                             <div className="min-w-0">
                                 <p className="font-bold text-ink" style={{ fontSize: '13px' }}>
-                                    Register checks · clear
+                                    No register name matches returned
                                 </p>
                                 <p className="text-ink-mid" style={{ fontSize: '12px' }}>
-                                    No records for "{subjectName}" in the Disqualified Directors or Insolvency registers.
+                                    No name matches for "{subjectName}" returned by the Disqualified Directors or Insolvency registers.
                                 </p>
                             </div>
                         </div>
@@ -790,7 +737,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
 
                 {/* ── Roster ─────────────────────────────────────────── */}
                 <div className="mt-8">
-                <Marker kanji="社" label={`Companies · ${results.length}`} />
+                <Marker kanji="社" label={`Company matches · ${results.length}`} />
 
                 <div className="flex flex-wrap gap-x-6 gap-y-3 items-center mb-3">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -843,7 +790,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
-                        <table className="w-full border-collapse">
+                        <table className="person-roster-table w-full border-collapse">
                             <thead>
                                 <tr>
                                     {['Company', 'Role', 'Held', 'Status'].map((h, i) => (
@@ -923,6 +870,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                 </div>
             )}
                 </main>
+                </div>
               </div>
             </div>
 

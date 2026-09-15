@@ -36,6 +36,16 @@
 - Vite excludes generated test reports and scratch files from watching to prevent exported HTML from clearing local sessions.
 - This batch stays on `feature/monetization`; it does not activate Production Clerk or publish to main.
 
+## Individual card follow-up
+
+- Owner approved proposal A from `design/individual-card-proposals.html` and requested retention of the split director/shareholder seal.
+- Individual results use a wide subject card above the identifying evidence and company matches. The combined role seal retains half 株 and half 締; single-role results use their respective glyph.
+- The card uses Gothic English typography and displays returned roles, company/directorship/shareholding counts and qualified current/historical register findings. Same-name uncertainty appears directly under the name.
+- Register check completion and time belong to the originating Individual file and travel with new snapshots. Failed checks are explicitly unavailable; old snapshots without check metadata do not invent a completed-check timestamp.
+- Identifying addresses, the lazy consent signature and the existing KYD panel remain available below. Company rows stack at phone widths and support keyboard activation.
+- The person HTML export matches the wide card, role seal and qualified register states, with no external font or script requests. This follow-up covers the Individual page; the other company/property card, combined reader and homepage copy revisions remain listed in `design/CARD_AND_COPY_REVIEW_2026-09-16.md` for subsequent implementation.
+- TypeScript and the focused person report checks pass. All 19 browser cases have passed across the combined run and corrected person-spec rerun (2/2). Desktop/mobile app and export screenshots were reviewed, including an independent screenshot critique. The final production build passes. Ready for branch review.
+
 ## Production remains unchanged
 
 - No merge or push to `main`.

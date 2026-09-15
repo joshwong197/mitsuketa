@@ -28,7 +28,8 @@
     "property:user": "node utils/property.pw.ts",
     "check:property-access": "tsx utils/propertyAccess.check.ts && tsx utils/stripeWebhook.check.ts",
     "check:scope-view": "tsx utils/companyScope.check.ts",
-    "check:ui-feedback": "npm run check:scope-view && npm run check:company-scope && npm run check:entity-search && npm run check:entity-profile && npm run check:register-evidence && npm run check:register-document-sources && npm run check:entity-record-api"
+    "check:person-report": "tsx services/exportService.person.check.ts",
+    "check:ui-feedback": "npm run check:scope-view && npm run check:company-scope && npm run check:entity-search && npm run check:entity-profile && npm run check:register-evidence && npm run check:register-document-sources && npm run check:entity-record-api && npm run check:person-report"
   },
   "dependencies": {
     "@clerk/backend": "^3.17.2",
