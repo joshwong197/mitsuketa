@@ -32,7 +32,7 @@ for(const scope of ['simple','comprehensive'])test(`${scope} HTML includes an of
     await reportDetails.getByText('Report details',{exact:true}).click();
     await expect(reportDetails.getByRole('heading',{name:'EXAMPLE LIMITED',exact:true})).toBeVisible();
     await reportDetails.getByText('Report details',{exact:true}).click();
-    await offline.getByRole('button',{name:'Record',exact:true}).click();
+    await offline.getByRole('button',{name:'Details',exact:true}).click();
     await expect(offline.locator('.export-network')).toHaveCount(0);
     await expect(offline.locator('.react-flow__node')).toHaveCount(0);
     await expect(offline.getByRole('heading',{name:'EXAMPLE LIMITED',exact:true})).toBeVisible();
@@ -46,7 +46,7 @@ for(const scope of ['simple','comprehensive'])test(`${scope} HTML includes an of
     await expect(offline.getByRole('link',{name:/Annual return/})).toHaveAttribute('href',/documents\/ABC123$/);
     await expect(offline.getByRole('link',{name:'View constitution ↗',exact:true})).toHaveAttribute('href',/documents\/C0A123$/);
     expect(await offline.evaluate(()=>Boolean((window as any).injected))).toBe(false);
-    await offline.getByRole('button',{name:'Network',exact:true}).click();
+    await offline.getByRole('button',{name:'Org Chart',exact:true}).click();
     await expect(offline.locator('.react-flow__node')).toBeVisible();
     expect(external).toEqual([]);
 });

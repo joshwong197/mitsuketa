@@ -1,9 +1,10 @@
 import React from 'react';
 import { Plus, X } from 'lucide-react';
 
-interface TabItem {
+export interface TabItem {
     id: string;
     label: string;
+    title?: string;
     isLoading?: boolean;
 }
 
@@ -41,11 +42,14 @@ export const TabBar: React.FC<TabBarProps> = ({
 
     const modeBtn = (mode: MainTab, kanji: string, label: string) => {
         const current = activeMainTab === mode;
+        const count = mode === 'company' ? companyTabs.length : mode === 'individual' ? individualTabs.length : propertyTabs.length;
+        const kind = mode === 'company' ? 'company' : mode === 'individual' ? 'individual' : 'property';
         return (
             <button
                 onClick={() => onMainTabChange(mode)}
                 className={`flex items-center gap-2 px-4 py-2.5 transition-colors ${current ? 'text-ink bg-paper2' : 'text-ink-pale hover:text-ink-mid'}`}
                 style={{ fontSize: 12.5, boxShadow: current ? 'inset 0 -2px 0 var(--accent)' : undefined }}
+                aria-label={`${label}, ${count} open ${kind} ${count === 1 ? 'tab' : 'tabs'}`}
             >
                 <span
                     style={{ fontFamily: 'var(--serif)', fontSize: 11 }}
@@ -53,7 +57,14 @@ export const TabBar: React.FC<TabBarProps> = ({
                 >
                     {kanji}
                 </span>
-                {label}
+                <span>{label}</span>
+                <span
+                    aria-hidden="true"
+                    className={`inline-flex min-w-[18px] h-[18px] items-center justify-center px-1 border font-mono text-[10px] tabular-nums ${current ? 'border-accent text-accent' : 'border-rule text-ink-pale'}`}
+                    title={`${count} open ${kind} ${count === 1 ? 'tab' : 'tabs'}`}
+                >
+                    {count}
+                </span>
             </button>
         );
     };
@@ -64,7 +75,7 @@ export const TabBar: React.FC<TabBarProps> = ({
             <div className="flex items-center">
                 {/* Single-character kanji, matching the find screen's mode line
                     (社 · 人 · 比 · 地) so the app has one convention. */}
-                {modeBtn('company', '社', 'Companies & entities')}
+                {modeBtn('company', '社', 'Companies')}
                 {modeBtn('individual', '人', 'Individual')}
                 {modeBtn('property', '地', 'Property')}
             </div>
@@ -80,6 +91,9 @@ export const TabBar: React.FC<TabBarProps> = ({
                                 className={`group flex items-center gap-1.5 px-3 py-1.5 cursor-pointer transition-colors whitespace-nowrap max-w-[220px] border-r border-rule ${active ? 'text-ink bg-paper2' : 'text-ink-pale hover:text-ink-mid'}`}
                                 style={{ fontSize: 12 }}
                                 onClick={() => onSubTabClick(tab.id)}
+                                role="button"
+                                aria-label={tab.title ?? tab.label}
+                                title={tab.title ?? tab.label}
                             >
                                 <span className="truncate">{tab.label}</span>
                                 {tab.isLoading && (

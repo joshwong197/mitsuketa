@@ -132,7 +132,15 @@ export interface GraphSnapshot {
   edges: GraphEdge[];
   personResults?: PersonCompanyResult[]; // NEW: For person search snapshots
   notes?: CaseNote[]; // Case notes copied in at save time (Stage B populates)
+  subjectId?: string;
+  caseId?: string;
+  viewScope?: 'simple' | 'comprehensive';
+  hideDirectors?: boolean;
+  disqualifiedMatches?: any[];
+  insolvencyMatches?: any[];
 }
+
+export interface CaseTrailEntry { time: string; text: string }
 
 // --- Cases workspace (see design/CASES_PLAN.md) ---
 
@@ -159,6 +167,11 @@ export interface PersistedCompanyTab {
   allNodesInMemory: GraphNode[];
   edges: GraphEdge[];
   compare?: CompanyTab['compare'];
+  openedAt?: number;
+  trail?: CaseTrailEntry[];
+  restoredSnapshotId?: string;
+  viewScope?: 'simple' | 'comprehensive';
+  hideDirectors?: boolean;
 }
 
 // The one implicit case in v1 — localStorage mitsuketa_session_v1.
@@ -217,6 +230,11 @@ export interface CompanyTab {
   edges: GraphEdge[];
   allNodesInMemory: GraphNode[];
   isLoading: boolean;
+  openedAt?: number;
+  trail?: CaseTrailEntry[];
+  restoredSnapshotId?: string;
+  viewScope?: 'simple' | 'comprehensive';
+  hideDirectors?: boolean;
   // Present when this tab holds a Compare (A ↔ B) result rather than an org chart
   compare?: {
     aLabel: string;
@@ -235,6 +253,9 @@ export interface IndividualTab {
   disqualifiedMatches: any[];
   insolvencyMatches: any[];
   isEnriching: boolean; // True while fetching NZBN enrichment data
+  openedAt?: number;
+  trail?: CaseTrailEntry[];
+  restoredSnapshotId?: string;
 }
 
 /**
@@ -248,7 +269,7 @@ export interface IndividualTab {
  */
 export interface PropertyTab {
   id: string;
-  label: string;      // the title number
+  label: string;      // the resolved address, or title number when unavailable
   titleNo: string;
   report: unknown;    // TitleReport — typed at the use site to keep types.ts free of service imports
 }

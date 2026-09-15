@@ -1,24 +1,40 @@
-# Mitsuketa current handoff — 14 September 2026
+# Mitsuketa current handoff — 16 September 2026
 
 ## Current branch
 
 - Branch: `feature/monetization`
 - The branch includes the scoped entity reports, Clerk property access, council-link flow and expanded licensed valuation adapters.
 - Preview: <https://mitsuketa-git-feature-monetization-joshwong197s-projects.vercel.app/#/app>
-- Latest Vercel redeploy is ready and uses the updated branch environment variables.
-- Working tree was clean before this handoff file was created.
+- Preview deploys from this branch; verify the deployment after the latest branch push.
+- The September 16 UI feedback batch is documented in `design/UI_FEEDBACK_PLAN_2026-09-16.md`.
 
 ## Ready for owner testing
 
 - Public company/entity search while signed out.
 - Simple and Comprehensive company search.
 - Expanded entity record, company history/document links and constitution shortcut.
-- Record + Network HTML export.
+- Details + Org Chart HTML export.
 - Property access through development Clerk.
 - `breakerofboundaries@gmail.com` is the branch Property administrator.
 - A signed-out browser correctly receives **Sign in** and **Request access** at Property.
 - Privacy/terms must both be scrolled to the end before acceptance unlocks; larger in-page popups are available.
 - Neon audit uses one row per submitted search operation, with the user, search, timestamp and matter reference. Candidate/title activity updates that row.
+
+## September 16 UI feedback batch
+
+- Separate Case and Workspace rail views; tab counts; clickable workspace case index.
+- Per-case trail/opening time, notes, changes, director filter and search scope. Late results stay with their originating search.
+- Comprehensive → Simple → Comprehensive uses the cached graph. Simple-only searches ask before fetching the wider graph; failures preserve Simple.
+- Named snapshots, saved/download feedback, bounded collection imports and restore into a separate case. New snapshots do not bleed across separate searches for the same subject.
+- Partial names and ampersand/and lookup fallback; numeric identifiers are preserved.
+- Documents distinguish confirmed empty from unavailable/unsupported. Societies, trusts, partnerships and charities have verified official browse links; automated document scraping is not implemented for those registers.
+- Business details no longer leave the old left-column gap. Company, person and property cards use consistent typography/status cues; property tabs and headings lead with the resolved address.
+- Property summaries include supplied owner/title/type/status/district/area/issue-date information and current mortgage/caveat/lease events; covenants remain in detail.
+- Brand returns home without unmounting open cases. Removed Open for early access from the top homepage strip.
+- All four Nganui spelling/locality variants have address regressions; the user's original query remains in the audit operation.
+- Validation passed: TypeScript, production build, full checks, UI feedback checks and all 18 browser tests. Company/person/property cards were visually reviewed. Browser tests use synthetic API responses without LINZ queries or Neon writes.
+- Vite excludes generated test reports and scratch files from watching to prevent exported HTML from clearing local sessions.
+- This batch stays on `feature/monetization`; it does not activate Production Clerk or publish to main.
 
 ## Production remains unchanged
 

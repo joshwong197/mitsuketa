@@ -197,3 +197,20 @@ for (const wrong of [candidate('1810'), candidate('810', 'Otahuhu'), candidate('
 }
 assert.equal((await lookup([candidate(), candidate()])).resolution_status, 'needs_confirmation');
 console.log('ok - full postal address, locality/number isolation and ambiguous selection');
+
+for (const query of ['36 Nganui Ave', '36 Nganui Avenue, Takanini', '36 Nganui Avenue', '36 Nganui Ave, Takanini']) {
+    const filters: string[] = [];
+    const client = { getFeatures: async (_layer: string, options: { cqlFilter: string }) => {
+        filters.push(options.cqlFilter);
+        return [{ geometry: null, properties: { full_address: '36 Nganui Avenue, Takanini, Auckland', suburb_locality: 'Takanini', town_city: 'Auckland' } }];
+    } } as unknown as LDSClient;
+    const result = await searchAddress(client, query);
+    assert.equal(result.resolved_address?.full_address, '36 Nganui Avenue, Takanini, Auckland');
+    assert.equal(result.query, query);
+    assert.ok(filters[0].includes('Nganui Avenue'));
+}
+const wrongNumberClient = { getFeatures: async () => [{ geometry: null, properties: { full_address: '136 Nganui Avenue, Takanini, Auckland' } }] } as unknown as LDSClient;
+assert.equal((await searchAddress(wrongNumberClient, '36 Nganui Ave')).resolution_status, 'not_found');
+const wrongUnitClient = { getFeatures: async () => [{ geometry: null, properties: { full_address: '2/36 Nganui Avenue, Takanini, Auckland' } }] } as unknown as LDSClient;
+assert.equal((await searchAddress(wrongUnitClient, '1/36 Nganui Ave')).resolution_status, 'not_found');
+console.log('ok - abbreviated suffixes, original query, whole street numbers and units');

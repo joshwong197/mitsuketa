@@ -1,5 +1,6 @@
 // Deliberately project public business fields, not the entire NZBN payload.
 // Personal role/shareholder addresses, bank accounts and GST identifiers stay out.
+import { registerDocumentSource, registerDocumentSources, type DocumentStatus } from '../utils/registerDocumentSource.js';
 export const asText = (value: unknown): string => typeof value === 'string' ? value.trim() : typeof value === 'number' ? String(value) : '';
 const list = (value: unknown): any[] => Array.isArray(value) ? value : [];
 const numeric = (value: unknown): number | null => typeof value === 'number' && Number.isFinite(value) ? value : null;
@@ -41,6 +42,8 @@ export function normaliseEntityProfile(raw: any, retrievedAt = new Date().toISOS
     const websites = list(raw?.websites).filter(current).map(item => asText(item.url)).filter(url => {
         try { return ['https:', 'http:'].includes(new URL(url).protocol); } catch { return false; }
     });
+    const charityNumber = asText(nonCompany?.charitiesNumber);
+    const documentSources = registerDocumentSources(source, number, charityNumber);
     return {
         nzbn: asText(raw?.nzbn), name: asText(raw?.entityName), typeCode: asText(raw?.entityTypeCode),
         type: asText(raw?.entityTypeDescription), status: asText(raw?.entityStatusDescription), source, number,
@@ -55,7 +58,7 @@ export function normaliseEntityProfile(raw: any, retrievedAt = new Date().toISOS
         annualFiled: asText(company?.annualReturnLastFiled), reportingMonth: numeric(company?.financialReportFilingMonth),
         constitution: typeof company?.hasConstitutionFiled === 'boolean' ? company.hasConstitutionFiled : null,
         country: asText(company?.countryOfOrigin || nonCompany?.countryOfOrigin),
-        charityNumber: asText(nonCompany?.charitiesNumber), balanceDate: asText(nonCompany?.balanceDate),
+        charityNumber, balanceDate: asText(nonCompany?.balanceDate),
         ultimateHolding: company?.ultimateHoldingCompany?.yn === false ? 'None declared' : asText(company?.ultimateHoldingCompany?.name),
         totalShares, extensive: company?.extensiveShareholding === true, allocations, roles,
         shareholdingSupplied: !!company?.shareholding,
@@ -65,7 +68,8 @@ export function normaliseEntityProfile(raw: any, retrievedAt = new Date().toISOS
         })),
         historicalShareholders: [] as {name:string;endDate:string}[],
         documents: [] as {title:string;filing:string;date:string;size:string;url:string}[],
-        documentsLimited:false,historyIssues:[] as string[],historyCheckedAt:'',
+        documentSource: registerDocumentSource(source, number, charityNumber), documentSources,
+        documentsStatus: 'not_checked' as DocumentStatus, documentsStatusNote: '', documentsLimited:false,historyIssues:[] as string[],historyCheckedAt:'',
     };
 }
 export type EntityProfile = ReturnType<typeof normaliseEntityProfile>;

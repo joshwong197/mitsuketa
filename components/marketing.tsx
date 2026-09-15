@@ -316,7 +316,6 @@ export function navHTML(current: 'home' | 'about' | 'terms'): string {
   <div class="strip">
     <span><span class="sq"></span>Aotearoa New Zealand</span>
     <span class="sep">&#9474;</span><span>Corporate and property due diligence</span>
-    <span class="sep">&#9474;</span><span>Open for early access</span>
   </div>
   <nav>
     <a class="brand" href="#/" aria-label="Mitsuketa home">

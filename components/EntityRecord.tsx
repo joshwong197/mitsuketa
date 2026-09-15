@@ -1,5 +1,6 @@
 import React, {useId} from 'react';
 import type {EntityProfile} from '../services/entityProfile';
+import {entityStatus, type EntityStatusInput} from '../utils/entityStatus';
 
 export const registerDate=(date:string)=>{
     const m=date.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -10,12 +11,13 @@ const addressType=(t:string)=>({REGISTERED:'Registered office',SERVICE:'Address 
 const Facts=({rows}:{rows:[string,React.ReactNode][]})=><dl className="entity-facts">{rows.map(([name,value])=><React.Fragment key={name}><dt>{name}</dt><dd>{value||'Not supplied'}</dd></React.Fragment>)}</dl>;
 const Roles=({roles}:{roles:EntityProfile['roles']})=><div className="entity-people">{roles.map((r,i)=><div className="entity-person" key={i}><span className="entity-person-mark" aria-hidden="true">人</span><div><strong>{r.name||'Name not supplied'}</strong><p>{r.role} · {r.status||'Status not supplied'}</p><small>From {registerDate(r.startDate)}{r.endDate?` · To ${registerDate(r.endDate)}`:''}</small></div></div>)}</div>;
 
-export function EntityRecord({profile,onRefresh}:{profile:EntityProfile;onRefresh?:()=>void}) {
+export function EntityRecord({profile,onRefresh,statusContext}:{profile:EntityProfile;onRefresh?:()=>void;statusContext?:EntityStatusInput}) {
     const id=useId();
+    const status=entityStatus({...statusContext,status:profile.status});
     const currentRoles=profile.roles.filter(r=>!r.historical);
     const historicRoles=profile.roles.filter(r=>r.historical);
     const documents=profile.documents||[];
-    const registerDocumentsUrl=profile.isCompany&&/^\d+$/.test(profile.number)?`${profile.register.url}/documents`:profile.register.url;
+    const registerDocumentsUrl=profile.documentSource?.browseUrl|| (profile.isCompany&&/^\d+$/.test(profile.number)?`${profile.register.url}/documents`:profile.register.url);
     const constitutionDocument=profile.constitution===true?documents.find(d=>/constitution/i.test(`${d.filing} ${d.title}`)):undefined;
     const constitutionValue=profile.constitution===null?'Not supplied':profile.constitution
         ?constitutionDocument?<a href={constitutionDocument.url} target="_blank" rel="noreferrer">Yes · view latest filing ↗</a>:'Yes'
@@ -25,11 +27,12 @@ export function EntityRecord({profile,onRefresh}:{profile:EntityProfile;onRefres
         <header className="entity-card">
             <div className="entity-card-spine" aria-hidden="true"><span>記録</span><small>見つけた</small></div>
             <div className="entity-card-main">
-                <div className="entity-card-top"><span>Mitsuketa · Entity record</span><span className="entity-status">{profile.status||'Status not supplied'}</span></div>
+                <div className="entity-card-top"><span>Mitsuketa · Entity record</span><span className={`entity-status entity-status-${status.bucket}`}>{status.label}</span></div>
                 <h3>{profile.name}</h3>
-                <p className="entity-type">{profile.type||'Entity type not supplied'} · {profile.status||'Status not supplied'}</p>
+                <p className="entity-type">{profile.type||'Entity type not supplied'} · <strong>{status.label}</strong></p>
+                {status.alerts.length>0&&<div className={`entity-status-alerts entity-alerts-${status.bucket}`} aria-label="Register status findings">{status.alerts.map((alert,i)=><span key={`${alert.label}-${i}`} className={alert.historical?'is-historical':''}>{alert.historical?'Historical finding: ':''}{alert.label}</span>)}</div>}
                 <div className="entity-identifiers"><span>NZBN <strong>{profile.nzbn}</strong></span><span>Register no. <strong>{profile.number||'Not supplied'}</strong></span></div>
-                <div className="entity-card-bottom"><span>Registered <strong>{registerDate(profile.registered)}</strong></span><div className="entity-card-actions"><a aria-label={`Open ${profile.register.label}`} href={profile.register.url} target="_blank" rel="noreferrer">Open {profile.register.label} ↗</a>{constitutionDocument&&<a className="entity-constitution-link" href={constitutionDocument.url} target="_blank" rel="noreferrer">View constitution ↗</a>}</div></div>
+                <div className="entity-card-bottom"><span>Registered <strong>{registerDate(profile.registered)}</strong></span><div className="entity-card-actions"><a aria-label={`Open ${profile.register.label}`} href={profile.register.url} target="_blank" rel="noreferrer">Open {profile.register.label} ↗</a>{profile.constitution===true&&<a className="entity-constitution-link" href={constitutionDocument?.url||registerDocumentsUrl} target="_blank" rel="noreferrer">{constitutionDocument?'View constitution':'Find constitution'} ↗</a>}</div></div>
             </div>
         </header>
         <div className="entity-at-a-glance" aria-label="Record at a glance">
@@ -38,6 +41,7 @@ export function EntityRecord({profile,onRefresh}:{profile:EntityProfile;onRefres
         </div>
         <nav className="entity-record-index" aria-label="Record sections">{[['identity','一','Business'],['people','二','People'],['ownership','三','Ownership'],['documents','四','Documents']].map(([key,mark,label])=><button key={key} onClick={()=>document.getElementById(`${id}-${key}`)?.scrollIntoView({block:'start'})}><span aria-hidden="true">{mark}</span>{label}</button>)}</nav>
         <div className="entity-record-grid">
+            <div className="entity-record-column entity-business-column">
             <section id={`${id}-identity`} className="entity-record-section entity-business">
                 <header><span aria-hidden="true">一</span><div><p>Identity & place</p><h4>Business record</h4></div></header>
                 {!!profile.formerNames?.length&&<details className="entity-history"><summary>Former names ({profile.formerNames.length})</summary>{profile.formerNames.map((n,i)=><p key={i}><strong>{n.name}</strong><br/><small>{n.startDate&&`From ${registerDate(n.startDate)}`}{n.endDate&&` · To ${registerDate(n.endDate)}`}</small></p>)}</details>}
@@ -57,6 +61,8 @@ export function EntityRecord({profile,onRefresh}:{profile:EntityProfile;onRefres
                 ]}/>
                 {!!profile.historicalAddresses?.length&&<details className="entity-history"><summary>Historical addresses ({profile.historicalAddresses.length})</summary>{profile.historicalAddresses.map((a,i)=><div key={i} className="entity-address"><strong>{addressType(a.type)}</strong><p>{a.text}</p><small>From {registerDate(a.startDate)} · To {registerDate(a.endDate)}</small></div>)}</details>}
             </section>
+            </div>
+            <div className="entity-record-column entity-people-column">
             <section id={`${id}-people`} className="entity-record-section">
                 <header><span aria-hidden="true">二</span><div><p>The people</p><h4>Directors & other roles</h4></div><strong className="entity-section-count">{currentRoles.length}</strong></header>
                 {!profile.roles.length&&<p>No public roles supplied in this NZBN response.</p>}
@@ -76,14 +82,19 @@ export function EntityRecord({profile,onRefresh}:{profile:EntityProfile;onRefres
                 </div>;})}
                 {!!profile.historicalShareholders?.length&&<details className="entity-history"><summary>Historical shareholders ({profile.historicalShareholders.length})</summary><p className="entity-coverage">Names and cessation dates supplied by the Companies Register. Historic parcel sizes are not supplied here; this is not a complete ownership timeline.</p>{profile.historicalShareholders.map((h,i)=><p key={i}><strong>{h.name}</strong><br/><small>Ceased {registerDate(h.endDate)}</small></p>)}</details>}
             </section>
+            </div>
             <section id={`${id}-documents`} className="entity-record-section entity-document-section">
                 <header><span aria-hidden="true">四</span><div><p>The paper trail</p><h4>Documents & filings</h4></div><strong className="entity-section-count">{documents.length}</strong></header>
                 <p className="entity-coverage">Links open the source register’s files. PDFs are not included in this record. Annual returns and shareholding filings can help with historical checks.</p>
                 {docList(documents.slice(0,12))}
                 {documents.length>12&&<details className="entity-history"><summary>More documents ({documents.length-12})</summary>{docList(documents.slice(12))}</details>}
-                {!documents.length&&<p>No document links were returned for this record. Check the source register for available filings.</p>}
+                {!documents.length&&profile.documentsStatus==='empty'&&<p>No document links were returned by {profile.documentSource.label}. This is a confirmed empty result.</p>}
+                {!documents.length&&profile.documentsStatus==='unavailable'&&<p>{profile.documentsStatusNote||`${profile.documentSource.label} could not be reached.`} Check the official register directly.</p>}
+                {!documents.length&&profile.documentsStatus==='not_supported'&&<p>{profile.documentsStatusNote||`${profile.documentSource.label} provides public document viewing through its own record screen; automated document retrieval is not available.`}</p>}
+                {!documents.length&&profile.documentsStatus==='not_checked'&&<p>Document availability has not been checked yet. Open the official register to inspect filings.</p>}
                 {profile.documentsLimited&&<p>Showing 250 document links; the latest constitution filing is retained when available.</p>}
-                <a className="entity-source-link" href={registerDocumentsUrl} target="_blank" rel="noreferrer">Browse {profile.register.label} documents ↗</a>
+                <a className="entity-source-link" href={registerDocumentsUrl} target="_blank" rel="noreferrer">Browse {profile.documentSource?.label||profile.register.label} documents ↗</a>
+                {profile.documentSources?.slice(1).map(source=><a key={source.kind} className="entity-source-link entity-secondary-source" href={source.browseUrl} target="_blank" rel="noreferrer">Browse {source.label} records ↗</a>)}
                 {(profile.charityNumber||/trust|charit/i.test(profile.type))&&<p><a href="https://register.charities.govt.nz/CharitiesRegister/CharityAdvancedSearch.aspx" target="_blank" rel="noreferrer">Check the Charities Register ↗</a> for charity registration, officers and annual reports. A trust name alone does not establish charity registration.</p>}
             </section>
         </div>

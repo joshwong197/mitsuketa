@@ -18,8 +18,8 @@ import {
 } from 'lucide-react';
 import { PersonCompanyResult } from '../types';
 import { summariseAddresses } from '../utils/addressSummary';
-import { useConsentForms } from '../hooks/useConsentForms';
-import { useSignatureExtractor } from '../hooks/useSignatureExtractor';
+import { useConsentForms, type ConsentFormLink } from '../hooks/useConsentForms';
+import { useSignatureExtractor, type SignatureExtractionResult } from '../hooks/useSignatureExtractor';
 
 interface KydVerificationPanelProps {
     personName: string;
@@ -305,7 +305,7 @@ export const KydVerificationPanel: React.FC<KydVerificationPanelProps> = ({
         if (consentState.loading || Object.keys(consentState.results).length === 0) return;
 
         const jobs: Array<{ companyNumber: string; companyName: string; pdfUrl: string }> = [];
-        for (const [companyNumber, link] of Object.entries(consentState.results)) {
+        for (const [companyNumber, link] of Object.entries(consentState.results as Record<string, ConsentFormLink | null>)) {
             if (!link) continue;
             const company = results.find((r) => r.companyNumber === companyNumber);
             if (!company) continue;
@@ -327,10 +327,10 @@ export const KydVerificationPanel: React.FC<KydVerificationPanelProps> = ({
     };
 
     // Collect extracted signatures
-    const extractedSignatures = Array.from(signatureResults.values()).filter(
+    const extractedSignatures = Array.from((signatureResults as Map<string, SignatureExtractionResult>).values()).filter(
         (r) => r.imageDataUrl !== null
     );
-    const loadingCount = Array.from(signatureResults.values()).filter((r) => r.loading).length;
+    const loadingCount = Array.from((signatureResults as Map<string, SignatureExtractionResult>).values()).filter((r) => r.loading).length;
 
     const chipClass = 'flex items-center gap-1.5 px-3 py-1 border border-rule bg-paper text-ink-mid';
 

@@ -347,8 +347,26 @@ export function streetNumber(text: string): string | null {
     return m ? m[1].toLowerCase() : null;
 }
 
+const STREET_SUFFIXES: Record<string, string> = {
+    ave: 'Avenue', rd: 'Road', st: 'Street', dr: 'Drive', cres: 'Crescent',
+    pl: 'Place', tce: 'Terrace', ct: 'Court', gr: 'Grove', hwy: 'Highway',
+    pde: 'Parade', ln: 'Lane', cl: 'Close', cct: 'Circuit', esp: 'Esplanade',
+};
+
+/** Expand the road suffix for matching only; never rewrite the user's audit query. */
+export function normaliseStreetSuffix(text: string): string {
+    const [street, ...locality] = text.trim().split(',');
+    const expanded = street.replace(/\b([a-z]+)\.?\s*$/i, (suffix, key: string) => STREET_SUFFIXES[key.toLowerCase()] || suffix);
+    return [expanded, ...locality.map(part => part.trim())].join(', ');
+}
+
 function tokens(text: string): Set<string> {
-    return new Set(text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
+    return new Set(normaliseStreetSuffix(text).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
+}
+
+function unitNumber(text: string): string | null {
+    const first = text.trim().split(',')[0].trim().split(' ')[0];
+    return first.includes('/') ? first.slice(0, first.lastIndexOf('/')).toLowerCase() : null;
 }
 
 /**
@@ -439,11 +457,12 @@ export async function searchAddress(client: LDSClient, query = '',
         return titlesAt(client, cands[0], query);
     }
 
+    const matchingQuery = normaliseStreetSuffix(query);
     let cands = await client.getFeatures(ADDRESSES_LAYER, {
-        cqlFilter: cqlLike('full_address', query), count: 50,
+        cqlFilter: cqlLike('full_address', matchingQuery), count: 50,
     });
     if (cands.length === 0 && query.includes(',') && streetNumber(query)) {
-        const [street, ...parts] = query.split(',');
+        const [street, ...parts] = matchingQuery.split(',');
         const locality = parts.join(' ').replace(/\b\d{4}\b\s*$/, '');
         const required = locality.toLowerCase().match(/[a-z0-9]+/g) || [];
         const candidates = await client.getFeatures(ADDRESSES_LAYER, {
@@ -457,6 +476,13 @@ export async function searchAddress(client: LDSClient, query = '',
                 && required.every(token => available.has(token));
         });
     }
+    const wantedNumber = streetNumber(query);
+    const wantedUnit = unitNumber(query);
+    cands = cands.filter(candidate => {
+        const address = candidate.properties?.full_address || '';
+        return (!wantedNumber || streetNumber(address) === wantedNumber)
+            && (!wantedUnit || unitNumber(address) === wantedUnit);
+    });
     if (cands.length === 0) return { resolution_status: 'not_found', query };
 
     const ranked = [...cands].sort(byScoreDesc(query));

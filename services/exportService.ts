@@ -961,8 +961,16 @@ dt:first-of-type,dt:first-of-type + dd{border-top:none}
 .rating-note{margin-top:10px}
 .source-links{font-size:11.5px;margin:10px 0 0}
 .source-links a{color:var(--accent);text-underline-offset:3px}
+.summary{margin:26px 0 30px;border:1px solid var(--rule);background:var(--paper2);padding:18px 20px}
+.summary h2{margin:0 0 12px;font-family:"Shippori Mincho","Yu Mincho",serif;font-size:18px;font-weight:600}
+.summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 22px}
+.summary-item{border-top:1px solid var(--rule);padding:8px 0;min-width:0}
+.summary-item b{display:block;color:var(--ink-pale);font-size:10px;letter-spacing:.08em;text-transform:uppercase;font-weight:400}
+.summary-item span{display:block;margin-top:2px;font-size:12.5px;overflow-wrap:anywhere}
+.summary-interests{grid-column:1/-1}.summary-interests ul{list-style:none;margin:5px 0 0;padding:0}
+.summary-interests li{border-top:1px solid var(--ink-wash);padding:5px 0;font-size:12px}.summary-interests li:first-child{border-top:0}
 .colophon{font-size:11px;line-height:1.65;color:var(--ink-pale);margin-top:40px;
- border-top:1px solid var(--ink-wash);padding-top:14px;max-width:78ch}
+ border-top:1px solid var(--ink-wash);padding-top:14px;max-width:78ch;margin-left:auto;margin-right:auto;text-align:left}
 .colophon em{font-family:"Shippori Mincho","Yu Mincho",serif;font-style:normal;letter-spacing:.18em;
  margin-right:8px;color:var(--ink-mid)}
 .colophon p{margin:0 0 7px}
@@ -975,6 +983,7 @@ dt:first-of-type,dt:first-of-type + dd{border-top:none}
  dt:first-of-type + dd{border-top:none}
  .ev-when{position:static;display:block;width:auto;padding-right:0;text-align:left;margin-bottom:3px}
  .ev-year::before{left:0}
+ .summary{padding:16px}.summary-grid{grid-template-columns:1fr}.summary-interests{grid-column:auto}
  h1{font-size:32px}}
 /* Print: drop every tinted ground so a long chronology does not cost a
    cartridge. Severity squares keep their fill — that colour is the meaning.
@@ -994,8 +1003,8 @@ dt:first-of-type,dt:first-of-type + dd{border-top:none}
 <header class="mast">
   <div style="min-width:0;flex:1">
     <p class="sup"><em>登記簿</em>Record of title · LINZ Title Register</p>
-    <h1>${esc(view.titleNo)}</h1>
-    ${view.address ? `<p class="addr">${esc(view.address)}</p>` : ''}
+    <h1>${esc(view.address || view.titleNo)}</h1>
+    ${view.address ? `<p class="addr">Title ${esc(view.titleNo)}</p>` : ''}
     <p class="meta">${esc(view.meta)}</p>
   </div>
   <div class="stampwrap">
@@ -1006,6 +1015,20 @@ dt:first-of-type,dt:first-of-type + dd{border-top:none}
 <div class="rule2"></div>
 
 <div class="body">
+<section class="summary" aria-labelledby="summary-title">
+  <h2 id="summary-title">Title summary</h2>
+  <div class="summary-grid">
+    <div class="summary-item"><b>Address</b><span>${esc(view.address ?? 'Not supplied')}</span></div>
+    <div class="summary-item"><b>Title number</b><span>${esc(view.summary.titleNo)}</span></div>
+    <div class="summary-item"><b>Registered owners</b><span>${esc(view.summary.owners.join(' · ') || 'Not supplied')}</span></div>
+    <div class="summary-item"><b>Tenure / type</b><span>${esc(view.summary.tenure)}</span></div>
+    <div class="summary-item"><b>Status</b><span>${esc(view.summary.status)}</span></div>
+    <div class="summary-item"><b>Land district</b><span>${esc(view.summary.landDistrict)}</span></div>
+    <div class="summary-item"><b>Area</b><span>${esc(view.summary.area)}</span></div>
+    <div class="summary-item"><b>Issue date</b><span>${esc(view.summary.issueDate)}</span></div>
+    <div class="summary-item summary-interests"><b>Current mortgages, caveats and leases</b><span>${view.summary.interests.length ? `<ul>${view.summary.interests.map(e => `<li>${esc(e.headline)}${e.instrument ? ` · ${esc(e.instrument)}` : ''}</li>`).join('')}</ul>` : 'None recorded'}</span></div>
+  </div>
+</section>
 ${mapSvg ? section('地図', 'Parcel', '', mapSvg) : ''}
 
 ${section('登記', 'Register detail', '', `<dl>${view.facts.map(f =>

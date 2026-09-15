@@ -19,6 +19,8 @@ const getNodeWidth = (label: string): number => {
 };
 
 export const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
+  // Dagre must contain only this case; previous layouts must not influence it.
+  dagreGraph.nodes().forEach(id => dagreGraph.removeNode(id));
   dagreGraph.setGraph({
     rankdir: LAYOUT_DIRECTION, // TB (top-to-bottom)
     nodesep: 10, // Phase 2 stable setting

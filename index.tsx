@@ -32,10 +32,15 @@ function pageFromHash(): Page {
 
 function Root() {
   const [entered, setEntered] = useState(() => window.location.hash === '#/app');
+  const [appVisited, setAppVisited] = useState(() => window.location.hash === '#/app');
   const [page, setPage] = useState<Page>(pageFromHash);
 
   useEffect(() => {
-    const onHash = () => { setPage(pageFromHash()); setEntered(window.location.hash === '#/app'); };
+    const onHash = () => {
+      const inApp = window.location.hash === '#/app';
+      setPage(pageFromHash()); setEntered(inApp);
+      if (inApp) setAppVisited(true);
+    };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
@@ -43,12 +48,14 @@ function Root() {
 
   const access = new URLSearchParams(window.location.search).get('access');
   if (usesClerk() && access) return <Suspense fallback={<p>Loading Mitsuketa…</p>}><AccessPage mode={access} /></Suspense>;
-  if (entered) return <App />;
-  const onEnter = () => { window.location.hash = '/app'; setEntered(true); };
-  if (page === 'about') return <About onEnter={onEnter} />;
-  if (page === 'terms') return <Terms onEnter={onEnter} />;
-  if (page === 'privacy') return <Privacy onEnter={onEnter} />;
-  return <Landing onEnter={onEnter} />;
+  const onEnter = () => { window.location.hash = '/app'; setAppVisited(true); setEntered(true); };
+  const marketingPage = page === 'about' ? <About onEnter={onEnter} />
+    : page === 'terms' ? <Terms onEnter={onEnter} />
+    : page === 'privacy' ? <Privacy onEnter={onEnter} /> : <Landing onEnter={onEnter} />;
+  return <>
+    {appVisited && <div style={{ display: entered ? 'contents' : 'none' }} inert={!entered} aria-hidden={!entered}><App /></div>}
+    {!entered && marketingPage}
+  </>;
 }
 
 const rootElement = document.getElementById('root');

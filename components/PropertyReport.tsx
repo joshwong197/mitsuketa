@@ -275,8 +275,7 @@ export const PropertyReport: React.FC<PropertyReportProps> = ({
                 {report.matter_reference && <> · Matter: {report.matter_reference}</>}
             </p>}
 
-            {/* Masthead — the title number is this document's proper noun, and the
-                hanko is the one stamp on the page. */}
+            {/* Masthead puts the address first when LINZ supplies one. */}
             <header
                 className="flex items-start justify-between flex-wrap"
                 style={{ gap: 20, borderBottom: '2px solid var(--ink)', paddingBottom: 14, marginBottom: 4 }}
@@ -298,11 +297,9 @@ export const PropertyReport: React.FC<PropertyReportProps> = ({
                             fontVariantNumeric: 'tabular-nums',
                         }}
                     >
-                        {view.titleNo}
+                        {view.address || view.titleNo}
                     </h3>
-                    {view.address && (
-                        <p style={{ fontSize: 14, margin: '8px 0 0' }}>{view.address}</p>
-                    )}
+                    {view.address && <p className="text-ink-mid" style={{ fontFamily: 'var(--mono)', fontSize: 12, margin: '8px 0 0' }}>Title {view.titleNo}</p>}
                     <p className="text-ink-mid" style={{ fontSize: 12.5, margin: '3px 0 0' }}>{view.meta}</p>
                 </div>
                 <div className="flex flex-col items-center" style={{ gap: 7, paddingTop: 4 }}>
@@ -324,6 +321,20 @@ export const PropertyReport: React.FC<PropertyReportProps> = ({
             <div style={{ borderTop: '1px solid var(--ink)', marginBottom: 30 }} />
 
             <div className="doc-body">
+                <section className="property-summary" aria-labelledby="property-summary-title">
+                    <h4 id="property-summary-title">Title summary</h4>
+                    <dl className="property-summary-grid">
+                        <div className="property-summary-item"><dt>Address</dt><dd>{view.address || 'Not supplied'}</dd></div>
+                        <div className="property-summary-item"><dt>Title number</dt><dd>{view.summary.titleNo}</dd></div>
+                        <div className="property-summary-item"><dt>Registered owners</dt><dd>{view.summary.owners.join(' · ') || 'Not supplied'}</dd></div>
+                        <div className="property-summary-item"><dt>Tenure / type</dt><dd>{view.summary.tenure}</dd></div>
+                        <div className="property-summary-item"><dt>Status</dt><dd>{view.summary.status}</dd></div>
+                        <div className="property-summary-item"><dt>Land district</dt><dd>{view.summary.landDistrict}</dd></div>
+                        <div className="property-summary-item"><dt>Area</dt><dd>{view.summary.area}</dd></div>
+                        <div className="property-summary-item"><dt>Issue date</dt><dd>{view.summary.issueDate}</dd></div>
+                        <div className="property-summary-item property-summary-interests"><dt>Current mortgages, caveats and leases</dt><dd>{view.summary.interests.length ? <ul>{view.summary.interests.map(event=><li key={event.id}>{event.headline}{event.instrument?` · ${event.instrument}`:''}</li>)}</ul> : 'None recorded'}</dd></div>
+                    </dl>
+                </section>
                 {report.bbox && report.geometry && (
                     <Section mark="地図" title="Parcel">
                         <TitleMap geometry={report.geometry} bbox={report.bbox} />
@@ -581,10 +592,10 @@ export const PropertyReport: React.FC<PropertyReportProps> = ({
 
             {/* Colophon */}
             <p
-                className="text-ink-pale"
+                className="property-colophon text-ink-pale"
                 style={{
-                    fontSize: 11, lineHeight: 1.65, marginTop: 40,
-                    borderTop: '1px solid var(--ink-wash)', paddingTop: 14, maxWidth: '78ch',
+                    fontSize: 11, lineHeight: 1.65,
+                    borderTop: '1px solid var(--ink-wash)', paddingTop: 14,
                 }}
             >
                 <span style={{ fontFamily: 'var(--serif)', letterSpacing: '.18em', marginRight: 8, color: 'var(--ink-mid)' }}>

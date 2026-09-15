@@ -2,7 +2,8 @@ import { test, expect } from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 
 test.beforeEach(async ({page})=>{
-    await page.route('**/api/entity-record?**',route=>route.fulfill({json:{historicalAddresses:[],historicalShareholders:[],documents:[],unavailable:[]}}));
+    await page.addInitScript(() => sessionStorage.setItem('mitsuketa_intro_seen', '1'));
+    await page.route('**/api/entity-record?**',route=>route.fulfill({json:{historicalAddresses:[],historicalShareholders:[],documents:[],documentsStatus:'empty',unavailable:[]}}));
 });
 
 test('company scope defaults to Comprehensive and Simple only renders immediate relationships', async ({ page }) => {
@@ -51,20 +52,20 @@ test('company scope defaults to Comprehensive and Simple only renders immediate 
         expect(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top).toBe(true);
     }
     expect(requests.some(p => p.includes('role-type=SHR'))).toBe(false);
-    await page.getByRole('button', { name: 'Entity details', exact: true }).click();
-    const profile = page.getByRole('region', { name: 'Entity details' });
+    await page.getByRole('button', { name: 'Details', exact: true }).click();
+    const profile = page.getByRole('region', { name: 'Details' });
     await expect(profile.getByText('19 Dec 2000', { exact: true })).toBeVisible();
     await expect(profile.getByText('Example business address', { exact: false })).toBeVisible();
     await expect(profile.getByRole('link', { name: 'Open Companies Register' })).toHaveAttribute('href', /companies\/12345$/);
     await expect(profile.getByText('Total shares: 100', { exact: true })).toBeVisible();
     const download=page.waitForEvent('download');
-    await page.getByRole('button',{name:'Export interactive chart',exact:true}).click();
+    await page.getByRole('button',{name:'Download HTML report',exact:true}).click();
     const html=await readFile((await(await download).path())!,'utf8');
     const embedded=JSON.parse(html.match(/<script id="mitsuketa-data" type="application\/json">(.*?)<\/script>/s)![1]);
     expect(embedded.scope).toBe('simple');
     expect(embedded.record.name).toBe('ABC FIXTURE LIMITED');
     expect(embedded.nodes).toHaveLength(3);
-    await profile.getByRole('button',{name:'Back to network',exact:true}).focus();
+    await profile.getByRole('button',{name:'Back to Org Chart',exact:true}).focus();
     await page.keyboard.press('Escape');
     await expect(profile).toHaveCount(0);
     // Let the session save, then verify the graph's scope survives rehydration.
@@ -117,8 +118,8 @@ for (const [code, type, role, register] of [
         await page.getByLabel('Search company or person').press('Enter');
         await expect(page.getByRole('option').getByText(type, { exact: true })).toBeVisible();
         await page.getByRole('option').first().click();
-        await page.getByRole('button', { name: 'Entity details', exact: true }).click();
-        const panel = page.getByRole('region', { name: 'Entity details' });
+        await page.getByRole('button', { name: 'Details', exact: true }).click();
+        const panel = page.getByRole('region', { name: 'Details' });
         await expect(panel.getByText(`${type} · Registered`, { exact: true })).toBeVisible();
         await expect(panel.getByRole('link', { name: `Open ${register}`, exact: true })).toBeVisible();
         if (role) {

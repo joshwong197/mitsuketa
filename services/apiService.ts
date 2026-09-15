@@ -1166,31 +1166,78 @@ async function fetchDirectorsByEntityName(name: string, config: ApiConfig, baseU
     }
 }
 
+const normaliseSearchName = (value: string) => value
+    .trim()
+    .replace(/\s+/g, ' ')
+    .replace(/\s*&\s*/g, ' AND ')
+    .replace(/\s+and\s+/gi, ' AND ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const comparableSearchName = (value: string) => normaliseSearchName(value)
+    .replace(/[^A-Z0-9 ]/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+
+function rankAndDeduplicateSearchItems(items: EntitySearchResultItem[], searchedName: string): EntitySearchResultItem[] {
+    const seen = new Set<string>();
+    const unique = items.filter(item => {
+        const key = item.nzbn?.trim();
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+    const wanted = comparableSearchName(searchedName);
+    // Only name searches are ranked. Identifier searches retain register order.
+    if (!wanted) return unique;
+    return unique.map((item, index) => {
+        const name = comparableSearchName(item.entityName || '');
+        const rank = name === wanted ? 0 : name.startsWith(wanted) ? 1 : name.includes(wanted) ? 2 : 3;
+        return { item, index, rank };
+    }).sort((a, b) => a.rank - b.rank || a.index - b.index).map(({ item }) => item);
+}
+
 export const searchEntities = async (term: string, config: ApiConfig, logger?: LoggerCallback, page: number = 0, baseUrl: string = '/api/proxy'): Promise<EntitySearchResponse> => {
-    // Quote name searches for exact-phrase matching, but send NZBN/company
-    // numbers unquoted — the API matches identifiers on raw digits only.
-    const cleaned = term.trim();
+    // Identifiers must stay raw digits. Name matching starts as a phrase, then
+    // makes at most two bounded fallbacks on the same requested page: the other
+    // ampersand spelling and an unquoted word search. Results are never merged,
+    // which keeps the register's pagination and totals coherent.
+    const cleaned = term.trim().replace(/\s+/g, ' ');
     const digits = cleaned.replace(/[\s-]/g, '');
     const isNumericId = /^\d{6,13}$/.test(digits);
-    const encodedTerm = encodeURIComponent(isNumericId ? digits : `"${cleaned}"`);
-    const proxyPath = `${API_PATHS.nzbn}/entities?search-term=${encodedTerm}&page-size=10&page=${page}`;
-    const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
-
-    const response = await safeFetch(url, {
-        'x-user-api-key': config.nzbnKey || '',
-        'x-api-type': 'nzbn',
-        'Accept': 'application/json'
-    }, logger);
-
-    if (!response.ok) throw new Error(`Search failed: ${response.status}`);
-
-    const data = await response.json();
-    return {
-        pageSize: data.pageSize || 10,
-        page: data.page || page,
-        totalItems: data.totalItems || 0,
-        items: data.items || [],
+    const canonicalName = normaliseSearchName(cleaned);
+    const alternateAmpersandName = /\bAND\b/.test(canonicalName)
+        ? canonicalName.replace(/\bAND\b/g, '&')
+        : '';
+    const fetchPage = async (searchTerm: string): Promise<EntitySearchResponse> => {
+        const proxyPath = `${API_PATHS.nzbn}/entities?search-term=${encodeURIComponent(searchTerm)}&page-size=10&page=${page}`;
+        const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
+        const response = await safeFetch(url, {
+            'x-user-api-key': config.nzbnKey || '',
+            'x-api-type': 'nzbn',
+            'Accept': 'application/json'
+        }, logger);
+        if (!response.ok) throw new Error(`Search failed: ${response.status}`);
+        const data = await response.json();
+        return {
+            pageSize: data.pageSize || 10,
+            page: Number.isInteger(data.page) ? data.page : page,
+            totalItems: data.totalItems || 0,
+            items: Array.isArray(data.items) ? data.items : [],
+        };
     };
+
+    if (isNumericId) {
+        const data = await fetchPage(digits);
+        return { ...data, items: rankAndDeduplicateSearchItems(data.items, '') };
+    }
+    if (!canonicalName) return { pageSize: 10, page, totalItems: 0, items: [] };
+
+    let data = await fetchPage(`"${canonicalName}"`);
+    if (!data.items.length && alternateAmpersandName) data = await fetchPage(`"${alternateAmpersandName}"`);
+    if (!data.items.length) data = await fetchPage(canonicalName);
+    return { ...data, items: rankAndDeduplicateSearchItems(data.items, canonicalName) };
 };
 
 // Corporate holders that the register did not link to an NZBN.

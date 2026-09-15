@@ -190,8 +190,8 @@ function ExportedGraph({ payload }: { payload: ExportPayload }) {
             <header className="export-report-bar">
                 <strong>見つけた <span>Mitsuketa</span></strong>
                 <nav aria-label="Report views">
-                    <button aria-pressed={view==='network'} onClick={()=>setView('network')}>Network</button>
-                    <button aria-pressed={view==='record'} onClick={()=>setView('record')}>Record</button>
+                    <button aria-pressed={view==='network'} onClick={()=>setView('network')}>Org Chart</button>
+                    <button aria-pressed={view==='record'} onClick={()=>setView('record')}>Details</button>
                 </nav>
                 <span className="export-scope">{payload.scope==='simple'?'Simple':'Comprehensive'} search</span>
                 <button aria-label={`Switch to ${effective==='dark'?'light':'dark'} theme`} onClick={()=>setTheme(effective==='dark'?'light':'dark')}>{effective==='dark'?'Light':'Dark'}</button>
@@ -238,9 +238,9 @@ function ExportedGraph({ payload }: { payload: ExportPayload }) {
                 Mitsuketa 見つけた · {generatedStr}
             </div>
             </div>}
-            {view==='record'&&<main className="export-record" aria-label="Entity record">
+            {view==='record'&&<main className="export-record" aria-label="Entity Details">
                 <p className="export-snapshot">{payload.title} · Snapshot exported {generatedStr}</p>
-                {payload.record?<EntityRecord profile={payload.record}/>:<p>{payload.recordUnavailable||'No entity record is included in this snapshot.'}</p>}
+                {payload.record?<EntityRecord profile={payload.record} statusContext={payload.nodes.find(n=>n.data.isTarget)?.data}/>:<p>{payload.recordUnavailable||'No entity record is included in this snapshot.'}</p>}
             </main>}
         </div>
     );

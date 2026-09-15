@@ -230,6 +230,16 @@ export interface TitleView {
     all: MemorialEvent[];
     counts: Record<FilterKey, number>;
     ratingValuation: CouncilRatingValuation | null;
+    summary: {
+        titleNo: string;
+        owners: string[];
+        tenure: string;
+        status: string;
+        landDistrict: string;
+        area: string;
+        issueDate: string;
+        interests: MemorialEvent[];
+    };
 }
 
 export function buildTitleView(report: TitleReportData): TitleView {
@@ -265,6 +275,7 @@ export function buildTitleView(report: TitleReportData): TitleView {
     const legal = estates.map(estateLine).filter(Boolean);
     const area = areaOf(estates);
     const issued = title.issue_date ? new Date(title.issue_date) : null;
+    const issueDate = issued && !isNaN(issued.getTime()) ? formatDate(issued) : '—';
 
     const facts: TitleFact[] = [
         { label: 'Street address', value: report.address ?? '—' },
@@ -277,7 +288,7 @@ export function buildTitleView(report: TitleReportData): TitleView {
         { label: 'Guarantee status', value: title.guarantee_status ?? '—' },
         {
             label: 'Issue date',
-            value: issued && !isNaN(issued.getTime()) ? formatDate(issued) : '—',
+            value: issueDate,
             mono: true,
         },
     ];
@@ -301,5 +312,15 @@ export function buildTitleView(report: TitleReportData): TitleView {
         all: events,
         counts,
         ratingValuation: report.rating_valuation ?? null,
+        summary: {
+            titleNo: title.title_no ?? '—',
+            owners: owners.map(owner => owner.name),
+            tenure: title.type ?? title.register_type ?? '—',
+            status: title.status ?? '—',
+            landDistrict: title.land_district ?? '—',
+            area: area ?? '—',
+            issueDate,
+            interests: live.filter(event => ['mortgage', 'caveat', 'lease'].includes(event.category)),
+        },
     };
 }

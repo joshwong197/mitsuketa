@@ -30,5 +30,8 @@ for (const [code, host] of [['I', 'is-register.companiesoffice.govt.nz'], ['T', 
     assert.equal(p.constitution, null);
 }
 assert.equal(new URL(registerLink('COMPANY', '../bad').url).host, 'www.nzbn.govt.nz');
+const charityProfile=normaliseEntityProfile({sourceRegister:'T',sourceRegisterUniqueIdentifier:'100',roles:[], 'non-company-details':{charitiesNumber:'CC12345'}});
+assert.deepEqual(charityProfile.documentSources.map(source=>source.kind),['charitable-trusts','charities']);
+assert.equal(charityProfile.documentsStatus,'not_checked');
 assert.equal(personName({ firstName: 'Alex', middleName: 'Taylor', lastName: 'Example' }), 'Alex Taylor Example');
 console.log('PASS: entity profile fields, source routing, joint allocations, safe URLs, unavailable vs false, and excluded personal/financial fields.');

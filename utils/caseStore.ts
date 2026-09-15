@@ -35,7 +35,7 @@ export const LEGACY_SNAPSHOTS_KEY = 'mitsuketa_snapshots';
 /** Strip per-render transients so persisted graphs rehydrate clean. */
 const stripTransients = (nodes: GraphNode[]): GraphNode[] =>
   nodes.map((n) => {
-    const { isHighlighted: _h, isExpanding: _e, ...data } = n.data;
+    const { isHighlighted: _h, isExpanding: _e, diff: _d, ...data } = n.data;
     const { selected: _s, ...node } = n as GraphNode & { selected?: boolean };
     return { ...node, data } as GraphNode;
   });
@@ -53,6 +53,11 @@ export const toPersistedTab = (tab: CompanyTab): PersistedCompanyTab => ({
   allNodesInMemory: stripTransients(tab.allNodesInMemory),
   edges: tab.edges,
   ...(tab.compare ? { compare: tab.compare } : {}),
+  openedAt: tab.openedAt,
+  trail: tab.trail?.slice(-50),
+  viewScope: tab.viewScope,
+  hideDirectors: tab.hideDirectors,
+  restoredSnapshotId: tab.restoredSnapshotId,
 });
 
 /** Quota-guard stub: the tab survives as a re-searchable placeholder. */
@@ -63,6 +68,11 @@ const toStubTab = (tab: PersistedCompanyTab): PersistedCompanyTab => ({
   searchQuery: tab.searchQuery,
   allNodesInMemory: [],
   edges: [],
+  openedAt: tab.openedAt,
+  trail: tab.trail,
+  viewScope: tab.viewScope,
+  hideDirectors: tab.hideDirectors,
+  restoredSnapshotId: tab.restoredSnapshotId,
 });
 
 const isQuotaError = (err: unknown): boolean =>

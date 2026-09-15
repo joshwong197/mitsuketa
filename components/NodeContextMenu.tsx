@@ -1,3 +1,4 @@
+import { useViewportPopover } from '../hooks/useViewportPopover';
 import React from 'react';
 import { Users, Maximize2, Eye, Minimize2, ExternalLink, PenLine } from 'lucide-react';
 import { registerLink } from '../services/entityProfile';
@@ -48,7 +49,7 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
     const menuItems = [
         {
             icon: Eye,
-            label: 'Entity details',
+            label: 'Details',
             onClick: () => { if (nzbn) onEntityDetails?.(nzbn); onClose(); },
             disabled: !nzbn,
             hide: nodeType === 'personNode' || !onEntityDetails,
@@ -122,6 +123,7 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
         }
     ];
 
+    const popover = useViewportPopover(position);
     const visibleItems = menuItems.filter(item => !item.hide);
 
     return (
@@ -134,10 +136,11 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
 
             {/* Context Menu */}
             <div
-                className="fixed z-50 bg-paper border border-rule py-1 min-w-[200px]"
+                ref={popover.ref}
+                className="fixed z-50 bg-paper border border-rule py-1 min-w-[200px] max-w-[calc(100vw-24px)] max-h-[calc(100vh-24px)] overflow-y-auto"
                 style={{
-                    left: `${position.x}px`,
-                    top: `${position.y}px`,
+                    left: popover.left,
+                    top: popover.top,
                 }}
             >
                 {/* Header */}

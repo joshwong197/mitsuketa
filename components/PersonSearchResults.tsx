@@ -247,9 +247,11 @@ const IdentitySpine: React.FC<{
 
     return (
         <aside className="lg:sticky lg:top-0 lg:self-start lg:max-h-screen lg:overflow-y-auto lg:border-r border-rule lg:pr-6 pb-8">
-            <Marker kanji="人" label="Subject" />
-
-            <div className="flex items-start gap-3">
+            <section className="entity-card">
+                <div className="entity-card-spine" aria-hidden="true"><span>人</span><small>対象</small></div>
+                <div className="entity-card-main">
+                    <div className="entity-card-top"><span>Mitsuketa · Search subject</span><span className="entity-status">{roleLabel}</span></div>
+                    <div className="flex items-start gap-3" style={{ marginTop: 18 }}>
                 {/* Inkan — the same split 株/締 seal the graph node uses */}
                 {/* Inkan. The glyph is a direct grid child with line-height 1 so the seal
                     optically centres — a wrapper box sized to the glyph left the CJK
@@ -270,12 +272,15 @@ const IdentitySpine: React.FC<{
                     )}
                 </span>
                 <div className="min-w-0">
-                    <h2 className="text-ink" style={{ fontFamily: 'var(--serif)', fontWeight: 600, fontSize: 27, lineHeight: 1.12 }}>
+                    <h2 className="text-ink" style={{ fontFamily: 'var(--serif)', fontWeight: 500, fontSize: 27, lineHeight: 1.12 }}>
                         {personName}
                     </h2>
-                    <p className="uppercase text-ink-pale mt-1.5" style={{ fontSize: '10.5px', letterSpacing: '.12em' }}>{roleLabel}</p>
+                    <p className="text-ink-mid mt-1.5" style={{ fontSize: '11px', letterSpacing: '.06em' }}>Name returned by the Companies Register search</p>
                 </div>
             </div>
+                    <div className="entity-identifiers" style={{ marginTop: 16 }}><span>Matched records <strong>{results.length}</strong></span><span>Role coverage <strong>{roleLabel}</strong></span></div>
+                </div>
+            </section>
 
             <div className="mt-7 pt-1 border-t border-rule">
                 <Marker kanji="印" label="Verification" />
@@ -579,6 +584,10 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
 
                 <main className="min-w-0 pb-10">
                 <Marker kanji="険" label="Register checks" />
+
+                <p className="mb-3 border-l-2 border-amber bg-paper2 px-3 py-2 text-ink-mid" style={{ fontSize: '11.5px', lineHeight: 1.55 }}>
+                    Same-name notice: these are register findings for the searched name. They do not by themselves confirm that every finding belongs to this person; compare the identifying details shown in each register result.
+                </p>
 
                 {/* REGISTER CHECKS: one collapsed-by-default strip per register, not a
                     scrolling stack of full cards — a long record list used to push the

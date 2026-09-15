@@ -84,6 +84,7 @@ test('Mitsuketa entry, Property tab, reference, report and admin audit stay conn
     await expect(page.getByRole('heading', { name: /^Council rating valuation/ })).toBeVisible();
     await expect(page.getByText('$500,000', { exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: /Open official council valuation/ })).toHaveAttribute('href', /waimakariri/);
+    await page.screenshot({ path: testInfo.outputPath('property-summary.png') });
     const download = page.waitForEvent('download');
     await page.getByRole('button', { name: /Export report/ }).click();
     const file = testInfo.outputPath('property-report.html');

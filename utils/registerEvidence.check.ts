@@ -17,5 +17,7 @@ assert.match(docs.documents[2].title,/Constitution/);assert.match(docs.documents
 const manyRows=Array.from({length:251},(_,i)=>`<tr><td>${i}</td><td>Annual Return<a href="https://app.companiesoffice.govt.nz/companies/app/service/services/documents/${i.toString(16).padStart(8,'0')}">Annual Return</a></td><td>1kb</td></tr>`).join('');
 const capped=parseDocumentLinks(`<table><tr><th>Date</th><th>Document Type</th><th>Size</th></tr>${manyRows}<tr><td>Historic</td><td>Adoption of Constitution<a href="https://app.companiesoffice.govt.nz/companies/app/service/services/documents/C0A999">Adoption of Constitution</a></td><td>30kb</td></tr></table>`);
 assert.equal(capped.documents.length,250);assert.equal(capped.limited,true);assert.match(capped.documents.at(-1)!.title,/Constitution/);
+const empty=parseDocumentLinks(`<table><tr><th>Date</th><th>Document Type</th><th>Size</th></tr></table>`);
+assert.deepEqual(empty,{documents:[],limited:false},'A supplied empty document table is distinguishable from an unavailable page');
 for(const parser of [parseAddressHistory,parseShareholderHistory,parseDocumentLinks])assert.throws(()=>parser('<html>Unavailable</html>'));
 console.log('PASS: history parsing, inherited labels, document grouping, safe source URLs and unavailable-page handling');

@@ -44,6 +44,17 @@ export const PropertyStyles: React.FC = () => (
   width: 1px;
   background: var(--rule);
 }
+.property-summary { margin:26px 0 30px; border:1px solid var(--rule); background:var(--paper2); padding:18px 20px; }
+.property-summary h4 { margin:0 0 12px; font-family:var(--serif); font-size:18px; font-weight:600; }
+.property-summary-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 22px; }
+.property-summary-item { border-top:1px solid var(--rule); padding:8px 0; min-width:0; }
+.property-summary-item dt { color:var(--ink-pale); font-size:10px; letter-spacing:.08em; text-transform:uppercase; }
+.property-summary-item dd { margin:2px 0 0; font-size:12.5px; overflow-wrap:anywhere; }
+.property-summary-interests { grid-column:1/-1; }
+.property-summary-interests ul { list-style:none; margin:5px 0 0; padding:0; }
+.property-summary-interests li { border-top:1px solid var(--ink-wash); padding:5px 0; font-size:12px; }
+.property-summary-interests li:first-child { border-top:0; }
+.property-colophon { width:min(100%,78ch); margin:40px auto 0; text-align:left; }
 
 /* Section marker: kanji hanging in the margin, on the spine. */
 .sec { position: relative; margin-top: 34px; }
@@ -259,6 +270,9 @@ export const PropertyStyles: React.FC = () => (
   .doc-body::before { display: none }
   .sec-mark { position: static; width: auto; text-align: left; display: block; margin-bottom: 2px }
   .ledger { grid-template-columns: minmax(0, 1fr) }
+  .property-summary { padding:16px; }
+  .property-summary-grid { grid-template-columns:1fr; }
+  .property-summary-interests { grid-column:auto; }
   .ledger dt { text-align: left; padding: 8px 0 0; border-top: 1px solid var(--rule) }
   .ledger dd { padding: 1px 0 8px; border-top: none }
   .ledger dt:first-of-type + dd { border-top: none }

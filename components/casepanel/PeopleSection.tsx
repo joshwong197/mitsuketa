@@ -12,7 +12,9 @@ import { SharedPerson, SharedPersonAppearance } from '../../utils/peopleInCommon
 export const PeopleSection: React.FC<{
   people: SharedPerson[];
   onJumpToPerson: (person: SharedPerson, appearance: SharedPersonAppearance) => void;
-}> = ({ people, onJumpToPerson }) => {
+  title?: string;
+  description?: string;
+}> = ({ people, onJumpToPerson, title = 'People in common', description = 'Matched by name — same-name individuals can collide.' }) => {
   const [open, setOpen] = useState(true);
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
 
@@ -33,7 +35,7 @@ export const PeopleSection: React.FC<{
             className={`transition-transform ${open ? 'rotate-90' : ''}`}
           />
           <span className="uppercase tracking-[.14em]" style={{ fontSize: 10.5 }}>
-            People in common ({people.length})
+            {title} ({people.length})
           </span>
         </button>
       </div>
@@ -80,7 +82,7 @@ export const PeopleSection: React.FC<{
             );
           })}
           <p className="px-[18px] pt-1 pb-1.5 text-ink-pale" style={{ fontSize: 11 }}>
-            Matched by name — same-name individuals can collide.
+            {description}
           </p>
         </div>
       )}
