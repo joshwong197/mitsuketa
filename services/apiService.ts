@@ -185,9 +185,19 @@ class OrgSpider {
         });
         this.visited.add(rootNzbn);
 
-        // PHASE 1: Crawl upstream to find all parents
-        console.log('=== PHASE 1: Crawling Upstream (Finding Parents) ===');
-        await this.crawlUpstream(rootDetails);
+        // PHASE 1 (upstream) and PHASE 3 (root downstream) are independent — one
+        // walks owners, the other subsidiaries — so start them together rather
+        // than running Phase 3 only after upstream finishes. Node/edge writes
+        // dedupe by id and the shared visited Set is only touched between awaits,
+        // so the result matches the sequential order bar the ~1% concurrency
+        // jitter the crawl already has between Phase 2 and Phase 3. Phase 2 still
+        // waits for Phase 1, since it expands the parents Phase 1 discovers.
+        console.log('=== PHASE 1 + PHASE 3: Upstream + Root Downstream IN PARALLEL ===');
+        const upstreamDone = this.crawlUpstream(rootDetails);
+        const phase3Promise = this.config.companySearchScope === 'simple'
+            ? Promise.resolve()
+            : this.crawlDownstream(rootDetails.nzbn, rootDetails.entityName, 0, onDebug, 2);
+        await upstreamDone;
 
         if (this.config.companySearchScope === 'simple') {
             onDebug?.('audit', { totalNodes: this.nodes.size, totalEdges: this.edges.length, parentsExpanded: 0 },
@@ -211,10 +221,8 @@ class OrgSpider {
 
         console.log(`Found ${parentsToExpand.length} parents to expand`);
 
-        // OPTIMIZATION: Run Phase 2 (parent expansion) and Phase 3 (root downstream) IN PARALLEL.
-        // They crawl different entities and the shared visited Set is safe under JS async concurrency.
-        // This saves ~11s by overlapping the slow Roles API calls.
-        console.log('=== PHASE 2+3: Expanding Parents + Root Downstream IN PARALLEL ===');
+        // Phase 2 (parent expansion) runs IN PARALLEL with the still-running Phase 3.
+        console.log('=== PHASE 2: Expanding Parents (Phase 3 still running) ===');
 
         const phase2Promises = parentsToExpand.map(async (parentNzbn) => {
             const parentNode = this.nodes.get(parentNzbn);
@@ -229,9 +237,8 @@ class OrgSpider {
             }
         });
 
-        // Phase 3 runs IN PARALLEL with all Phase 2 parent expansions
-        const phase3Promise = this.crawlDownstream(rootDetails.nzbn, rootDetails.entityName, 0, onDebug, 2);
-
+        // Phase 3 (root downstream) was launched alongside Phase 1 above and is
+        // still running; wait for it together with the Phase 2 expansions.
         await Promise.all([...phase2Promises, phase3Promise]);
 
         if (onDebug) {
