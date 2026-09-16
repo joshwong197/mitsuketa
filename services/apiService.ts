@@ -950,7 +950,7 @@ class OrgSpider {
 // ever needed.
 const ENABLE_DISPATCH_GATE = true;
 const ENABLE_LEVEL_PREFETCH = true;    // warm each crawl level's slow calls in parallel
-const MIN_DISPATCH_INTERVAL_MS = 40;   // ~25 dispatches/sec (measured 0x 429 on the org key; shared key, so not maxed)
+const MIN_DISPATCH_INTERVAL_MS = 10;   // ~100 dispatches/sec (measured 0x 429 up to 200/s on the MBIE key)
 let dispatchAt = 0;
 async function dispatchGate() {
     if (!ENABLE_DISPATCH_GATE) return;
