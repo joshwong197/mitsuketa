@@ -1191,53 +1191,97 @@ function rankAndDeduplicateSearchItems(items: EntitySearchResultItem[], searched
     const wanted = comparableSearchName(searchedName);
     // Only name searches are ranked. Identifier searches retain register order.
     if (!wanted) return unique;
+    // "FONTERRA" should find "FONTERRA LIMITED" as the flagship, not bury it
+    // among "FONTERRA FINANCE …". Stripping the trailing legal suffix makes the
+    // bare incorporated company an exact match; ties then prefer the shorter
+    // (fewer extra words) name, which is nearly always the entity meant.
+    const stripLegalSuffix = (name: string) => name.replace(/\s+(LIMITED|LTD)\.?$/, '').trim();
     return unique.map((item, index) => {
         const name = comparableSearchName(item.entityName || '');
-        const rank = name === wanted ? 0 : name.startsWith(wanted) ? 1 : name.includes(wanted) ? 2 : 3;
-        return { item, index, rank };
-    }).sort((a, b) => a.rank - b.rank || a.index - b.index).map(({ item }) => item);
+        const core = stripLegalSuffix(name);
+        const rank = name === wanted ? 0
+            : core === wanted ? 1
+            : name.startsWith(wanted) ? 2
+            : name.includes(wanted) ? 3 : 4;
+        return { item, index, rank, words: name.split(' ').length };
+    }).sort((a, b) => a.rank - b.rank || a.words - b.words || a.index - b.index).map(({ item }) => item);
 }
+
+const fetchEntitiesPage = async (searchTerm: string, config: ApiConfig, page: number, baseUrl: string, logger?: LoggerCallback): Promise<EntitySearchResponse> => {
+    const proxyPath = `${API_PATHS.nzbn}/entities?search-term=${encodeURIComponent(searchTerm)}&page-size=10&page=${page}`;
+    const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
+    const response = await safeFetch(url, {
+        'x-user-api-key': config.nzbnKey || '',
+        'x-api-type': 'nzbn',
+        'Accept': 'application/json'
+    }, logger);
+    if (!response.ok) throw new Error(`Search failed: ${response.status}`);
+    const data = await response.json();
+    return {
+        pageSize: data.pageSize || 10,
+        page: Number.isInteger(data.page) ? data.page : page,
+        totalItems: data.totalItems || 0,
+        items: Array.isArray(data.items) ? data.items : [],
+    };
+};
+
+// Ordered query variants for a name search: exact phrase, alternate ampersand
+// spelling, then an unquoted word search. Identifier searches return the digits.
+const searchTermVariants = (term: string): { canonicalName: string; variants: string[] } => {
+    const cleaned = term.trim().replace(/\s+/g, ' ');
+    const digits = cleaned.replace(/[\s-]/g, '');
+    if (/^\d{6,13}$/.test(digits)) return { canonicalName: '', variants: [digits] };
+    const canonicalName = normaliseSearchName(cleaned);
+    if (!canonicalName) return { canonicalName: '', variants: [] };
+    const alternateAmpersandName = /\bAND\b/.test(canonicalName) ? canonicalName.replace(/\bAND\b/g, '&') : '';
+    return {
+        canonicalName,
+        variants: [`"${canonicalName}"`, ...(alternateAmpersandName ? [`"${alternateAmpersandName}"`] : []), canonicalName],
+    };
+};
 
 export const searchEntities = async (term: string, config: ApiConfig, logger?: LoggerCallback, page: number = 0, baseUrl: string = '/api/proxy'): Promise<EntitySearchResponse> => {
     // Identifiers must stay raw digits. Name matching starts as a phrase, then
     // makes at most two bounded fallbacks on the same requested page: the other
     // ampersand spelling and an unquoted word search. Results are never merged,
     // which keeps the register's pagination and totals coherent.
-    const cleaned = term.trim().replace(/\s+/g, ' ');
-    const digits = cleaned.replace(/[\s-]/g, '');
-    const isNumericId = /^\d{6,13}$/.test(digits);
-    const canonicalName = normaliseSearchName(cleaned);
-    const alternateAmpersandName = /\bAND\b/.test(canonicalName)
-        ? canonicalName.replace(/\bAND\b/g, '&')
-        : '';
-    const fetchPage = async (searchTerm: string): Promise<EntitySearchResponse> => {
-        const proxyPath = `${API_PATHS.nzbn}/entities?search-term=${encodeURIComponent(searchTerm)}&page-size=10&page=${page}`;
-        const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
-        const response = await safeFetch(url, {
-            'x-user-api-key': config.nzbnKey || '',
-            'x-api-type': 'nzbn',
-            'Accept': 'application/json'
-        }, logger);
-        if (!response.ok) throw new Error(`Search failed: ${response.status}`);
-        const data = await response.json();
-        return {
-            pageSize: data.pageSize || 10,
-            page: Number.isInteger(data.page) ? data.page : page,
-            totalItems: data.totalItems || 0,
-            items: Array.isArray(data.items) ? data.items : [],
-        };
-    };
+    const { canonicalName, variants } = searchTermVariants(term);
+    if (!variants.length) return { pageSize: 10, page, totalItems: 0, items: [] };
 
-    if (isNumericId) {
-        const data = await fetchPage(digits);
-        return { ...data, items: rankAndDeduplicateSearchItems(data.items, '') };
+    let data = await fetchEntitiesPage(variants[0], config, page, baseUrl, logger);
+    for (let i = 1; i < variants.length && !data.items.length; i++) {
+        data = await fetchEntitiesPage(variants[i], config, page, baseUrl, logger);
     }
-    if (!canonicalName) return { pageSize: 10, page, totalItems: 0, items: [] };
-
-    let data = await fetchPage(`"${canonicalName}"`);
-    if (!data.items.length && alternateAmpersandName) data = await fetchPage(`"${alternateAmpersandName}"`);
-    if (!data.items.length) data = await fetchPage(canonicalName);
     return { ...data, items: rankAndDeduplicateSearchItems(data.items, canonicalName) };
+};
+
+// Interactive results list: widen page 0 by gathering a few more register pages
+// of the winning query, then re-rank the union locally so a prefix match like
+// "FONTERRA LIMITED" floats up even when the register buries it past page 0.
+// searchEntities stays single-page for the crawler paths that need coherent
+// pagination; this is only for the human-facing search box.
+// ponytail: capped at maxPages (default 5 ≈ 50 records); raise if a real query
+// needs deeper, but every page is a round trip.
+export const searchEntitiesDeep = async (term: string, config: ApiConfig, logger?: LoggerCallback, maxPages: number = 5, baseUrl: string = '/api/proxy'): Promise<EntitySearchResponse> => {
+    const { canonicalName, variants } = searchTermVariants(term);
+    if (!variants.length) return { pageSize: 10, page: 0, totalItems: 0, items: [] };
+
+    // Page 0 decides which query variant actually returns records.
+    let first = await fetchEntitiesPage(variants[0], config, 0, baseUrl, logger);
+    let winning = variants[0];
+    for (let i = 1; i < variants.length && !first.items.length; i++) {
+        winning = variants[i];
+        first = await fetchEntitiesPage(winning, config, 0, baseUrl, logger);
+    }
+
+    const items = [...first.items];
+    const pages = Math.min(maxPages, Math.ceil((first.totalItems || 0) / (first.pageSize || 10)));
+    for (let page = 1; page < pages; page++) {
+        const next = await fetchEntitiesPage(winning, config, page, baseUrl, logger);
+        if (!next.items.length) break;
+        items.push(...next.items);
+    }
+    return { ...first, items: rankAndDeduplicateSearchItems(items, canonicalName) };
 };
 
 // Corporate holders that the register did not link to an NZBN.

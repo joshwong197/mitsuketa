@@ -210,6 +210,7 @@ export const FindScreen: React.FC<FindScreenProps> = ({
   onOpenPropertyReport,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [recent, setRecent] = useState<RecentSearch[]>(() => loadRecentSearches());
   // Compare mode — third face of the mode line. Slots + last-used hop budget.
@@ -247,6 +248,12 @@ export const FindScreen: React.FC<FindScreenProps> = ({
     setSelectedIndex(0);
   }, [results]);
 
+  // Keep the keyboard-selected row visible inside the scrollable list.
+  useEffect(() => {
+    const el = listRef.current?.children[selectedIndex] as HTMLElement | undefined;
+    el?.scrollIntoView({ block: 'nearest' });
+  }, [selectedIndex]);
+
   useEffect(() => {
     const p = pendingRerun.current;
     if (p && p.q === searchQuery && p.mode === searchMode) {
@@ -255,7 +262,9 @@ export const FindScreen: React.FC<FindScreenProps> = ({
     }
   }, [searchQuery, searchMode, onSearchSubmit]);
 
-  const visibleResults = results.slice(0, MAX_SUGGESTIONS);
+  // Show every result the search returned — the register can hold far more than
+  // a handful for a common name, and the list below scrolls.
+  const visibleResults = results;
 
   const recordSearch = (q: string) => {
     if (q.trim()) setRecent(addRecentSearch({ q, mode: searchMode }));
@@ -445,9 +454,10 @@ export const FindScreen: React.FC<FindScreenProps> = ({
         {findFace && visibleResults.length > 0 && (
           <div
             className="text-left"
-            style={{ border: '1px solid var(--rule)', borderTop: 'none', background: 'var(--paper)' }}
+            style={{ border: '1px solid var(--rule)', borderTop: 'none', background: 'var(--paper)', maxHeight: 360, overflowY: 'auto' }}
             role="listbox"
             aria-label="Search suggestions"
+            ref={listRef}
           >
             {visibleResults.map((item, i) => (
               <div

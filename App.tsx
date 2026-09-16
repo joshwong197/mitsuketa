@@ -39,7 +39,7 @@ import { displaySubjectName } from './utils/personName';
 import { markDirectLineage, calculateHiddenDescendants, expandNodeSubtree, collapseNodeSubtree } from './utils/graphVisibility';
 import { getLayoutedElements } from './services/layoutService';
 import { tidyUpLayout } from './services/layoutOptimizer';
-import { generateOrgChart, searchEntities, expandNodeDownstream } from './services/apiService';
+import { generateOrgChart, searchEntities, searchEntitiesDeep, expandNodeDownstream } from './services/apiService';
 import { downloadInteractiveGraphHtml, downloadPersonReportHtml, downloadTitleReportHtml } from './services/exportService';
 import { extractDirectorsFromEntity } from './services/directorService';
 import { ApiConfig, EntitySearchResultItem, EntitySearchResponse, GraphSnapshot, GraphNode, GraphEdge, EdgeData, LogEntry, NodeData, NodeType, NZBNFullEntity, PersonCompanyResult, CompanyTab, IndividualTab, PersonRegisterChecks, PropertyTab, CaseNote, PersistedCompanyTab } from './types';
@@ -560,7 +560,7 @@ function App() {
     setApiLogs([]); // Clear logs on new search
 
     try {
-      const response = await searchEntities(query, config, handleLog, 0);
+      const response = await searchEntitiesDeep(query, config, handleLog);
       if (response.items.length === 0) {
         setError("No entities found with that name or NZBN. Entities without an NZBN will not appear in this search.");
       } else {
@@ -2303,7 +2303,7 @@ function App() {
                   searchQuery={searchQuery}
                   onSearchQueryChange={setSearchQuery}
                   onSearchSubmit={() => handleSearch({ preventDefault: () => {} } as React.FormEvent)}
-                  results={searchResults.slice(0, 6)}
+                  results={searchResults}
                   onResultSelect={handleSelectEntityInTab}
                   isLoading={isLoading}
                   searchMode={searchMode}
