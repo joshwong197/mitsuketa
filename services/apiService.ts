@@ -644,6 +644,43 @@ class OrgSpider {
             return;
         }
 
+        // PREFETCH (cache-only): warm this level's child summaries and — for the
+        // next level down — their roles, all in parallel, so the sequential loop
+        // below hits warm caches instead of paying ~11s per child in series. This
+        // touches only entityCache/rolesCache, never nodes/edges/visited, so the
+        // traversal order and resulting graph are identical to the un-prefetched
+        // crawl — just far less waiting. Mirrors the upstream prefetch idiom.
+        if (ENABLE_LEVEL_PREFETCH) {
+            const norm = (n: string) => (n || '').toUpperCase()
+                .replace(/\bLTD\.?\b/g, 'LIMITED').replace(/\bCO\.?\b/g, 'COMPANY').replace(/[^A-Z0-9]/g, '');
+            const target = norm(ownerName);
+            const childNzbns = new Set<string>();
+            for (const role of results.roles) {
+                const rt = role.roleType || '';
+                if (!(rt.includes('Shareholder') && !rt.includes('Individual') && !rt.includes('Director'))) continue;
+                if (!((role.nzbn && role.nzbn === ownerNzbn) || norm(role.name || '') === target)) continue;
+                for (const h of role.shareholdings || []) {
+                    const n = h.associatedCompanyNzbn;
+                    if (n && !this.visited.has(n) && n !== this.rootNzbn) childNzbns.add(n);
+                }
+            }
+            if (childNzbns.size > 1) {
+                const summaries = await Promise.all([...childNzbns].map(nzbn =>
+                    this.getCachedOrFetch(nzbn, () => fetchEntitySummaryLight(nzbn, this.config, this.nzbnBaseUrl, this.logger))
+                        .catch(() => null)));
+                // Roles are only searched for children that get crawled further, i.e.
+                // when depth+1 is still within maxDepth and the child is not filtered
+                // out as inactive — mirror both so we don't warm calls the loop skips.
+                if (depth + 1 <= maxDepth) {
+                    const inactive = (s?: string) => /removed|deleted|liquidat/i.test(s || '');
+                    await Promise.all(summaries.map(s =>
+                        s && s.entityName && (this.config.includeInactive || !inactive(s.entityStatusDescription))
+                            ? this.getCachedRoles(s.entityName).catch(() => undefined)
+                            : Promise.resolve()));
+                }
+            }
+        }
+
         for (const role of results.roles) {
             // --- Filter Logic Trace ---
             const logPrefix = `[RoleCheck: ${role.associatedCompanyName || 'Unknown'}]`;
@@ -904,6 +941,25 @@ class OrgSpider {
 
 // --- API Helpers ---
 
+// Global dispatch gate. Space the *dispatch* of requests ~evenly to stay under
+// the key's rate limit while letting many sit in flight at once: the Companies
+// roles search is ~11s of waiting, so metering dispatch (not concurrency) keeps
+// dozens of requests in flight under the key's cap. That is the crawl's real speed-up
+// once callers fire the slow calls in parallel (see crawlDownstream prefetch).
+// ponytail: fixed interval; swap for a token bucket only if a burst allowance is
+// ever needed.
+const ENABLE_DISPATCH_GATE = true;
+const ENABLE_LEVEL_PREFETCH = true;    // warm each crawl level's slow calls in parallel
+const MIN_DISPATCH_INTERVAL_MS = 40;   // ~25 dispatches/sec (measured 0x 429 on the org key; shared key, so not maxed)
+let dispatchAt = 0;
+async function dispatchGate() {
+    if (!ENABLE_DISPATCH_GATE) return;
+    const now = Date.now();
+    const at = Math.max(now, dispatchAt);
+    dispatchAt = at + MIN_DISPATCH_INTERVAL_MS;
+    if (at > now) await delay(at - now);
+}
+
 async function safeFetch(url: string, headers: HeadersInit, logger?: LoggerCallback) {
     const method = 'GET';
 
@@ -928,7 +984,16 @@ async function safeFetch(url: string, headers: HeadersInit, logger?: LoggerCallb
     }
 
     try {
-        const res = await fetch(url, { headers });
+        await dispatchGate();
+        let res = await fetch(url, { headers });
+        // Going wide makes the odd 429 likely; back off (and slow every other
+        // dispatch with us) and retry a few times before giving up.
+        for (let attempt = 0; res.status === 429 && attempt < 3; attempt++) {
+            const backoff = 500 * Math.pow(2, attempt);
+            dispatchAt = Date.now() + backoff;
+            await delay(backoff);
+            res = await fetch(url, { headers });
+        }
 
         // Log Response
         if (logger) {
