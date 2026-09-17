@@ -1,5 +1,6 @@
 import { ApiConfig, PersonCompanyResult, LoggerCallback, GraphNode } from '../../types.js';
 import { BASE_API_URL, API_PATHS } from '../../constants.js';
+import { mapPool } from '../../utils/pool.js';
 
 /**
  * External administration status types from NZBN API entityStatusDescription
@@ -385,7 +386,7 @@ export async function enrichGraphNodes(
     nodes: GraphNode[],
     config: ApiConfig,
     logger?: LoggerCallback,
-    concurrency: number = 5,
+    concurrency: number = 25,
     baseUrl: string = '/api/proxy'
 ): Promise<GraphNode[]> {
 
@@ -398,19 +399,12 @@ export async function enrichGraphNodes(
 
     const statusMap = new Map<string, Awaited<ReturnType<typeof fetchCompanyStatus>>>();
 
-    // Process in batches
-    for (let i = 0; i < uniqueNzbns.length; i += concurrency) {
-        const batch = uniqueNzbns.slice(i, i + concurrency);
-
-        const promises = batch.map(async (nzbn) => {
-            const status = await fetchCompanyStatus(nzbn, config, logger, baseUrl);
-            if (status) {
-                statusMap.set(nzbn, status);
-            }
-        });
-
-        await Promise.allSettled(promises);
-    }
+    // Continuous pool instead of batch barriers (see utils/pool); the global
+    // dispatch gate still bounds the request rate.
+    await mapPool(uniqueNzbns, concurrency, async (nzbn) => {
+        const status = await fetchCompanyStatus(nzbn, config, logger, baseUrl);
+        if (status) statusMap.set(nzbn, status);
+    });
 
     console.log(`✅ Enriched ${statusMap.size} graph nodes with status data`);
 

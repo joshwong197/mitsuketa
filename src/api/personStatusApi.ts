@@ -1,6 +1,7 @@
 import { ApiConfig, GraphNode, LoggerCallback, NodeType } from '../../types.js';
 import { searchDisqualifiedDirectors } from './disqualifiedDirectorsApi.js';
 import { searchInsolvency, isInsolvencyRecordCurrent } from './insolvencyApi.js';
+import { mapPool } from '../../utils/pool.js';
 
 /**
  * Batch-enrich person nodes on an org chart with disqualified-director and
@@ -17,29 +18,29 @@ export async function enrichPersonNodes(
     nodes: GraphNode[],
     config: ApiConfig,
     logger?: LoggerCallback,
-    concurrency: number = 5
+    concurrency: number = 25,
+    baseUrl: string = '/api/proxy'
 ): Promise<GraphNode[]> {
     const personNodes = nodes.filter(n => n.data.type === NodeType.PERSON && n.data.label?.trim());
 
     const resultByNodeId = new Map<string, { isDisqualified: boolean; hasInsolvencyRecord: boolean; insolvencyCurrent: boolean }>();
 
-    for (let i = 0; i < personNodes.length; i += concurrency) {
-        const batch = personNodes.slice(i, i + concurrency);
-        await Promise.all(batch.map(async (node) => {
-            const name = node.data.label.trim();
-            const [disqualified, insolvency] = await Promise.allSettled([
-                searchDisqualifiedDirectors(name, config, logger),
-                searchInsolvency(name, config, logger),
-            ]);
+    // Continuous pool: each person is 2 register calls; a slow one no longer
+    // stalls a whole batch. The global dispatch gate still bounds the rate.
+    await mapPool(personNodes, concurrency, async (node) => {
+        const name = node.data.label.trim();
+        const [disqualified, insolvency] = await Promise.allSettled([
+            searchDisqualifiedDirectors(name, config, logger, 10, 0, baseUrl),
+            searchInsolvency(name, config, logger, 1000, 1, baseUrl),
+        ]);
 
-            const isDisqualified = disqualified.status === 'fulfilled' && disqualified.value.roles.length > 0;
-            const insolvencyRecords = insolvency.status === 'fulfilled' ? insolvency.value.searchResults : [];
-            const hasInsolvencyRecord = insolvencyRecords.length > 0;
-            const insolvencyCurrent = insolvencyRecords.some(isInsolvencyRecordCurrent);
+        const isDisqualified = disqualified.status === 'fulfilled' && disqualified.value.roles.length > 0;
+        const insolvencyRecords = insolvency.status === 'fulfilled' ? insolvency.value.searchResults : [];
+        const hasInsolvencyRecord = insolvencyRecords.length > 0;
+        const insolvencyCurrent = insolvencyRecords.some(isInsolvencyRecordCurrent);
 
-            resultByNodeId.set(node.id, { isDisqualified, hasInsolvencyRecord, insolvencyCurrent });
-        }));
-    }
+        resultByNodeId.set(node.id, { isDisqualified, hasInsolvencyRecord, insolvencyCurrent });
+    });
 
     console.log(`✅ Checked ${resultByNodeId.size} unique person(s) against the Disqualified Directors and Insolvency registers`);
 
