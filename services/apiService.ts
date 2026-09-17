@@ -651,6 +651,18 @@ class OrgSpider {
             return;
         }
 
+        // Continuous pipeline: recurse sibling subtrees together (below) instead
+        // of a roles-prefetch barrier + depth-first serial recursion, so level N+1
+        // roles calls overlap across the whole level rather than one subtree at a
+        // time. This also visits each node by its shortest path first (breadth-
+        // first), so more real subsidiaries fit inside the depth cap — the serial
+        // depth-first crawl burned its depth budget down one branch and dropped
+        // major subsidiaries (e.g. PlaceMakers/Mico under Fletcher) by traversal
+        // luck. Faster and a strict superset of the serial result. Flip
+        // ENABLE_PARALLEL_RECURSION to fall back to the serial depth-first crawl.
+        const pipeline = ENABLE_PARALLEL_RECURSION;
+        const recurseTargets: { nzbn: string; label: string }[] = [];
+
         // PREFETCH (cache-only): warm this level's child summaries and — for the
         // next level down — their roles, all in parallel, so the sequential loop
         // below hits warm caches instead of paying ~11s per child in series. This
@@ -678,7 +690,9 @@ class OrgSpider {
                 // Roles are only searched for children that get crawled further, i.e.
                 // when depth+1 is still within maxDepth and the child is not filtered
                 // out as inactive — mirror both so we don't warm calls the loop skips.
-                if (depth + 1 <= maxDepth) {
+                // In pipeline mode the parallel recursion overlaps these itself, so
+                // skip the warming barrier (which would serialise the level).
+                if (!pipeline && depth + 1 <= maxDepth) {
                     const inactive = (s?: string) => /removed|deleted|liquidat/i.test(s || '');
                     await Promise.all(summaries.map(s =>
                         s && s.entityName && (this.config.includeInactive || !inactive(s.entityStatusDescription))
@@ -820,7 +834,10 @@ class OrgSpider {
                     // explosion is stopped one level down, not by skipping this branch.
                     // bypassCap is deliberately NOT propagated: an explicit expansion
                     // un-caps only the node the user clicked, not every node beneath it.
-                    await this.crawlDownstream(childNzbn, childLabel, depth + 1, onDebug, maxDepth);
+                    // Pipeline: defer recursion and run all sibling subtrees together
+                    // after the loop; otherwise recurse inline (committed behaviour).
+                    if (pipeline) recurseTargets.push({ nzbn: childNzbn, label: childLabel });
+                    else await this.crawlDownstream(childNzbn, childLabel, depth + 1, onDebug, maxDepth);
 
                 } catch (e) {
                     console.warn(`Failed to fetch details for subsidiary ${childNzbn}`, e);
@@ -839,6 +856,15 @@ class OrgSpider {
                     this.visited.add(childNzbn);
                 }
             }
+        }
+
+        // Pipeline: every direct child of this node is already in `visited` from
+        // the loop above, so recursing them together only races at grandchild
+        // level (the accepted concurrency jitter). This is the step that overlaps
+        // roles calls across the whole level instead of one subtree at a time.
+        if (pipeline && recurseTargets.length) {
+            await Promise.all(recurseTargets.map(t =>
+                this.crawlDownstream(t.nzbn, t.label, depth + 1, onDebug, maxDepth)));
         }
     }
 
@@ -956,7 +982,8 @@ class OrgSpider {
 // ponytail: fixed interval; swap for a token bucket only if a burst allowance is
 // ever needed.
 const ENABLE_DISPATCH_GATE = true;
-const ENABLE_LEVEL_PREFETCH = true;    // warm each crawl level's slow calls in parallel
+const ENABLE_LEVEL_PREFETCH = true;      // warm each crawl level's slow calls in parallel
+const ENABLE_PARALLEL_RECURSION = true;  // recurse sibling subtrees together (see crawlDownstream); false = serial depth-first
 const MIN_DISPATCH_INTERVAL_MS = 10;   // ~100 dispatches/sec (measured 0x 429 up to 200/s on the MBIE key)
 let dispatchAt = 0;
 async function dispatchGate() {
