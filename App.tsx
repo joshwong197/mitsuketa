@@ -1202,55 +1202,25 @@ function App() {
       if (graph.nodes.length === 0) {
         if (!originId || activeCaseIdRef.current === originId) setError("No corporate structure found for this entity.");
       } else {
-        console.log('🔍 RAW GRAPH:', { nodeCount: graph.nodes.length, edgeCount: graph.edges.length });
-
-        // Mark direct lineage and calculate hidden counts
+        // Structure pipeline — everything that decides positions, depths and
+        // edges. None of it depends on the register/status enrichment, so it can
+        // render before those calls come back.
         let processedNodes = markDirectLineage(graph.nodes, graph.edges, entity.nzbn);
-        console.log('📊 AFTER LINEAGE MARKING:', {
-          total: processedNodes.length,
-          visible: processedNodes.filter(n => n.data.isVisible).length,
-          hidden: processedNodes.filter(n => !n.data.isVisible).length
-        });
-
         processedNodes = calculateHiddenDescendants(processedNodes, graph.edges);
-        console.log('🎯 AFTER BADGE CALCULATION:',
-          processedNodes.filter(n => n.data.hiddenDescendantCount).map(n => ({
-            id: n.id,
-            label: n.data.label,
-            hiddenCount: n.data.hiddenDescendantCount
-          }))
-        );
-
-        // Enrich nodes with insolvency/admin status BEFORE rendering
-        // so all badges (PREV: IN LIQUIDATION, external admin, Removed, etc.) appear instantly.
-        // Company and person enrichment run in parallel — they touch disjoint node
-        // types, and person checks are already deduplicated to one call per unique
-        // individual by the graph itself (personId gives every person exactly one
-        // node, however many companies they appear on — design/HANDOVER.md §4.1).
-        console.log('🔍 Enriching nodes with NZBN status + register-check data before render...');
-        const [companyEnriched, personEnriched] = await Promise.all([
-          enrichGraphNodes(processedNodes, { ...config, includeInactive: true }, handleLog),
-          enrichPersonNodes(processedNodes, config, handleLog),
-        ]);
-        const enrichedNodes = processedNodes.map((n, i) =>
-          n.data.type === 'company' ? companyEnriched[i] : n.data.type === 'person' ? personEnriched[i] : n
-        );
-        console.log('✅ Enrichment complete, rendering graph with full status data');
-
-        // Assign ink-depth (undirected BFS from target) before layout so edges + nodes tier
-        const depthNodes = assignDepths(computePersonRoleFlags(enrichedNodes, graph.edges), graph.edges);
+        const depthNodes = assignDepths(computePersonRoleFlags(processedNodes, graph.edges), graph.edges);
         const nodesById = nodesToMap(depthNodes);
-
-        // Filter to show only visible nodes
         const visibleNodes = depthNodes.filter(n => n.data.isVisible);
-        console.log('👁️ VISIBLE NODES:', visibleNodes.map(n => n.data.label));
-
         const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
           visibleNodes,
           graph.edges as unknown as Edge[]
         );
         const optimized = tidyUpLayout(layoutedNodes, layoutedEdges);
         const finalEdges = styleEdgesByDepth(optimized.edges, nodesById);
+
+        // PROGRESSIVE RENDER: paint the chart now, then stream the register/status
+        // flags in when they resolve. Enrichment never moves a node or changes an
+        // edge — it only adds status/alert fields — so first paint no longer waits
+        // on dozens of register calls.
         setGraphTabs(prev => prev.map(t => t.id === originId
           ? { ...t, nodes: optimized.nodes as any, edges: finalEdges as any, allNodesInMemory: depthNodes, isLoading: false, viewScope: scope }
           : t));
@@ -1260,13 +1230,43 @@ function App() {
           setEdges(finalEdges);
         }
 
-        // Trail: graph mapped + flag count
         const mapName = depthNodes.find(n => n.data.isTarget)?.data.label || entity.entityName;
         logTrail(`Mapped ${mapName} · ${visibleNodes.length} entities`, originId);
-        const flagCount = depthNodes.filter(n =>
-          n.data.isInExternalAdmin || n.data.hasHistoricInsolvency || n.data.removalCommenced
-        ).length;
-        if (flagCount > 0) logTrail(`Flags · ${flagCount} ${flagCount === 1 ? 'entity' : 'entities'}`, originId);
+
+        // Background enrichment: patch status + register flags into the nodes that
+        // are already on screen. Merge order keeps depth/roleKind (which the view
+        // filters rely on) and overlays the enriched status/flag fields.
+        try {
+          const [companyEnriched, personEnriched] = await Promise.all([
+            enrichGraphNodes(processedNodes, { ...config, includeInactive: true }, handleLog),
+            enrichPersonNodes(processedNodes, config, handleLog),
+          ]);
+          const enrichedById = new Map<string, GraphNode['data']>();
+          processedNodes.forEach((n, i) => {
+            if (n.data.type === 'company') enrichedById.set(companyEnriched[i].id, companyEnriched[i].data);
+            else if (n.data.type === 'person') enrichedById.set(personEnriched[i].id, personEnriched[i].data);
+          });
+          const patch = (list: GraphNode[]): GraphNode[] => list.map(n =>
+            enrichedById.has(n.id) ? { ...n, data: { ...n.data, ...enrichedById.get(n.id) } } : n);
+          const enrichedMemory = patch(depthNodes);
+          const enrichedRendered = patch(optimized.nodes as unknown as GraphNode[]);
+
+          setGraphTabs(prev => prev.map(t => t.id === originId
+            ? { ...t, nodes: enrichedRendered as any, allNodesInMemory: enrichedMemory }
+            : t));
+          if (!originId || activeCaseIdRef.current === originId) {
+            setAllNodesInMemory(enrichedMemory);
+            setNodes(enrichedRendered as any);
+          }
+
+          const flagCount = enrichedMemory.filter(n =>
+            n.data.isInExternalAdmin || n.data.hasHistoricInsolvency || n.data.removalCommenced
+          ).length;
+          if (flagCount > 0) logTrail(`Flags · ${flagCount} ${flagCount === 1 ? 'entity' : 'entities'}`, originId);
+        } catch (enrichErr) {
+          // The chart is already usable; a register-check failure must not blank it.
+          console.warn('Enrichment failed (chart already rendered):', enrichErr);
+        }
       }
     } catch (err: any) {
       if (!originId || activeCaseIdRef.current === originId) setError(err.message || "Failed to fetch corporate map.");
