@@ -136,6 +136,8 @@ export interface GraphSnapshot {
   caseId?: string;
   viewScope?: 'simple' | 'comprehensive';
   hideDirectors?: boolean;
+  hideInactiveCompanies?: boolean;
+  hideInactiveDirectors?: boolean;
   disqualifiedMatches?: any[];
   insolvencyMatches?: any[];
   registerChecks?: PersonRegisterChecks;
@@ -173,6 +175,8 @@ export interface PersistedCompanyTab {
   restoredSnapshotId?: string;
   viewScope?: 'simple' | 'comprehensive';
   hideDirectors?: boolean;
+  hideInactiveCompanies?: boolean;
+  hideInactiveDirectors?: boolean;
 }
 
 // The one implicit case in v1 — localStorage mitsuketa_session_v1.
@@ -236,6 +240,8 @@ export interface CompanyTab {
   restoredSnapshotId?: string;
   viewScope?: 'simple' | 'comprehensive';
   hideDirectors?: boolean;
+  hideInactiveCompanies?: boolean;
+  hideInactiveDirectors?: boolean;
   // Present when this tab holds a Compare (A ↔ B) result rather than an org chart
   compare?: {
     aLabel: string;

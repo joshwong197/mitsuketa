@@ -187,6 +187,12 @@ export interface CasePanelProps {
   hideDirectors: boolean;
   onToggleHideDirectors: () => void;
   hideableDirectors: number;
+  hideInactiveCompanies: boolean;
+  onToggleHideInactiveCompanies: () => void;
+  inactiveCompanyCount: number;
+  hideInactiveDirectors: boolean;
+  onToggleHideInactiveDirectors: () => void;
+  inactiveDirectorCount: number;
 
   trail: { time: string; text: string }[];
 
@@ -255,6 +261,12 @@ export const CasePanel: React.FC<CasePanelProps> = ({
   hideDirectors,
   onToggleHideDirectors,
   hideableDirectors,
+  hideInactiveCompanies,
+  onToggleHideInactiveCompanies,
+  inactiveCompanyCount,
+  hideInactiveDirectors,
+  onToggleHideInactiveDirectors,
+  inactiveDirectorCount,
   trail,
   caseNotes,
   noteTabLabels,
@@ -405,6 +417,32 @@ export const CasePanel: React.FC<CasePanelProps> = ({
               {hideableDirectors === 0 && (
                 <p className="text-ink-pale" style={{ fontSize: 10.5, marginTop: 2 }}>
                   No director-only people are in this chart.
+                </p>
+              )}
+              <RoleToggle
+                on={hideInactiveCompanies}
+                onClick={onToggleHideInactiveCompanies}
+                kanji="抹"
+                label="Hide removed companies"
+                count={inactiveCompanyCount}
+                disabled={inactiveCompanyCount === 0}
+              />
+              {hideInactiveCompanies && (
+                <p className="text-ink-pale" style={{ fontSize: 10.5, marginTop: 2 }}>
+                  Struck-off, dissolved and amalgamated only. Liquidation and insolvency stay on the chart.
+                </p>
+              )}
+              <RoleToggle
+                on={hideInactiveDirectors}
+                onClick={onToggleHideInactiveDirectors}
+                kanji="退"
+                label="Hide resigned directors"
+                count={inactiveDirectorCount}
+                disabled={inactiveDirectorCount === 0}
+              />
+              {hideInactiveDirectors && (
+                <p className="text-ink-pale" style={{ fontSize: 10.5, marginTop: 2 }}>
+                  Ceased directorships hidden. Anyone still an active director or shareholder stays.
                 </p>
               )}
             </div>

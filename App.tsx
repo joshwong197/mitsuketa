@@ -22,6 +22,7 @@ import { assignDepths } from './utils/graphDepth';
 import { computePersonRoleFlags } from './utils/personRoles';
 import { immediateCompanyGraph } from './utils/companyScope';
 import { entityStatus } from './utils/entityStatus';
+import { getStatusBucket } from './utils/statusRamp';
 import { CompanyNode, PersonNode, SummaryNode } from './components/CustomNodes';
 import { StatusLegend } from './components/StatusLegend';
 import { NodeContextMenu } from './components/NodeContextMenu';
@@ -759,6 +760,8 @@ function App() {
       trail: [{ time: timeLabel(openedAt)!, text: `Searching "${entity.entityName}"` }],
       viewScope: companySearchScope,
       hideDirectors: false,
+      hideInactiveCompanies: false,
+      hideInactiveDirectors: false,
     };
 
     setGraphTabs(prev => {
@@ -2030,6 +2033,20 @@ function App() {
     setGraphTabs(prev => prev.map(t => t.id === id ? { ...t,
       hideDirectors: typeof next === 'function' ? next(!!t.hideDirectors) : next } : t));
   };
+  // Two more render-time filters over the same crawl (nothing refetched): hide
+  // struck-off/dissolved companies, and hide resigned (ceased) directorships.
+  const hideInactiveCompanies = !!currentCompanyTab?.hideInactiveCompanies;
+  const setHideInactiveCompanies = (next: boolean | ((previous: boolean) => boolean)) => {
+    const id = activeCaseIdRef.current;
+    setGraphTabs(prev => prev.map(t => t.id === id ? { ...t,
+      hideInactiveCompanies: typeof next === 'function' ? next(!!t.hideInactiveCompanies) : next } : t));
+  };
+  const hideInactiveDirectors = !!currentCompanyTab?.hideInactiveDirectors;
+  const setHideInactiveDirectors = (next: boolean | ((previous: boolean) => boolean)) => {
+    const id = activeCaseIdRef.current;
+    setGraphTabs(prev => prev.map(t => t.id === id ? { ...t,
+      hideInactiveDirectors: typeof next === 'function' ? next(!!t.hideInactiveDirectors) : next } : t));
+  };
   const graphScope = currentCompanyTab?.viewScope || allNodesInMemory.find(n => n.data.isTarget)?.data.companySearchScope;
   const scopeGraph = useMemo(() => {
     const target = allNodesInMemory.find(n => n.data.isTarget) || allNodesInMemory[0];
@@ -2054,13 +2071,56 @@ function App() {
       return { ...n, data: { ...data, hasNote: flagByKey.has(key), noteFlagged: !!flagByKey.get(key) } as any };
     });
   }, [scopeGraph.nodes, caseNotes, activeCaseId]);
-  const visibleNodes = useMemo(() => nodesWithAnnotations.filter(n =>
-    !hideDirectors || (n.data as unknown as NodeData).roleKind !== 'director'), [nodesWithAnnotations, hideDirectors]);
-  const visibleEdges = useMemo(() => {
-    const ids = new Set(visibleNodes.map(n => n.id));
-    return scopeGraph.edges.filter(e => ids.has(e.source) && ids.has(e.target));
-  }, [scopeGraph.edges, visibleNodes]);
+  // A struck-off / dissolved / amalgamated company — the "dead entity" buckets.
+  // Liquidation and insolvency are NOT inactive: they stay on the chart as live
+  // red flags.
+  const isRemovedCompany = (d: NodeData) =>
+    d.type === NodeType.COMPANY && ['faded', 'amalgamated'].includes(getStatusBucket(d));
+  // A ceased directorship edge — a resigned director's tie to a company.
+  const isCeasedDirectorEdge = (e: { data?: any }) =>
+    !!(e.data?.isCeased && e.data?.roleKind === 'director');
+
+  const visible = useMemo(() => {
+    // 1. Node-level: drop director-only people and/or removed companies.
+    const keptNodes = nodesWithAnnotations.filter(n => {
+      const d = n.data as unknown as NodeData;
+      if (hideDirectors && d.roleKind === 'director') return false;
+      if (hideInactiveCompanies && isRemovedCompany(d)) return false;
+      return true;
+    });
+    const keptIds = new Set(keptNodes.map(n => n.id));
+    // 2. Edge-level: only between kept nodes; drop ceased directorships too.
+    let edges = scopeGraph.edges.filter(e => keptIds.has(e.source) && keptIds.has(e.target));
+    if (hideInactiveDirectors) edges = edges.filter(e => !isCeasedDirectorEdge(e));
+    // 3. Drop people the edge removal orphaned (a resigned director with no live
+    //    tie left); anyone still an active director or shareholder keeps an edge.
+    const connected = new Set<string>();
+    edges.forEach(e => { connected.add(e.source); connected.add(e.target); });
+    const nodes = keptNodes.filter(n =>
+      (n.data as unknown as NodeData).type !== NodeType.PERSON || connected.has(n.id));
+    const finalIds = new Set(nodes.map(n => n.id));
+    return { nodes, edges: edges.filter(e => finalIds.has(e.source) && finalIds.has(e.target)) };
+  }, [nodesWithAnnotations, scopeGraph.edges, hideDirectors, hideInactiveCompanies, hideInactiveDirectors]);
+  const visibleNodes = visible.nodes;
+  const visibleEdges = visible.edges;
+
   const hideableDirectors = scopeGraph.nodes.filter(n => (n.data as unknown as NodeData).roleKind === 'director').length;
+  const inactiveCompanyCount = useMemo(() =>
+    scopeGraph.nodes.filter(n => isRemovedCompany(n.data as unknown as NodeData)).length, [scopeGraph.nodes]);
+  // People whose only ties are ceased directorships — the ones "hide inactive
+  // directors" would remove.
+  const inactiveDirectorCount = useMemo(() => {
+    const incident = new Map<string, any[]>();
+    for (const e of scopeGraph.edges) {
+      (incident.get(e.source) ?? incident.set(e.source, []).get(e.source)!).push(e);
+      (incident.get(e.target) ?? incident.set(e.target, []).get(e.target)!).push(e);
+    }
+    return scopeGraph.nodes.filter(n => {
+      if ((n.data as unknown as NodeData).type !== NodeType.PERSON) return false;
+      const es = incident.get(n.id) ?? [];
+      return es.length > 0 && es.every(isCeasedDirectorEdge);
+    }).length;
+  }, [scopeGraph.nodes, scopeGraph.edges]);
 
   // Case-file derived values
   useEffect(() => {
@@ -2208,6 +2268,12 @@ function App() {
             hideDirectors={hideDirectors}
             onToggleHideDirectors={() => setHideDirectors(v => !v)}
             hideableDirectors={hideableDirectors}
+            hideInactiveCompanies={hideInactiveCompanies}
+            onToggleHideInactiveCompanies={() => setHideInactiveCompanies(v => !v)}
+            inactiveCompanyCount={inactiveCompanyCount}
+            hideInactiveDirectors={hideInactiveDirectors}
+            onToggleHideInactiveDirectors={() => setHideInactiveDirectors(v => !v)}
+            inactiveDirectorCount={inactiveDirectorCount}
             trail={trail}
             caseNotes={caseNotes.filter(n => n.tabId === activeCaseId)}
             workspaceNotes={caseNotes}

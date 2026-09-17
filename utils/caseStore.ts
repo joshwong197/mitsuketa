@@ -57,6 +57,8 @@ export const toPersistedTab = (tab: CompanyTab): PersistedCompanyTab => ({
   trail: tab.trail?.slice(-50),
   viewScope: tab.viewScope,
   hideDirectors: tab.hideDirectors,
+  hideInactiveCompanies: tab.hideInactiveCompanies,
+  hideInactiveDirectors: tab.hideInactiveDirectors,
   restoredSnapshotId: tab.restoredSnapshotId,
 });
 
@@ -72,6 +74,8 @@ const toStubTab = (tab: PersistedCompanyTab): PersistedCompanyTab => ({
   trail: tab.trail,
   viewScope: tab.viewScope,
   hideDirectors: tab.hideDirectors,
+  hideInactiveCompanies: tab.hideInactiveCompanies,
+  hideInactiveDirectors: tab.hideInactiveDirectors,
   restoredSnapshotId: tab.restoredSnapshotId,
 });
 
