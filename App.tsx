@@ -1173,6 +1173,9 @@ function App() {
   // entry instead of the live canvas (which by then shows a different tab).
   const handleSelectEntity = async (entity: EntitySearchResultItem, forTabId?: string, scope = companySearchScope) => {
     const originId = forTabId || activeCompanyTabId;
+    // End-to-end timer: search click → interactive chart, and → fully enriched.
+    const loadStart = performance.now();
+    const elapsed = () => ((performance.now() - loadStart) / 1000).toFixed(2);
     setGraphTabs(prev => prev.map(t => t.id === originId ? { ...t, isLoading: true, hideDirectors: scope === 'simple' ? false : t.hideDirectors } : t));
     if (!originId || activeCaseIdRef.current === originId) setSearchQuery(entity.entityName);
     setError(null);
@@ -1232,6 +1235,7 @@ function App() {
 
         const mapName = depthNodes.find(n => n.data.isTarget)?.data.label || entity.entityName;
         logTrail(`Mapped ${mapName} · ${visibleNodes.length} entities`, originId);
+        console.log(`⏱️ Chart ready in ${elapsed()}s (${visibleNodes.length} entities) — register flags loading…`);
 
         // Background enrichment: patch status + register flags into the nodes that
         // are already on screen. Merge order keeps depth/roleKind (which the view
@@ -1263,6 +1267,7 @@ function App() {
             n.data.isInExternalAdmin || n.data.hasHistoricInsolvency || n.data.removalCommenced
           ).length;
           if (flagCount > 0) logTrail(`Flags · ${flagCount} ${flagCount === 1 ? 'entity' : 'entities'}`, originId);
+          console.log(`⏱️ Total load ${elapsed()}s — chart + register checks complete (${flagCount} flagged)`);
         } catch (enrichErr) {
           // The chart is already usable; a register-check failure must not blank it.
           console.warn('Enrichment failed (chart already rendered):', enrichErr);
