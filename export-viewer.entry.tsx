@@ -1,3 +1,4 @@
+import { removedCompany } from './utils/relationshipStatus';
 // Entry for the self-contained interactive HTML export.
 // Bundled by `npm run build:export-viewer` into public/export-viewer.js,
 // then inlined into exported files by services/exportService.ts.
@@ -128,45 +129,40 @@ function ExportedGraph({ payload }: { payload: ExportPayload }) {
         }),
         payload.edges
     ), []);
-    const initialRef = useRef(initialNodes);
-    const [allNodes, setAllNodes] = useState<GraphNode[]>(initialNodes);
-
-    const styledEdges = useMemo(() => styleEdges(payload.edges), []);
-
-    // rfNodes is what React Flow renders — driven by drag events (onNodesChange)
-    // and re-laid-out whenever visibility changes (drags reset then, like the main app).
-    const [rfNodes, setRfNodes, onNodesChange] = useNodesState([]);
-    const [rfEdges, setRfEdges] = useState<Edge[]>([]);
-    useEffect(() => {
-        const visible = allNodes.filter((n) => n.data.isVisible);
-        const laid = getLayoutedElements(visible as Node[], styledEdges);
-        setRfNodes(laid.nodes);
-        setRfEdges(laid.edges as Edge[]);
-    }, [allNodes, styledEdges]);
-
-    const applyVisibility = (updated: GraphNode[]) => {
-        setAllNodes(calculateHiddenDescendants(updated, payload.edges));
-    };
-
-    const onNodeClick = (_: React.MouseEvent, node: Node) => {
-        const mem = allNodes.find((n) => n.id === node.id);
-        if (!mem) return;
-        if (mem.data.isBranchExpanded) {
-            applyVisibility(collapseNodeSubtree(allNodes, payload.edges, node.id));
-        } else if ((mem.data.hiddenDescendantCount || 0) > 0) {
-            applyVisibility(expandNodeSubtree(allNodes, payload.edges, node.id));
+    const root = payload.nodes.find(n=>n.data.isTarget) || payload.nodes[0];
+    const [scope,setScope]=useState(payload.scope==='simple'?'simple':'comprehensive');
+    const [removed,setRemoved]=useState(false), [former,setFormer]=useState(false), [people,setPeople]=useState(false);
+    const [mode,setMode]=useState('focused');
+    const [expanded,setExpanded]=useState<Set<string>>(new Set());
+    const [selected,setSelected]=useState(root.id);
+    const [menu,setMenu]=useState<{id:string,x:number,y:number}|null>(null);
+    const menuRef=useRef<HTMLDivElement>(null);
+    useEffect(()=>{if(!menu)return;menuRef.current?.querySelector<HTMLButtonElement>('button')?.focus();const dismiss=(e:PointerEvent)=>{if(!menuRef.current?.contains(e.target as Element))setMenu(null)};const escape=(e:KeyboardEvent)=>{if(e.key==='Escape')setMenu(null)};document.addEventListener('pointerdown',dismiss);document.addEventListener('keydown',escape);return()=>{document.removeEventListener('pointerdown',dismiss);document.removeEventListener('keydown',escape)}},[menu]);
+    const toggleConnections=(id:string)=>{if(payload.scope==='simple')return;setSelected(id);setScope('comprehensive');setMode('focused');setExpanded(prev=>{const next=new Set(prev);next.has(id)?next.delete(id):next.add(id);return next});setMenu(null)};
+    const [flow,setFlow]=useState<any>(null);
+    const [rfNodes,setRfNodes,onNodesChange]=useNodesState([]);
+    const [rfEdges,setRfEdges]=useState<Edge[]>([]);
+    const filtered=useMemo(()=>{
+        const eligible=new Map<string, GraphNode>(initialNodes.filter(n=>(scope!=='simple'&&removed) || !removedCompany(n.data)).map(n=>[n.id,n] as [string, GraphNode]));
+        const edges=payload.edges.filter(e=>eligible.has(e.source)&&eligible.has(e.target)&&((scope!=='simple'&&former)||(!e.data?.isCeased&&!e.data?.currentUnverified)));
+        const ids=new Set<string>(); if(eligible.has(root.id)) ids.add(root.id);
+        const company=(id:string)=>eligible.get(id)?.type==='companyNode';
+        if(mode==='saved') initialNodes.forEach(n=>{if(n.data.isVisible&&eligible.has(n.id))ids.add(n.id)});
+        else if(mode==='all') eligible.forEach(n=>{if(people||company(n.id))ids.add(n.id)});
+        else if(scope==='simple') edges.forEach(e=>{if(e.target===root.id)ids.add(e.source)});
+        else {
+            edges.forEach(e=>{if(company(e.source)&&company(e.target)&&(e.source===root.id||e.target===root.id)){ids.add(e.source);ids.add(e.target)}});
+            let changed=true;while(changed){changed=false;edges.forEach(e=>{if(company(e.source)&&company(e.target)&&((ids.has(e.source)&&expanded.has(e.source))||(ids.has(e.target)&&expanded.has(e.target)))){if(!ids.has(e.source)||!ids.has(e.target))changed=true;ids.add(e.source);ids.add(e.target)}})}
+            if(people)edges.forEach(e=>{if(ids.has(e.target)&&!company(e.source))ids.add(e.source)});
         }
-    };
-
-    const expandAll = () => {
-        applyVisibility(allNodes.map((n) => ({
-            ...n,
-            data: { ...n.data, isVisible: true, isBranchExpanded: true },
-        })));
-    };
-
-    const resetView = () => setAllNodes(initialRef.current);
-
+        const connected=new Set(edges.filter(e=>ids.has(e.source)&&ids.has(e.target)).flatMap(e=>[e.source,e.target]));
+        ids.forEach(id=>{if(!company(id)&&!connected.has(id))ids.delete(id)});
+        return {nodes:initialNodes.filter(n=>ids.has(n.id)).map(n=>({...n,data:{...n.data,isVisible:true,isBranchExpanded:false,hiddenDescendantCount:undefined}})),edges:styleEdges(edges.filter(e=>ids.has(e.source)&&ids.has(e.target)))};
+    },[removed,former,people,scope,mode,expanded]);
+    useEffect(()=>{const laid=getLayoutedElements(filtered.nodes as Node[],filtered.edges);setRfNodes(laid.nodes);setRfEdges(laid.edges as Edge[]);const t=setTimeout(()=>flow?.fitView({padding:.18}),150);return()=>clearTimeout(t)},[filtered,flow]);
+    const onNodeClick=(_:React.MouseEvent,n:Node)=>setSelected(n.id);
+    const resetView=()=>{setMode('focused');setScope(payload.scope==='simple'?'simple':'comprehensive');setRemoved(false);setFormer(false);setPeople(false);setExpanded(new Set())};
+    const expandAll=()=>{setScope('comprehensive');setMode('all')};
     // Theme. export-viewer.css already carries the :root[data-theme] rules, but
     // nothing ever set the attribute — so an exported chart silently followed the
     // reader's OS and arrived dark with no way back. Default stays the OS
@@ -197,12 +193,27 @@ function ExportedGraph({ payload }: { payload: ExportPayload }) {
                 <button aria-label={`Switch to ${effective==='dark'?'light':'dark'} theme`} onClick={()=>setTheme(effective==='dark'?'light':'dark')}>{effective==='dark'?'Light':'Dark'}</button>
             </header>
             {view==='network'&&<div className="export-network">
-            <ReactFlow
+            <div className="revision-toolbar">
+                <div className="revision-title"><strong>{payload.title}</strong><span>{filtered.nodes.length} of {payload.nodes.length} entities · {filtered.edges.length} relationships shown</span></div>
+                <div className="revision-controls">
+                <select aria-label="Chart scope" value={scope} onChange={e=>{setScope(e.target.value);setMode('focused')}}><option value="simple">Simple</option>{payload.scope!=='simple'&&<option value="comprehensive">Comprehensive</option>}</select>
+                {scope!=='simple'&&<label><input type="checkbox" checked={removed} onChange={e=>setRemoved(e.target.checked)}/> Include removed companies</label>}
+                {scope!=='simple'&&<label><input type="checkbox" checked={former} onChange={e=>setFormer(e.target.checked)}/> Include former / unverified relationships</label>}
+                {scope!=='simple'&&<label><input type="checkbox" checked={people} onChange={e=>{setPeople(e.target.checked);setMode('focused')}}/> Show people</label>}
+                <button onClick={resetView}>Reset</button>{scope!=='simple'&&<button onClick={expandAll}>Expand all branches</button>}
+                </div>
+                <details><summary>Report details & notes</summary><p>NZBN {payload.nzbn} · Exported {generatedStr}</p><p>Filters change the view. All original data remains in this snapshot.</p><NotesBlock notes={notes}/></details>
+                </div>
+                <div className="revision-selection"><span>Selected: <strong>{payload.nodes.find(n=>n.id===selected)?.data.label}</strong></span><button disabled={payload.scope==='simple'} onClick={()=>toggleConnections(selected)}>{expanded.has(selected)?'Collapse':'Expand'} company connections</button><span>Right-click a company to expand or collapse its connections. Filters still apply.</span></div>
+                <div className="revision-canvas"><ReactFlow onInit={setFlow}
                 nodes={rfNodes}
                 edges={rfEdges}
                 onNodesChange={onNodesChange}
                 nodeTypes={nodeTypes}
                 onNodeClick={onNodeClick}
+                onNodeContextMenu={(event,node)=>{event.preventDefault();setSelected(node.id);setMenu({id:node.id,x:Math.max(8,Math.min(event.clientX,window.innerWidth-280)),y:Math.max(8,Math.min(event.clientY,window.innerHeight-155))})}}
+                onPaneClick={()=>setMenu(null)}
+                onMoveStart={()=>setMenu(null)}
                 fitView
                 fitViewOptions={{ padding: 0.2 }}
                 minZoom={0.05}
@@ -212,31 +223,13 @@ function ExportedGraph({ payload }: { payload: ExportPayload }) {
                 {/* Dot color is dyed in export-viewer.css (SVG attrs can't take var()) */}
                 <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
                 <Controls position="bottom-left" showInteractive={false} />
-            </ReactFlow>
+            </ReactFlow></div>
+            {menu&&<div ref={menuRef} role="menu" aria-label="Entity connections" style={{position:'fixed',left:menu.x,top:menu.y,zIndex:100,width:264,padding:12,background:'var(--paper)',color:'var(--ink)',border:'1px solid var(--rule)',boxShadow:'0 4px 18px #0003'}}>
+                <p style={{fontSize:12,marginBottom:10}}>{payload.nodes.find(n=>n.id===menu.id)?.data.label}</p>
+                {payload.nodes.find(n=>n.id===menu.id)?.type==='companyNode'&&payload.scope!=='simple'?<button role="menuitem" style={{width:'100%',padding:10,border:'1px solid var(--rule)',background:'var(--paper)',color:'var(--accent)',textAlign:'left',cursor:'pointer'}} onClick={()=>toggleConnections(menu.id)}>{expanded.has(menu.id)?'Collapse':'Expand'} connections{scope==='simple'?' (Comprehensive)':''}</button>:<p style={{fontSize:12}}>Select a company to explore its connections.</p>}
+                <button role="menuitem" onClick={()=>setMenu(null)} style={{fontSize:12,marginTop:10}}>Close</button>
+            </div>}
 
-            <details className="export-network-panel">
-                <summary>Report details</summary>
-                <div className="export-network-panel-body">
-                    <h1>{payload.title}</h1>
-                    {payload.nzbn && <p className="export-network-nzbn">NZBN: {payload.nzbn}</p>}
-                    <p className="export-network-generated">Generated: {generatedStr}</p>
-                    <p className="export-network-explainer">
-                        Point-in-time snapshot — reflects NZ register data as at the generation date. Click a node to expand or collapse its branch; drag to reposition.
-                    </p>
-                    <p className="export-network-count">
-                        {allNodes.filter((n) => n.data.isVisible).length} of {allNodes.length} entities shown · {payload.edges.length} relationships
-                    </p>
-                    <div className="export-network-actions">
-                        <button onClick={expandAll}>Expand all</button>
-                        <button onClick={resetView}>Reset view</button>
-                    </div>
-                    <NotesBlock notes={notes} />
-                </div>
-            </details>
-
-            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 text-[11px] text-ink-pale pointer-events-none">
-                Mitsuketa 見つけた · {generatedStr}
-            </div>
             </div>}
             {view==='record'&&<main className="export-record" aria-label="Entity Details">
                 <p className="export-snapshot">{payload.title} · Snapshot exported {generatedStr}</p>

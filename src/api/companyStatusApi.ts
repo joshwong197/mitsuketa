@@ -1,6 +1,7 @@
 import { ApiConfig, PersonCompanyResult, LoggerCallback, GraphNode } from '../../types.js';
 import { BASE_API_URL, API_PATHS } from '../../constants.js';
 import { mapPool } from '../../utils/pool.js';
+import { gatedFetch } from '../../utils/dispatchGate.js';
 
 /**
  * External administration status types from NZBN API entityStatusDescription
@@ -46,6 +47,7 @@ interface NZBNEntityResponse {
 }
 
 export interface CompanyStatusResult {
+    companyCheck: 'complete' | 'unavailable';
     entityStatusDescription: string;
     isInExternalAdmin: boolean;
     externalAdminType?: string;
@@ -66,7 +68,7 @@ export async function fetchEntityStatusHistory(
 ): Promise<Array<{ entityStatusDescription: string; effectiveFrom?: string; effectiveTo?: string }>> {
     const proxyPath = `${API_PATHS.nzbn}/entities/${nzbn}/history/entity-statuses`;
     const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
-    const response = await fetch(url, {
+    const response = await gatedFetch(url, {
         headers: {
             'x-user-api-key': config.nzbnKey || '',
             'x-api-type': 'nzbn',
@@ -109,7 +111,7 @@ export function fetchNzbnEntityCached(
     if (!pending) {
         const proxyPath = `${API_PATHS.nzbn}/entities/${encodeURIComponent(nzbn)}`;
         const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
-        pending = fetch(url, {
+        pending = gatedFetch(url, {
             headers: {
                 'x-user-api-key': apiKey || '',
                 'x-api-type': 'nzbn',
@@ -123,6 +125,19 @@ export function fetchNzbnEntityCached(
         pending.then(v => { if (v === null) entityCache.delete(key); });
     }
     return pending;
+}
+
+/**
+ * Prime the shared entity cache with a raw /entities/{nzbn} payload already
+ * fetched elsewhere — specifically the crawl, which fetches every entity's
+ * detail to build the graph. The status enrichment then reuses that payload
+ * instead of fetching the same entity a second time. The crawl's fetch is the
+ * freshest read this search, so it overwrites any older cached copy.
+ */
+export function primeNzbnEntityCache(nzbn: string, baseUrl: string, data: unknown): void {
+    if (!data) return;
+    if (entityCache.size > 500) entityCache.clear();
+    entityCache.set(`${baseUrl}|${nzbn}`, Promise.resolve(data));
 }
 
 /**
@@ -191,6 +206,7 @@ export async function fetchCompanyStatus(
         // Check historic insolvency (for removed companies)
         let hasHistoricInsolvency = false;
         let historicInsolvencyType: string | undefined;
+        let companyCheck: 'complete' | 'unavailable' = 'complete';
 
         const insolvencies = companyDetails?.insolvencies || [];
         const currentInsolvency = companyDetails?.insolvencyDetails;
@@ -249,7 +265,7 @@ export async function fetchCompanyStatus(
             try {
                 const historyProxyPath = `${API_PATHS.nzbn}/entities/${nzbn}/history/entity-statuses`;
                 const historyUrl = `${baseUrl}?path=${encodeURIComponent(historyProxyPath)}`;
-                const historyResponse = await fetch(historyUrl, {
+                const historyResponse = await gatedFetch(historyUrl, {
                     headers: {
                         'x-user-api-key': config.nzbnKey || '',
                         'x-api-type': 'nzbn',
@@ -287,14 +303,16 @@ export async function fetchCompanyStatus(
                             historicInsolvencyType = types.join(' & ');
                             console.log(`[DEBUG] Found historic insolvency via Status History API for ${nzbn}:`, historicInsolvencyType);
                         }
-                    }
-                }
+                    } else companyCheck = 'unavailable';
+                } else companyCheck = 'unavailable';
             } catch (err) {
+                companyCheck = 'unavailable';
                 console.warn(`⚠️ Failed to fetch history for ${nzbn}:`, err);
             }
         }
 
         return {
+            companyCheck,
             entityStatusDescription: statusDesc,
             isInExternalAdmin,
             externalAdminType,
@@ -413,12 +431,13 @@ export async function enrichGraphNodes(
         if (node.data.type !== 'company' || !node.data.nzbn) return node;
 
         const status = statusMap.get(node.data.nzbn);
-        if (!status) return node;
+        if (!status) return { ...node, data: { ...node.data, companyCheck: 'unavailable' as const } };
 
         return {
             ...node,
             data: {
                 ...node.data,
+                companyCheck: status.companyCheck,
                 entityStatusDescription: status.entityStatusDescription,
                 isInExternalAdmin: status.isInExternalAdmin,
                 externalAdminType: status.externalAdminType,

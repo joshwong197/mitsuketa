@@ -1,4 +1,5 @@
 import dagre from '@dagrejs/dagre';
+import { layoutDepths } from '../utils/layoutDepth';
 import { Node, Edge, Position } from 'reactflow';
 import { NODE_WIDTH, NODE_HEIGHT, LAYOUT_DIRECTION } from '../constants';
 
@@ -18,7 +19,9 @@ const getNodeWidth = (label: string): number => {
   return Math.min(maxWidth, Math.max(minWidth, labelLength * 8 + 60));
 };
 
-export const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
+export const getLayoutedElements = (nodes: Node[], allEdges: Edge[]) => {
+  const visibleIds = new Set(nodes.map(n => n.id));
+  const edges = allEdges.filter(e => visibleIds.has(e.source) && visibleIds.has(e.target));
   // Dagre must contain only this case; previous layouts must not influence it.
   dagreGraph.nodes().forEach(id => dagreGraph.removeNode(id));
   dagreGraph.setGraph({
@@ -70,35 +73,7 @@ export const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
 
     // Calculate depth for each node (distance from leaves)
     // Leaves have depth 0, their parents have depth 1, etc.
-    const depthMap = new Map<string, number>();
-
-    // Helper function to calculate depth recursively
-    const calculateDepth = (nodeId: string): number => {
-      // Check if already calculated
-      if (depthMap.has(nodeId)) {
-        return depthMap.get(nodeId)!;
-      }
-
-      // Find children of this node
-      const childrenIds = edges.filter(e => e.source === nodeId).map(e => e.target);
-
-      // If no children, this is a leaf node (depth 0)
-      if (childrenIds.length === 0) {
-        depthMap.set(nodeId, 0);
-        return 0;
-      }
-
-      // Depth is 1 + max depth of children
-      const maxChildDepth = Math.max(...childrenIds.map(calculateDepth));
-      const depth = maxChildDepth + 1;
-      depthMap.set(nodeId, depth);
-      return depth;
-    };
-
-    // Calculate depth for all nodes
-    layoutedNodes.forEach(node => calculateDepth(node.id));
-
-
+    const depthMap = layoutDepths(layoutedNodes, edges);
 
     // Group nodes by depth
     const nodesByDepth = new Map<number, string[]>();
@@ -240,5 +215,5 @@ export const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
     });
   }
 
-  return { nodes: layoutedNodes, edges };
+  return { nodes: layoutedNodes, edges: allEdges };
 };

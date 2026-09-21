@@ -1,9 +1,12 @@
+import { shareholderStatus } from '../utils/relationshipStatus';
 import { ApiConfig, GraphEdge, GraphNode, NodeType, NZBNFullEntity, EntitySearchResultItem, EntitySearchResponse, CompaniesRoleSearchResult, DebugCallback, LoggerCallback } from '../types.js';
 import { BASE_API_URL, API_PATHS } from '../constants.js';
 import { personId } from '../utils/personId.js';
 import { unlinkedCompanyId, normaliseEntityName } from '../utils/entityId.js';
 import { computePersonRoleFlags } from '../utils/personRoles.js';
 import { personName, rememberEntityProfile } from './entityProfile.js';
+import { primeNzbnEntityCache } from '../src/api/companyStatusApi.js';
+import { gatedFetch } from '../utils/dispatchGate.js';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -43,6 +46,8 @@ const TRUSTEE_NAME_KEYWORDS = ['TRUSTEE', 'NOMINEE', 'CUSTODIAN'];
 const TRUSTEE_HOLDINGS_CAP = 5;   // trustee/nominee shell: cap once it holds > this many
 const GENERIC_HOLDINGS_CAP = 50;  // any other entity: only cap a genuine mega-node
 
+export type GraphPreview = { nodes: GraphNode[]; edges: GraphEdge[] };
+
 class OrgSpider {
     private config: ApiConfig;
     private visited: Set<string>;
@@ -54,13 +59,25 @@ class OrgSpider {
     private logger?: LoggerCallback;
 
     // OPTIMIZATION: Entity cache to avoid duplicate fetches
-    private entityCache: Map<string, { name: string, status: string, sourceRegisterUniqueId?: string, roles?: NZBNFullEntity['roles'], timestamp: number }>;
+    private entityCache: Map<string, { name: string, status: string, sourceRegisterUniqueId?: string, companyDetails?: NZBNFullEntity['company-details'], roles?: NZBNFullEntity['roles'], timestamp: number }>;
 
     // OPTIMIZATION: Request timing for smart rate limiting
     private requestTimes: number[];
 
     // OPTIMIZATION: Roles API response cache (prevents redundant ~11s calls)
     private rolesCache: Map<string, CompaniesRoleSearchResult>;
+    private pendingRoles = new Map<string, Promise<CompaniesRoleSearchResult>>();
+    private detailsCache = new Map<string, Promise<NZBNFullEntity>>();
+    private getDetails(nzbn: string): Promise<NZBNFullEntity> {
+        let pending = this.detailsCache.get(nzbn);
+        if (!pending) {
+            pending = fetchEntityDetails(nzbn, this.config, this.nzbnBaseUrl, this.logger);
+            this.detailsCache.set(nzbn, pending);
+            void pending.catch(() => { if (this.detailsCache.get(nzbn) === pending) this.detailsCache.delete(nzbn); });
+        }
+        return pending;
+    }
+    private pendingEntities = new Map<string, Promise<{ entityName: string; entityStatusDescription: string; sourceRegisterUniqueId?: string; companyDetails?: NZBNFullEntity['company-details'], roles?: NZBNFullEntity['roles'] }>>();
 
     constructor(config: ApiConfig, logger?: LoggerCallback, baseUrls?: { nzbn?: string; companies?: string }) {
         this.config = config;
@@ -96,7 +113,7 @@ class OrgSpider {
     }
 
     // OPTIMIZATION #3: Entity caching
-    private async getCachedOrFetch(nzbn: string, fetchFn: () => Promise<{ entityName: string, entityStatusDescription: string, sourceRegisterUniqueId?: string, roles?: NZBNFullEntity['roles'] }>): Promise<{ entityName: string, entityStatusDescription: string, sourceRegisterUniqueId?: string, roles?: NZBNFullEntity['roles'] }> {
+    private async getCachedOrFetch(nzbn: string, fetchFn: () => Promise<{ entityName: string, entityStatusDescription: string, sourceRegisterUniqueId?: string, companyDetails?: NZBNFullEntity['company-details'], roles?: NZBNFullEntity['roles'] }>): Promise<{ entityName: string, entityStatusDescription: string, sourceRegisterUniqueId?: string, companyDetails?: NZBNFullEntity['company-details'], roles?: NZBNFullEntity['roles'] }> {
         if (!ENABLE_ENTITY_CACHE) {
             // Fallback: Always fetch
             return await fetchFn();
@@ -110,16 +127,25 @@ class OrgSpider {
                 entityName: cached.name,
                 entityStatusDescription: cached.status,
                 sourceRegisterUniqueId: cached.sourceRegisterUniqueId,
+                companyDetails: cached.companyDetails,
                 roles: cached.roles
             };
         }
 
         // Fetch and cache
-        const result = await fetchFn();
+        let pending = this.pendingEntities.get(nzbn);
+        if (!pending) {
+            pending = fetchFn();
+            this.pendingEntities.set(nzbn, pending);
+        }
+        let result: Awaited<typeof pending>;
+        try { result = await pending; }
+        finally { if (this.pendingEntities.get(nzbn) === pending) this.pendingEntities.delete(nzbn); }
         this.entityCache.set(nzbn, {
             name: result.entityName,
             status: result.entityStatusDescription,
             sourceRegisterUniqueId: result.sourceRegisterUniqueId,
+            companyDetails: result.companyDetails || (result as NZBNFullEntity)['company-details'],
             roles: result.roles,
             timestamp: Date.now()
         });
@@ -135,7 +161,14 @@ class OrgSpider {
             console.log(`💾 Roles cache hit for "${name}"`);
             return this.rolesCache.get(cacheKey)!;
         }
-        const result = await fetchRolesByEntityName(name, this.config, this.companiesBaseUrl, this.logger);
+        let pending = this.pendingRoles.get(cacheKey);
+        if (!pending) {
+            pending = fetchRolesByEntityName(name, this.config, this.companiesBaseUrl, this.logger);
+            this.pendingRoles.set(cacheKey, pending);
+        }
+        let result: CompaniesRoleSearchResult;
+        try { result = await pending; }
+        finally { if (this.pendingRoles.get(cacheKey) === pending) this.pendingRoles.delete(cacheKey); }
         this.rolesCache.set(cacheKey, result);
         return result;
     }
@@ -149,7 +182,7 @@ class OrgSpider {
 
     // --- Core Graph Building Logic ---
 
-    public async buildGraph(rootNzbn: string, onDebug?: DebugCallback): Promise<{ nodes: GraphNode[], edges: GraphEdge[] }> {
+    public async buildGraph(rootNzbn: string, onDebug?: DebugCallback, onPreview?: (graph: GraphPreview) => void): Promise<{ nodes: GraphNode[], edges: GraphEdge[] }> {
         this.nodes.clear();
         this.edges = [];
         this.visited.clear();
@@ -160,7 +193,16 @@ class OrgSpider {
         console.log(`🏎️ Graph build starting... (Using ${USE_LIGHTWEIGHT_ENDPOINTS ? 'OPTIMIZED' : 'LEGACY'} endpoints)`);
 
         // 1. Fetch Target (Center of the Butterfly)
-        const rootDetails = await fetchEntityDetails(rootNzbn, this.config, this.nzbnBaseUrl, this.logger);
+        const rootDetails = await this.getDetails(rootNzbn);
+
+        // Build a separate immediate graph from the response already in hand.
+        // Simple scope never follows parents or subsidiaries. Do not expose the
+        // mutable maps used by the concurrent comprehensive crawl.
+        if (onPreview && this.config.companySearchScope !== 'simple') {
+            const preview = new OrgSpider({ ...this.config, companySearchScope: 'simple' });
+            preview.detailsCache.set(rootNzbn, Promise.resolve(rootDetails));
+            onPreview(await preview.buildGraph(rootNzbn));
+        }
 
         if (onDebug) {
             onDebug('upstream', rootDetails, `Upstream Data (Target): ${rootDetails.entityName}`);
@@ -285,7 +327,7 @@ class OrgSpider {
                 console.log(`🚀 Prefetching ${parentNzbnsToPreFetch.length} parent statuses in parallel`);
                 await Promise.all(parentNzbnsToPreFetch.map(nzbn =>
                     this.getCachedOrFetch(nzbn, () =>
-                        fetchEntitySummaryLight(nzbn, this.config, this.nzbnBaseUrl, this.logger)
+                        this.getDetails(nzbn)
                     ).catch(e => console.warn(`Prefetch failed for ${nzbn}`, e))
                 ));
             }
@@ -349,7 +391,7 @@ class OrgSpider {
                                 // OPTIMIZATION: Use cached lightweight endpoint
                                 const parentData = await this.getCachedOrFetch(
                                     parentNzbn,
-                                    () => fetchEntitySummaryLight(parentNzbn, this.config, this.nzbnBaseUrl, this.logger)
+                                    () => this.getDetails(parentNzbn)
                                 );
 
                                 const isInactive = parentData.entityStatusDescription.toLowerCase().includes('removed') ||
@@ -411,7 +453,7 @@ class OrgSpider {
                             // This saves ~11s per parent by eliminating a redundant Roles API call.
 
                             // Recurse upstream
-                            const parentDetails = await fetchEntityDetails(parentNzbn, this.config, this.nzbnBaseUrl, this.logger);
+                            const parentDetails = await this.getDetails(parentNzbn);
                             await this.crawlUpstream(parentDetails, depth + 1);
                         } catch (e) {
                             console.warn(`Failed upstream fetch for ${parentNzbn}`, e);
@@ -466,7 +508,7 @@ class OrgSpider {
                         try {
                             const parentData = await this.getCachedOrFetch(
                                 parentNzbn,
-                                () => fetchEntitySummaryLight(parentNzbn, this.config, this.nzbnBaseUrl, this.logger)
+                                () => this.getDetails(parentNzbn)
                             );
 
                             // 🚀 FIX: IF holderLabel is Unknown, populate it now from the actual registry summary:
@@ -515,7 +557,7 @@ class OrgSpider {
                     this.visited.add(parentNzbn);
                     try {
                         // OPTIMIZATION: Removed crawlSiblings here - Phase 2 handles sibling discovery.
-                        const parentDetails = await fetchEntityDetails(parentNzbn, this.config, this.nzbnBaseUrl, this.logger);
+                        const parentDetails = await this.getDetails(parentNzbn);
                         await this.crawlUpstream(parentDetails, depth + 1);
                     } catch (e) {
                         console.warn(`Failed upstream fetch for role ${parentNzbn}`, e);
@@ -685,7 +727,7 @@ class OrgSpider {
             }
             if (childNzbns.size > 1) {
                 const summaries = await Promise.all([...childNzbns].map(nzbn =>
-                    this.getCachedOrFetch(nzbn, () => fetchEntitySummaryLight(nzbn, this.config, this.nzbnBaseUrl, this.logger))
+                    this.getCachedOrFetch(nzbn, () => this.getDetails(nzbn))
                         .catch(() => null)));
                 // Roles are only searched for children that get crawled further, i.e.
                 // when depth+1 is still within maxDepth and the child is not filtered
@@ -765,8 +807,24 @@ class OrgSpider {
                     continue;
                 }
 
+                const ownershipDetails = await this.getCachedOrFetch(childNzbn, () => this.getDetails(childNzbn)).catch(() => null);
+                const ownershipStatus = shareholderStatus(ownerNzbn, ownerName, ownershipDetails ? { 'company-details': ownershipDetails.companyDetails || (ownershipDetails as NZBNFullEntity)['company-details'] } : null, holding, role);
+                const addHoldingEdge = (label: string) => {
+                    const alreadyKnown = this.edges.find(e => e.source === ownerNzbn && e.target === childNzbn);
+                    this.addEdge(ownerNzbn, childNzbn, ownershipStatus === 'former' ? `${label} · Former` : ownershipStatus === 'unverified' ? `${label} · Current status unverified` : label, 'subsidiary', ownershipStatus === 'former', 'shareholder');
+                    const edge = this.edges.find(e => e.source === ownerNzbn && e.target === childNzbn);
+                    if (!alreadyKnown && edge?.data && ownershipStatus === 'unverified') edge.data.currentUnverified = true;
+                    if (edge?.data && ownershipStatus === 'current') { edge.data.isCeased = false; edge.data.currentUnverified = false; edge.data.label = label; edge.style = { stroke: 'var(--ink-mid)' }; }
+                };
+
                 if (this.visited.has(childNzbn)) {
-                    console.log(`${holdingLogPrefix} Skipped: Already visited.`);
+                    // Fetch/expansion deduplication must not discard a second
+                    // owner's relationship to an entity already in the graph.
+                    if (this.nodes.has(childNzbn) && childNzbn !== this.rootNzbn) {
+                        const label = holding.sharePercentage !== undefined && holding.sharePercentage > 0
+                            ? `▼ Shareholder (${holding.sharePercentage}%)` : '▼ Shareholder';
+                        addHoldingEdge(label);
+                    }
                     continue;
                 }
 
@@ -784,7 +842,7 @@ class OrgSpider {
                 console.log(`%c[GraphBuilder] Creating Subsidiary Node: ${childNameRaw} (${childNzbn})`, "color: lime; font-weight: bold");
 
                 // Create Edge
-                this.addEdge(ownerNzbn, childNzbn, shareLabel, 'subsidiary');
+                addHoldingEdge(shareLabel);
 
                 let childLabel = childNameRaw || 'Unknown Company';
                 let childStatus = 'Subsidiary';
@@ -793,7 +851,7 @@ class OrgSpider {
                     // OPTIMIZATION #3: Fetch with caching (avoids duplicate fetches)
                     const childSummary = await this.getCachedOrFetch(
                         childNzbn,
-                        () => fetchEntitySummaryLight(childNzbn, this.config, this.nzbnBaseUrl, this.logger)
+                        () => this.getDetails(childNzbn)
                     );
                     childLabel = childSummary.entityName;
                     childStatus = childSummary.entityStatusDescription;
@@ -974,26 +1032,11 @@ class OrgSpider {
 
 // --- API Helpers ---
 
-// Global dispatch gate. Space the *dispatch* of requests ~evenly to stay under
-// the key's rate limit while letting many sit in flight at once: the Companies
-// roles search is ~11s of waiting, so metering dispatch (not concurrency) keeps
-// dozens of requests in flight under the key's cap. That is the crawl's real speed-up
-// once callers fire the slow calls in parallel (see crawlDownstream prefetch).
-// ponytail: fixed interval; swap for a token bucket only if a burst allowance is
-// ever needed.
-const ENABLE_DISPATCH_GATE = true;
 const ENABLE_LEVEL_PREFETCH = true;      // warm each crawl level's slow calls in parallel
 const ENABLE_PARALLEL_RECURSION = true;  // recurse sibling subtrees together (see crawlDownstream); false = serial depth-first
-const MIN_DISPATCH_INTERVAL_MS = 10;   // ~100 dispatches/sec (measured 0x 429 up to 200/s on the MBIE key)
-let dispatchAt = 0;
-async function dispatchGate() {
-    if (!ENABLE_DISPATCH_GATE) return;
-    const now = Date.now();
-    const at = Math.max(now, dispatchAt);
-    dispatchAt = at + MIN_DISPATCH_INTERVAL_MS;
-    if (at > now) await delay(at - now);
-}
 
+// The dispatch gate + 429 backoff now live in utils/dispatchGate and are shared
+// by every API path (crawl AND enrichment) via gatedFetch — see that file.
 async function safeFetch(url: string, headers: HeadersInit, logger?: LoggerCallback) {
     const method = 'GET';
 
@@ -1018,16 +1061,7 @@ async function safeFetch(url: string, headers: HeadersInit, logger?: LoggerCallb
     }
 
     try {
-        await dispatchGate();
-        let res = await fetch(url, { headers });
-        // Going wide makes the odd 429 likely; back off (and slow every other
-        // dispatch with us) and retry a few times before giving up.
-        for (let attempt = 0; res.status === 429 && attempt < 3; attempt++) {
-            const backoff = 500 * Math.pow(2, attempt);
-            dispatchAt = Date.now() + backoff;
-            await delay(backoff);
-            res = await fetch(url, { headers });
-        }
+        const res = await gatedFetch(url, { headers });
 
         // Log Response
         if (logger) {
@@ -1080,7 +1114,11 @@ async function fetchEntityDetailsFull(nzbn: string, config: ApiConfig, baseUrl: 
         if (res.status === 401) throw new Error("NZBN API Unauthorized.");
         throw new Error(`NZBN API Error: ${res.status}`);
     }
-    return await res.json();
+    const data = await res.json();
+    // Share this fetch with the company-status enrichment so it doesn't fetch
+    // the same /entities/{nzbn} again after the crawl.
+    primeNzbnEntityCache(nzbn, baseUrl, data);
+    return data;
 }
 
 // OPTIMIZED FUNCTION (Default for current graphs)
@@ -1144,7 +1182,7 @@ async function fetchEntityStatusOnly(nzbn: string, config: ApiConfig, baseUrl: s
 // endpoint/payload as the full fetch, so `roles` is included at no extra cost;
 // it's what lets crawlDownstream draw directors for subsidiaries for free).
 // Uses direct primary key lookup instead of slow full-text search
-async function fetchEntitySummaryLight(nzbn: string, config: ApiConfig, baseUrl: string, logger?: LoggerCallback): Promise<{ entityName: string, entityStatusDescription: string, sourceRegisterUniqueId?: string, roles?: NZBNFullEntity['roles'] }> {
+async function fetchEntitySummaryLight(nzbn: string, config: ApiConfig, baseUrl: string, logger?: LoggerCallback): Promise<{ entityName: string, entityStatusDescription: string, sourceRegisterUniqueId?: string, companyDetails?: NZBNFullEntity['company-details'], roles?: NZBNFullEntity['roles'] }> {
     try {
         const proxyPath = `${API_PATHS.nzbn}/entities/${encodeURIComponent(nzbn)}`;
         const url = `${baseUrl}?path=${encodeURIComponent(proxyPath)}`;
@@ -1157,6 +1195,9 @@ async function fetchEntitySummaryLight(nzbn: string, config: ApiConfig, baseUrl:
         if (!res.ok) throw new Error(`Summary fetch failed: ${res.status}`);
 
         const data = await res.json();
+        // Share this fetch with the company-status enrichment (same endpoint) so
+        // it reuses the crawl's payload instead of re-fetching each company.
+        primeNzbnEntityCache(nzbn, baseUrl, data);
 
         return {
             entityName: data.entityName,
@@ -1452,9 +1493,9 @@ export async function resolveEntityNzbn(
     return resolved;
 }
 
-export const generateOrgChart = async (rootNzbn: string, config: ApiConfig, onDebug?: DebugCallback, onLog?: LoggerCallback, baseUrls?: { nzbn?: string; companies?: string }) => {
+export const generateOrgChart = async (rootNzbn: string, config: ApiConfig, onDebug?: DebugCallback, onLog?: LoggerCallback, baseUrls?: { nzbn?: string; companies?: string }, onPreview?: (graph: GraphPreview) => void) => {
     const spider = new OrgSpider(config, onLog, baseUrls);
-    return await spider.buildGraph(rootNzbn, onDebug);
+    return await spider.buildGraph(rootNzbn, onDebug, onPreview);
 };
 
 // Lazy-load expansion: crawl downstream from a specific node that was capped or depth-limited

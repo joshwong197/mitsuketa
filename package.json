@@ -13,6 +13,8 @@
     "check:entity-profile": "tsx services/entityProfile.check.ts",
     "check:entity-search": "tsx services/searchEntities.check.ts",
     "check:register-evidence": "tsx utils/registerEvidence.check.ts",
+    "check:throttling": "tsx services/performanceBaseline.check.ts && tsx api/proxy-throttling.check.ts",
+    "check:performance": "npm run check:throttling && tsx services/layoutPerformance.check.ts && tsx utils/registerPatches.check.ts && tsx utils/checkProgress.check.ts && npm run check:company-scope",
     "check:register-document-sources": "tsx utils/registerDocumentSource.check.ts",
     "check:entity-record-api": "tsx api/entity-record.check.ts",
     "check:property-invitations": "tsx utils/propertyInvitations.check.ts",

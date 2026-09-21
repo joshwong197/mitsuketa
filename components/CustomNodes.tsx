@@ -305,8 +305,8 @@ const SealRing = ({ roleKind, color }: { roleKind?: 'shareholder' | 'director' |
   const borderStyle = roleKind === 'director' ? 'dashed' : 'solid';
   return (
     <>
-      <div className="absolute inset-0 rounded-full" style={{ border: `1px solid ${color}`, borderStyle }} />
-      <div className="absolute rounded-full" style={{ inset: 2, border: `1px solid oklch(from ${color} l c h / .35)`, borderStyle }} />
+      <div className="absolute inset-0 rounded-full" style={{ borderWidth: 1, borderColor: color, borderStyle }} />
+      <div className="absolute rounded-full" style={{ inset: 2, borderWidth: 1, borderColor: `oklch(from ${color} l c h / .35)`, borderStyle }} />
     </>
   );
 };
@@ -356,6 +356,12 @@ export const PersonNode = memo(({ data, selected }: NodeProps<NodeData>) => {
       <div>
         <p className="text-[12.5px] font-bold text-ink">{data.label}</p>
         <p className="text-[10px] uppercase tracking-wider text-ink-pale">{roleLabel}</p>
+        {(data.disqualifiedCheck === 'pending' || data.insolvencyCheck === 'pending') && (
+          <p className="text-[10px] text-ink-mid">Register checks pending</p>
+        )}
+        {(data.disqualifiedCheck === 'unavailable' || data.insolvencyCheck === 'unavailable') && (
+          <p className="text-[10px]" style={{ color: 'var(--amber)' }}>Register checks incomplete</p>
+        )}
         {isCrit && (
           <div className="flex items-center gap-[5px] mt-0.5 status-chip" title={critLabels.join(' · ')}>
             <span

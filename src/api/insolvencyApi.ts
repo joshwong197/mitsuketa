@@ -1,5 +1,6 @@
 import { ApiConfig, LoggerCallback } from '../../types.js';
 import { BASE_API_URL } from '../../constants.js';
+import { gatedFetch } from '../../utils/dispatchGate.js';
 
 const INSOLVENCY_PATH = '/insolvency-trustee-services/v5';
 
@@ -14,6 +15,7 @@ const INSOLVENCY_PATH = '/insolvency-trustee-services/v5';
 // undefined — which is exactly what made a discharged bankrupt read as never
 // discharged. searchInsolvency() therefore follows each hit with a detail fetch.
 export interface InsolvencyRecord {
+    detailUnavailable?: boolean;
     estateNumber: number;
     estateName: string;
     nzbn?: string;
@@ -88,7 +90,7 @@ async function safeFetch(url: string, headers: HeadersInit, logger?: LoggerCallb
     }
 
     try {
-        const res = await fetch(url, { headers });
+        const res = await gatedFetch(url, { headers });
 
         if (logger) {
             logger({
@@ -273,7 +275,7 @@ export async function searchInsolvency(
     const enriched = await Promise.all(
         filtered.map(async record => {
             const detail = await fetchInsolvencyDetail(record.estateNumber, config, logger, baseUrl);
-            return detail ? { ...record, ...detail } : record;
+            return detail ? { ...record, ...detail } : { ...record, detailUnavailable: true };
         })
     );
 

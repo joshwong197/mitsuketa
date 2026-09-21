@@ -1,5 +1,6 @@
 import { ApiConfig, LoggerCallback } from '../../types.js';
 import { BASE_API_URL } from '../../constants.js';
+import { gatedFetch } from '../../utils/dispatchGate.js';
 
 const DISQUALIFIED_DIRECTORS_PATH = '/companies-office/companies-register/disqualified-directors/v3';
 
@@ -62,7 +63,7 @@ async function safeFetch(url: string, headers: HeadersInit, logger?: LoggerCallb
     }
 
     try {
-        const res = await fetch(url, { headers });
+        const res = await gatedFetch(url, { headers });
 
         if (logger) {
             logger({

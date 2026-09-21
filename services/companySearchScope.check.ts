@@ -38,7 +38,19 @@ try {
     assert.match(simple.edges.find(e => e.data?.roleKind === 'both')?.data?.label || '', /25%/);
     assert.equal(simple.nodes.find(n => n.data.isTarget)?.data.companySearchScope, 'simple');
     requests = [];
-    const full = await generateOrgChart('111', config);
+    let previewCount = 0;
+    let previewJson = '';
+    let previewGraph: Awaited<ReturnType<typeof generateOrgChart>> | undefined;
+    const full = await generateOrgChart('111', config, undefined, undefined, undefined, preview => {
+        previewCount++;
+        assert.equal(requests.length, 1, 'Preview must use the root payload, without additional API calls');
+        assert.deepEqual(preview.nodes.map(n => n.id).sort(), simple.nodes.map(n => n.id).sort());
+        previewGraph = preview;
+        previewJson = JSON.stringify(preview);
+    });
+    assert.equal(previewCount, 1, 'Publish one stable immediate preview');
+    assert.equal(JSON.stringify(previewGraph), previewJson, 'The comprehensive crawl must not mutate the preview');
+    assert.equal(requests.filter(p => /\/entities\/111$/.test(p)).length, 1, 'Preview must not refetch the root');
     assert.ok(full.nodes.some(n => n.id === '333'), 'Default Comprehensive must still follow upstream ownership');
     assert.ok(full.nodes.some(n => n.data.label === 'Parent Director'));
     assert.ok(full.nodes.some(n => n.data.label === 'Former Director'), 'Comprehensive retains historical roles');

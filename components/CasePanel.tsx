@@ -187,6 +187,7 @@ export interface CasePanelProps {
   hideDirectors: boolean;
   onToggleHideDirectors: () => void;
   hideableDirectors: number;
+  showHistoryControls?: boolean;
   hideInactiveCompanies: boolean;
   onToggleHideInactiveCompanies: () => void;
   inactiveCompanyCount: number;
@@ -261,6 +262,7 @@ export const CasePanel: React.FC<CasePanelProps> = ({
   hideDirectors,
   onToggleHideDirectors,
   hideableDirectors,
+  showHistoryControls = true,
   hideInactiveCompanies,
   onToggleHideInactiveCompanies,
   inactiveCompanyCount,
@@ -419,11 +421,12 @@ export const CasePanel: React.FC<CasePanelProps> = ({
                   No director-only people are in this chart.
                 </p>
               )}
+              {showHistoryControls && <>
               <RoleToggle
-                on={hideInactiveCompanies}
+                on={!hideInactiveCompanies}
                 onClick={onToggleHideInactiveCompanies}
                 kanji="抹"
-                label="Hide removed companies"
+                label="Include removed companies"
                 count={inactiveCompanyCount}
                 disabled={inactiveCompanyCount === 0}
               />
@@ -433,18 +436,19 @@ export const CasePanel: React.FC<CasePanelProps> = ({
                 </p>
               )}
               <RoleToggle
-                on={hideInactiveDirectors}
+                on={!hideInactiveDirectors}
                 onClick={onToggleHideInactiveDirectors}
                 kanji="退"
-                label="Hide resigned directors"
+                label="Include former / unverified relationships"
                 count={inactiveDirectorCount}
                 disabled={inactiveDirectorCount === 0}
               />
               {hideInactiveDirectors && (
                 <p className="text-ink-pale" style={{ fontSize: 10.5, marginTop: 2 }}>
-                  Ceased directorships hidden. Anyone still an active director or shareholder stays.
+                  Former and unverified relationships are hidden.
                 </p>
               )}
+              </>}
             </div>
           </Section>
         )}
@@ -529,7 +533,7 @@ export const CasePanel: React.FC<CasePanelProps> = ({
               <button onClick={() => importInputRef.current?.click()} className="text-ink-mid hover:text-ink transition-colors" aria-label="Import snapshot" title="Import snapshot">
                 <Upload size={15} strokeWidth={1.5} />
               </button>
-              <button onClick={onTakeSavePoint} className="text-ink-mid hover:text-ink transition-colors" aria-label="Save snapshot" title="Save snapshot">
+              <button onClick={onTakeSavePoint} disabled={!canExport} className="text-ink-mid hover:text-ink transition-colors disabled:opacity-40" aria-label="Save snapshot" title="Save snapshot">
                 <Camera size={15} strokeWidth={1.5} />
               </button>
             </>

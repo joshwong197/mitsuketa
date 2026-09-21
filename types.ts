@@ -66,6 +66,9 @@ export interface NodeData {
   hasHistoricInsolvency?: boolean;
   historicInsolvencyType?: string;
   isDisqualified?: boolean; // Person node: on the disqualified directors register (crit)
+  disqualifiedCheck?: 'pending' | 'complete' | 'unavailable';
+  insolvencyCheck?: 'pending' | 'complete' | 'unavailable';
+  companyCheck?: 'pending' | 'complete' | 'unavailable';
   // Person node: insolvency register match (crit regardless of discharged/current —
   // see utils/statusRamp.ts). Deduped by node id (personId), so this is set once per
   // unique person no matter how many edges/companies they're attached to.
@@ -96,6 +99,7 @@ export interface EdgeData {
   percentage: number;
   label: string;
   relationshipType?: 'parent' | 'subsidiary' | 'sibling' | 'common';
+  currentUnverified?: boolean; // Discovery hit without current ownership evidence
   isCeased?: boolean; // Role has ended (resigned/inactive) — rendered dashed ink-wash
   // Person → company edges only: which register relationship this specific edge
   // represents. A person's node-level roleKind is the union across all their edges;
@@ -235,6 +239,8 @@ export interface CompanyTab {
   edges: GraphEdge[];
   allNodesInMemory: GraphNode[];
   isLoading: boolean;
+  /** Temporary initial graph; never persist or export it as a completed search. */
+  graphIncomplete?: boolean;
   openedAt?: number;
   trail?: CaseTrailEntry[];
   restoredSnapshotId?: string;

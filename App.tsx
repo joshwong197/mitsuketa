@@ -1,3 +1,4 @@
+import { removedCompany } from './utils/relationshipStatus';
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import ReactFlow, {
   Controls,
@@ -30,6 +31,7 @@ import { NoteEditor } from './components/NoteEditor';
 import { DirectorPanel } from './components/DirectorPanel';
 import { EntityDetailsPanel } from './components/EntityDetailsPanel';
 import { GraphScopeControl } from './components/GraphScopeControl';
+import { RegisterCheckProgress, type SearchPhase } from './components/RegisterCheckProgress';
 import { PersonSearchResults } from './components/PersonSearchResults';
 import { ConfirmOrgChartDialog } from './components/ConfirmOrgChartDialog';
 import { TabBar } from './components/TabBar';
@@ -40,6 +42,8 @@ import { displaySubjectName } from './utils/personName';
 import { markDirectLineage, calculateHiddenDescendants, expandNodeSubtree, collapseNodeSubtree } from './utils/graphVisibility';
 import { getLayoutedElements } from './services/layoutService';
 import { tidyUpLayout } from './services/layoutOptimizer';
+import { dispatchStats } from './utils/dispatchGate';
+import { mergeRegisterData } from './utils/registerPatches';
 import { generateOrgChart, searchEntities, searchEntitiesDeep, expandNodeDownstream } from './services/apiService';
 import { downloadInteractiveGraphHtml, downloadPersonReportHtml, downloadTitleReportHtml } from './services/exportService';
 import { extractDirectorsFromEntity } from './services/directorService';
@@ -187,7 +191,7 @@ const rehydrateTab = (pt: PersistedCompanyTab): CompanyTab => {
   }
 };
 
-function App() {
+function App({ entrySearch = false }: { entrySearch?: boolean }) {
   // Theme State
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     if (typeof window !== 'undefined') {
@@ -244,7 +248,7 @@ function App() {
   }>({ upstream: null, downstream: null, audit: null });
 
   // Network Console State
-  const [apiLogs, setApiLogs] = useState<LogEntry[]>([]);
+  const apiLogs = useRef<LogEntry[]>([]);
 
   // Context Menu State
   const [contextMenu, setContextMenu] = useState<{
@@ -325,8 +329,10 @@ function App() {
   const [sidebarView, setSidebarView] = useState<'case' | 'workspace'>('case');
   const activeCaseId = activeMainTab === 'company' ? activeCompanyTabId : activeMainTab === 'individual' ? activeIndividualTabId : activePropertyTabId;
   const activeCaseIdRef = useRef<string | null>(activeCaseId);
+  const searchGenerations = useRef(new Map<string, number>());
   activeCaseIdRef.current = activeCaseId;
   const currentCompanyTab = graphTabs.find(tab => tab.id === activeCompanyTabId);
+  const [searchPhases, setSearchPhases] = useState<Record<string, SearchPhase>>({});
   const isGraphLoading = activeMainTab === 'company' && !!currentCompanyTab?.isLoading;
   const currentIndividualTab = individualTabs.find(tab => tab.id === activeIndividualTabId);
   const trail = activeMainTab === 'company' ? currentCompanyTab?.trail || [] : currentIndividualTab?.trail || [];
@@ -357,7 +363,8 @@ function App() {
   // Search view (full-canvas FindScreen). A fresh session opens on the search
   // view — it IS the home screen — but a restored session with company tabs
   // opens straight onto the case.
-  const [searchViewOpen, setSearchViewOpen] = useState(() => graphTabs.length === 0);
+  const [searchViewOpen, setSearchViewOpen] = useState(() => entrySearch || graphTabs.length === 0);
+  useEffect(() => { if (entrySearch) setSearchViewOpen(true); }, [entrySearch]);
   // Bumped on every open trigger so FindScreen remounts and its input refocuses.
   const [searchViewNonce, setSearchViewNonce] = useState(0);
 
@@ -502,11 +509,12 @@ function App() {
 
   // Intro gate
   const [showIntro, setShowIntro] = useState(() =>
-    typeof window !== 'undefined' && !sessionStorage.getItem(INTRO_SEEN_KEY)
+    !entrySearch && typeof window !== 'undefined' && !sessionStorage.getItem(INTRO_SEEN_KEY)
   );
 
   const handleLog = useCallback((entry: LogEntry) => {
-    setApiLogs(prev => [...prev, entry]);
+    apiLogs.current.push(entry);
+    if (apiLogs.current.length > 1000) apiLogs.current.splice(0, 500);
   }, []);
 
   // AUTO-TIDY: Run after graph loads
@@ -558,7 +566,7 @@ function App() {
     setIsLoading(true);
     setError(null);
     setSearchResults([]);
-    setApiLogs([]); // Clear logs on new search
+    apiLogs.current = []; // Clear logs on new search
 
     try {
       const response = await searchEntitiesDeep(query, config, handleLog);
@@ -606,7 +614,7 @@ function App() {
     setPersonSearchResults([]);
     setDisqualifiedMatches([]); // Reset
     setInsolvencyMatches([]); // Reset
-    setApiLogs([]);
+    apiLogs.current = [];
 
     try {
       console.log(`🔍 Searching for person: "${personName}"`);
@@ -760,8 +768,8 @@ function App() {
       trail: [{ time: timeLabel(openedAt)!, text: `Searching "${entity.entityName}"` }],
       viewScope: companySearchScope,
       hideDirectors: false,
-      hideInactiveCompanies: false,
-      hideInactiveDirectors: false,
+      hideInactiveCompanies: true,
+      hideInactiveDirectors: true,
     };
 
     setGraphTabs(prev => {
@@ -1005,6 +1013,9 @@ function App() {
       window.history.replaceState(null, '', '/#/app');
       return;
     }
+    // The root route opens FindScreen. Keep saved tabs available without
+    // mounting their graph or overriding the search view.
+    if (entrySearch) return;
     if (activeCompanyTabId && graphTabs.some(t => t.id === activeCompanyTabId)) {
       handleSubTabClick(activeCompanyTabId);
     }
@@ -1161,7 +1172,7 @@ function App() {
     if (activeMainTab === 'company' && !searchViewOpen && activeCompanyTabId && nodes.length > 0) {
       setGraphTabs(prev => prev.map(t =>
         t.id === activeCompanyTabId
-          ? { ...t, nodes: nodes as any, edges: edges as any, allNodesInMemory, isLoading: false }
+          ? { ...t, nodes: nodes as any, edges: edges as any, allNodesInMemory }
           : t
       ));
     }
@@ -1173,10 +1184,18 @@ function App() {
   // entry instead of the live canvas (which by then shows a different tab).
   const handleSelectEntity = async (entity: EntitySearchResultItem, forTabId?: string, scope = companySearchScope) => {
     const originId = forTabId || activeCompanyTabId;
+    const generationKey = originId || 'current';
+    const generation = (searchGenerations.current.get(generationKey) || 0) + 1;
+    searchGenerations.current.set(generationKey, generation);
+    const current = () => searchGenerations.current.get(generationKey) === generation;
+    const setPhase = (phase: SearchPhase) => {
+      if (current()) setSearchPhases(prev => ({ ...prev, [generationKey]: phase }));
+    };
+    setPhase('mapping');
     // End-to-end timer: search click → interactive chart, and → fully enriched.
     const loadStart = performance.now();
     const elapsed = () => ((performance.now() - loadStart) / 1000).toFixed(2);
-    setGraphTabs(prev => prev.map(t => t.id === originId ? { ...t, isLoading: true, hideDirectors: scope === 'simple' ? false : t.hideDirectors } : t));
+    setGraphTabs(prev => prev.map(t => t.id === originId ? { ...t, isLoading: true, graphIncomplete: true, hideDirectors: scope === 'simple' ? false : t.hideDirectors } : t));
     if (!originId || activeCaseIdRef.current === originId) setSearchQuery(entity.entityName);
     setError(null);
     hasAutoTidiedRef.current = false; // Reset for new graph
@@ -1199,25 +1218,47 @@ function App() {
             };
           });
         },
-        handleLog
+        handleLog,
+        undefined,
+        preview => {
+          if (!current()) return;
+          const immediate = assignDepths(computePersonRoleFlags(markDirectLineage(preview.nodes, preview.edges, entity.nzbn), preview.edges), preview.edges)
+            .map(n => n.data.type === 'person' ? { ...n, data: { ...n.data, disqualifiedCheck: 'pending' as const, insolvencyCheck: 'pending' as const } } : n);
+          const layout = getLayoutedElements(immediate, preview.edges as unknown as Edge[]);
+          setGraphTabs(prev => prev.map(t => t.id === originId ? {
+            ...t, nodes: layout.nodes as any, edges: layout.edges as any, allNodesInMemory: immediate, isLoading: true, viewScope: scope,
+          } : t));
+          if (!originId || activeCaseIdRef.current === originId) {
+            setAllNodesInMemory(immediate); setNodes(layout.nodes); setEdges(layout.edges);
+          }
+          console.log(`⏱️ Initial relationship preview ${elapsed()}s (${immediate.length} entities; wider network still loading)`);
+        }
       );
 
+      if (!current()) return;
       if (graph.nodes.length === 0) {
+        setPhase('incomplete');
         if (!originId || activeCaseIdRef.current === originId) setError("No corporate structure found for this entity.");
       } else {
         // Structure pipeline — everything that decides positions, depths and
         // edges. None of it depends on the register/status enrichment, so it can
         // render before those calls come back.
+        const processingStart = performance.now();
         let processedNodes = markDirectLineage(graph.nodes, graph.edges, entity.nzbn);
+        processedNodes = processedNodes.map(n => n.data.type === 'person'
+          ? { ...n, data: { ...n.data, disqualifiedCheck: 'pending' as const, insolvencyCheck: 'pending' as const } } : n);
         processedNodes = calculateHiddenDescendants(processedNodes, graph.edges);
+        console.log(`⏱️ Visibility processing ${((performance.now() - processingStart) / 1000).toFixed(3)}s`);
         const depthNodes = assignDepths(computePersonRoleFlags(processedNodes, graph.edges), graph.edges);
         const nodesById = nodesToMap(depthNodes);
         const visibleNodes = depthNodes.filter(n => n.data.isVisible);
+        const layoutStart = performance.now();
         const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(
           visibleNodes,
           graph.edges as unknown as Edge[]
         );
         const optimized = tidyUpLayout(layoutedNodes, layoutedEdges);
+        console.log(`⏱️ Layout ${((performance.now() - layoutStart) / 1000).toFixed(3)}s (${visibleNodes.length} visible / ${graph.nodes.length} total nodes)`);
         const finalEdges = styleEdgesByDepth(optimized.edges, nodesById);
 
         // PROGRESSIVE RENDER: paint the chart now, then stream the register/status
@@ -1225,7 +1266,7 @@ function App() {
         // edge — it only adds status/alert fields — so first paint no longer waits
         // on dozens of register calls.
         setGraphTabs(prev => prev.map(t => t.id === originId
-          ? { ...t, nodes: optimized.nodes as any, edges: finalEdges as any, allNodesInMemory: depthNodes, isLoading: false, viewScope: scope }
+          ? { ...t, nodes: optimized.nodes as any, edges: finalEdges as any, allNodesInMemory: depthNodes, isLoading: false, graphIncomplete: false, viewScope: scope }
           : t));
         if (!originId || activeCaseIdRef.current === originId) {
           setAllNodesInMemory(depthNodes);
@@ -1236,50 +1277,78 @@ function App() {
         const mapName = depthNodes.find(n => n.data.isTarget)?.data.label || entity.entityName;
         logTrail(`Mapped ${mapName} · ${visibleNodes.length} entities`, originId);
         console.log(`⏱️ Chart ready in ${elapsed()}s (${visibleNodes.length} entities) — register flags loading…`);
+        console.log('Request metrics at chart ' + JSON.stringify(dispatchStats()));
+        setPhase('checking');
+        requestAnimationFrame(() => setTimeout(() => {
+          if (current()) console.log(`⏱️ Chart paint opportunity ${elapsed()}s`);
+        }, 0));
 
         // Background enrichment: patch status + register flags into the nodes that
         // are already on screen. Merge order keeps depth/roleKind (which the view
         // filters rely on) and overlays the enriched status/flag fields.
         try {
+          const publishChecks = (updates: GraphNode[]) => {
+            if (!current()) return;
+            setGraphTabs(prev => prev.map(t => t.id === originId ? {
+              ...t, nodes: mergeRegisterData(t.nodes as unknown as GraphNode[], updates) as any,
+              allNodesInMemory: mergeRegisterData(t.allNodesInMemory, updates),
+            } : t));
+            if (!originId || activeCaseIdRef.current === originId) {
+              setAllNodesInMemory(latest => mergeRegisterData(latest, updates));
+              setNodes(latest => mergeRegisterData(latest as unknown as GraphNode[], updates) as any);
+            }
+          };
           const [companyEnriched, personEnriched] = await Promise.all([
-            enrichGraphNodes(processedNodes, { ...config, includeInactive: true }, handleLog),
-            enrichPersonNodes(processedNodes, config, handleLog),
+            enrichGraphNodes(processedNodes, { ...config, includeInactive: true }, handleLog).then(result => {
+              publishChecks(result.filter(n => n.data.type === 'company')); return result;
+            }),
+            enrichPersonNodes(processedNodes, config, handleLog, 16, '/api/proxy', publishChecks),
           ]);
+          if (!current()) return;
           const enrichedById = new Map<string, GraphNode['data']>();
           processedNodes.forEach((n, i) => {
             if (n.data.type === 'company') enrichedById.set(companyEnriched[i].id, companyEnriched[i].data);
             else if (n.data.type === 'person') enrichedById.set(personEnriched[i].id, personEnriched[i].data);
           });
-          const patch = (list: GraphNode[]): GraphNode[] => list.map(n =>
-            enrichedById.has(n.id) ? { ...n, data: { ...n.data, ...enrichedById.get(n.id) } } : n);
+          // Enrichment owns status fields, not positions, visibility or expansion.
+          const fields = ['entityStatusDescription', 'status', 'isInExternalAdmin', 'externalAdminType', 'removalCommenced', 'hasHistoricInsolvency', 'historicInsolvencyType', 'isDisqualified', 'hasInsolvencyRecord', 'insolvencyCurrent', 'disqualifiedCheck', 'insolvencyCheck', 'companyCheck'] as const;
+          const patch = (list: GraphNode[]): GraphNode[] => list.map(n => {
+            const enriched = enrichedById.get(n.id);
+            if (!enriched) return n;
+            const statusPatch = Object.fromEntries(fields.filter(key => key in enriched).map(key => [key, enriched[key]]));
+            return { ...n, data: { ...n.data, ...statusPatch } };
+          });
           const enrichedMemory = patch(depthNodes);
-          const enrichedRendered = patch(optimized.nodes as unknown as GraphNode[]);
 
           setGraphTabs(prev => prev.map(t => t.id === originId
-            ? { ...t, nodes: enrichedRendered as any, allNodesInMemory: enrichedMemory }
+            ? { ...t, nodes: patch(t.nodes as unknown as GraphNode[]) as any, allNodesInMemory: patch(t.allNodesInMemory) }
             : t));
           if (!originId || activeCaseIdRef.current === originId) {
-            setAllNodesInMemory(enrichedMemory);
-            setNodes(enrichedRendered as any);
+            setAllNodesInMemory(latest => patch(latest));
+            setNodes(latest => patch(latest as unknown as GraphNode[]) as any);
           }
 
           const flagCount = enrichedMemory.filter(n =>
             n.data.isInExternalAdmin || n.data.hasHistoricInsolvency || n.data.removalCommenced
           ).length;
           if (flagCount > 0) logTrail(`Flags · ${flagCount} ${flagCount === 1 ? 'entity' : 'entities'}`, originId);
-          console.log(`⏱️ Total load ${elapsed()}s — chart + register checks complete (${flagCount} flagged)`);
+          console.log(`⏱️ Total load ${elapsed()}s — chart + register requests settled (${flagCount} flagged; inspect unavailable checks)`);
+          console.log('Request metrics at completion ' + JSON.stringify(dispatchStats()));
+          setPhase('complete');
         } catch (enrichErr) {
           // The chart is already usable; a register-check failure must not blank it.
           console.warn('Enrichment failed (chart already rendered):', enrichErr);
+          setPhase('interrupted');
         }
       }
     } catch (err: any) {
-      if (!originId || activeCaseIdRef.current === originId) setError(err.message || "Failed to fetch corporate map.");
+      setPhase('incomplete');
+      if (current() && (!originId || activeCaseIdRef.current === originId)) setError(err.message || "Failed to fetch corporate map.");
       logTrail('Search failed', originId);
     } finally {
       // Stop the tab's loading pulse even when the load failed or came back
       // empty (the save-back effect only clears it on a successful stamp).
-      if (forTabId) {
+      if (forTabId && current()) {
         setGraphTabs(prev => prev.map(t =>
           t.id === forTabId && t.isLoading ? { ...t, isLoading: false } : t
         ));
@@ -1315,6 +1384,10 @@ function App() {
   };
 
   const exportAsHtml = async () => {
+    if (activeMainTab === 'company' && currentCompanyTab?.graphIncomplete) {
+      setNotice('The relationship network is still incomplete. Wait for it to finish before exporting.');
+      return;
+    }
     setIsExportingHtml(true);
     try {
       if (activeMainTab === 'individual' && personSearchResults.length > 0) {
@@ -1504,6 +1577,10 @@ function App() {
   };
 
   const takeSnapshot = () => {
+    if (activeMainTab === 'company' && currentCompanyTab?.graphIncomplete) {
+      setNotice('The relationship network is still incomplete. Wait for it to finish before saving a snapshot.');
+      return;
+    }
     const caseId = activeCaseId;
     const now = Date.now();
     let snapshot: GraphSnapshot;
@@ -1718,25 +1795,11 @@ function App() {
   const handleShowAll = () => {
     setContextMenu(null);
 
-    // Reset all nodes to full opacity
-    setNodes((nds) =>
-      nds.map(n => ({
-        ...n,
-        style: {
-          ...n.style,
-          opacity: 1,
-          pointerEvents: 'auto'
-        }
-      }))
-    );
-
-    // Show all edges
-    setEdges((eds) =>
-      eds.map(e => ({
-        ...e,
-        hidden: false
-      }))
-    );
+    const expanded = allNodesInMemory.map(n => ({...n, data:{...n.data,isVisible:true,isBranchExpanded:true}, style:{...n.style,opacity:1}}));
+    setAllNodesInMemory(expanded);
+    const laid = getLayoutedElements(expanded, edges.map(e=>({...e,hidden:false})));
+    setNodes(laid.nodes);
+    setEdges(styleEdgesByDepth(laid.edges, nodesToMap(expanded)));
   };
 
   const handleShowDirectors = async (nodeId: string, nzbn: string, label: string) => {
@@ -2040,17 +2103,17 @@ function App() {
   };
   // Two more render-time filters over the same crawl (nothing refetched): hide
   // struck-off/dissolved companies, and hide resigned (ceased) directorships.
-  const hideInactiveCompanies = !!currentCompanyTab?.hideInactiveCompanies;
+  const hideInactiveCompanies = currentCompanyTab?.hideInactiveCompanies !== false;
   const setHideInactiveCompanies = (next: boolean | ((previous: boolean) => boolean)) => {
     const id = activeCaseIdRef.current;
     setGraphTabs(prev => prev.map(t => t.id === id ? { ...t,
-      hideInactiveCompanies: typeof next === 'function' ? next(!!t.hideInactiveCompanies) : next } : t));
+      hideInactiveCompanies: typeof next === 'function' ? next(t.hideInactiveCompanies !== false) : next } : t));
   };
-  const hideInactiveDirectors = !!currentCompanyTab?.hideInactiveDirectors;
+  const hideInactiveDirectors = currentCompanyTab?.hideInactiveDirectors !== false;
   const setHideInactiveDirectors = (next: boolean | ((previous: boolean) => boolean)) => {
     const id = activeCaseIdRef.current;
     setGraphTabs(prev => prev.map(t => t.id === id ? { ...t,
-      hideInactiveDirectors: typeof next === 'function' ? next(!!t.hideInactiveDirectors) : next } : t));
+      hideInactiveDirectors: typeof next === 'function' ? next(t.hideInactiveDirectors !== false) : next } : t));
   };
   const graphScope = currentCompanyTab?.viewScope || allNodesInMemory.find(n => n.data.isTarget)?.data.companySearchScope;
   const scopeGraph = useMemo(() => {
@@ -2080,17 +2143,17 @@ function App() {
   // Liquidation and insolvency are NOT inactive: they stay on the chart as live
   // red flags.
   const isRemovedCompany = (d: NodeData) =>
-    d.type === NodeType.COMPANY && ['faded', 'amalgamated'].includes(getStatusBucket(d));
+    d.type === NodeType.COMPANY && removedCompany(d);
   // A ceased directorship edge — a resigned director's tie to a company.
   const isCeasedDirectorEdge = (e: { data?: any }) =>
-    !!(e.data?.isCeased && e.data?.roleKind === 'director');
+    !!(e.data?.isCeased || e.data?.currentUnverified);
 
   const visible = useMemo(() => {
     // 1. Node-level: drop director-only people and/or removed companies.
     const keptNodes = nodesWithAnnotations.filter(n => {
       const d = n.data as unknown as NodeData;
       if (hideDirectors && d.roleKind === 'director') return false;
-      if (hideInactiveCompanies && isRemovedCompany(d)) return false;
+      if ((graphScope === 'simple' || hideInactiveCompanies) && isRemovedCompany(d)) return false;
       return true;
     });
     const keptIds = new Set(keptNodes.map(n => n.id));
@@ -2102,10 +2165,10 @@ function App() {
     const connected = new Set<string>();
     edges.forEach(e => { connected.add(e.source); connected.add(e.target); });
     const nodes = keptNodes.filter(n =>
-      (n.data as unknown as NodeData).type !== NodeType.PERSON || connected.has(n.id));
+      (n.data as unknown as NodeData).isTarget || connected.has(n.id));
     const finalIds = new Set(nodes.map(n => n.id));
     return { nodes, edges: edges.filter(e => finalIds.has(e.source) && finalIds.has(e.target)) };
-  }, [nodesWithAnnotations, scopeGraph.edges, hideDirectors, hideInactiveCompanies, hideInactiveDirectors]);
+  }, [nodesWithAnnotations, scopeGraph.edges, hideDirectors, hideInactiveCompanies, hideInactiveDirectors, graphScope]);
   const visibleNodes = visible.nodes;
   const visibleEdges = visible.edges;
 
@@ -2115,16 +2178,7 @@ function App() {
   // People whose only ties are ceased directorships — the ones "hide inactive
   // directors" would remove.
   const inactiveDirectorCount = useMemo(() => {
-    const incident = new Map<string, any[]>();
-    for (const e of scopeGraph.edges) {
-      (incident.get(e.source) ?? incident.set(e.source, []).get(e.source)!).push(e);
-      (incident.get(e.target) ?? incident.set(e.target, []).get(e.target)!).push(e);
-    }
-    return scopeGraph.nodes.filter(n => {
-      if ((n.data as unknown as NodeData).type !== NodeType.PERSON) return false;
-      const es = incident.get(n.id) ?? [];
-      return es.length > 0 && es.every(isCeasedDirectorEdge);
-    }).length;
+    return scopeGraph.edges.filter(isCeasedDirectorEdge).length;
   }, [scopeGraph.nodes, scopeGraph.edges]);
 
   // Case-file derived values
@@ -2273,6 +2327,7 @@ function App() {
             hideDirectors={hideDirectors}
             onToggleHideDirectors={() => setHideDirectors(v => !v)}
             hideableDirectors={hideableDirectors}
+            showHistoryControls={graphScope !== 'simple'}
             hideInactiveCompanies={hideInactiveCompanies}
             onToggleHideInactiveCompanies={() => setHideInactiveCompanies(v => !v)}
             inactiveCompanyCount={inactiveCompanyCount}
@@ -2314,7 +2369,7 @@ function App() {
             onCheckChanges={handleCheckChanges}
             onExportHtml={exportAsHtml}
             isExportingHtml={isExportingHtml}
-            canExport={activeMainTab === 'company' ? graphLoaded : activeMainTab === 'individual' && personSearchResults.length > 0}
+            canExport={activeMainTab === 'company' ? graphLoaded && !currentCompanyTab?.graphIncomplete : activeMainTab === 'individual' && personSearchResults.length > 0}
           />
         </div>
 
@@ -2325,7 +2380,7 @@ function App() {
               a 40-directorship subject takes tens of seconds to come back, so the
               click read as a dead button. Excluded while the find screen is open,
               which has its own inline spinner for search-as-you-type. */}
-          {!searchViewOpen && ((activeMainTab === 'company' && currentCompanyTab?.isLoading) || (activeMainTab === 'individual' && currentIndividualTab?.isEnriching)) && (
+          {!searchViewOpen && ((activeMainTab === 'company' && currentCompanyTab?.isLoading && nodes.length === 0) || (activeMainTab === 'individual' && currentIndividualTab?.isEnriching)) && (
             <div className="absolute top-0 left-0 right-0 z-50">
               <div className="h-0.5 bg-paper2 overflow-hidden relative">
                 <div className="loadsweep absolute inset-y-0 left-0 w-1/3 bg-accent" />
@@ -2354,6 +2409,8 @@ function App() {
             onNewSearch={openSearchView}
           />
 
+          {!searchViewOpen && activeMainTab === 'company' && nodes.length > 0 && <RegisterCheckProgress
+            nodes={allNodesInMemory} phase={searchPhases[activeCompanyTabId || 'current']} />}
           <div className="flex-1 relative">
             {/* A property report owns the canvas whenever its tab is active — it
                 is a document, not a graph, so it scrolls in place. */}
@@ -2441,12 +2498,14 @@ function App() {
                 </div>}
                 <div className="relative min-h-0 flex-1">
                 <ReactFlow
+                key={`${activeCompanyTabId}-${searchPhases[activeCompanyTabId || 'current'] === 'mapping' ? 'preview' : 'full'}`}
                 nodes={visibleNodes}
                 edges={visibleEdges}
+                nodesDraggable={searchPhases[activeCompanyTabId || 'current'] !== 'mapping'}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onNodeClick={handleNodeClick}
-                onNodeContextMenu={handleNodeContextMenu}
+                onNodeContextMenu={searchPhases[activeCompanyTabId || 'current'] === 'mapping' ? undefined : handleNodeContextMenu}
                 onPaneClick={handlePaneClick}
                 nodeTypes={nodeTypes}
                 fitView

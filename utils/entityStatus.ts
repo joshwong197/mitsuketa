@@ -8,6 +8,9 @@ export function entityStatus(input: EntityStatusInput) {
     const status = input.status || input.externalAdminType || '';
     const bucket = getStatusBucket({ ...input, status: input.isRemoved && !status ? 'Removed' : status } as NodeData);
     const alerts: Array<{ label: string; historical: boolean }> = [];
+    if (input.companyCheck === 'unavailable') alerts.push({ label: 'Company check incomplete', historical: false });
+    if (input.disqualifiedCheck === 'unavailable') alerts.push({ label: 'Disqualification check unavailable', historical: false });
+    if (input.insolvencyCheck === 'unavailable') alerts.push({ label: 'Insolvency check incomplete', historical: false });
     if (input.isDisqualified) alerts.push({ label: 'Disqualified director record', historical: false });
     if (input.hasInsolvencyRecord) alerts.push({ label: 'Insolvency record', historical: input.insolvencyCurrent === false });
     if (input.isInExternalAdmin || /liquidat|receiver|administration|statutory/i.test(status)) {

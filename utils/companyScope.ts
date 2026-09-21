@@ -3,7 +3,7 @@ import { computePersonRoleFlags } from './personRoles';
 
 /** Match a fresh Simple search: current role/shareholder edges into the target only. */
 export function immediateCompanyGraph(nodes: GraphNode[], edges: GraphEdge[], targetId: string) {
-    const incoming = edges.filter(edge => edge.target === targetId && !edge.data?.isCeased && edge.data?.relationshipType !== 'sibling');
+    const incoming = edges.filter(edge => edge.target === targetId && !edge.data?.isCeased && !edge.data?.currentUnverified && edge.data?.relationshipType !== 'sibling');
     const ids = new Set([targetId, ...incoming.map(edge => edge.source)]);
     const immediateNodes = nodes.filter(node => ids.has(node.id)).map(node => ({
         ...node,

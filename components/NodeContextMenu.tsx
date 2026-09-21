@@ -78,7 +78,7 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
         },
         {
             icon: Eye,
-            label: 'Show All',
+            label: 'Expand all branches',
             onClick: () => {
                 onShowAll();
                 onClose();
@@ -95,7 +95,7 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
         },
         {
             icon: Maximize2,
-            label: isCapped ? 'Fetch & Expand Structure' : 'Expand Full Structure',
+            label: isCapped ? 'Fetch & Expand Structure' : 'Expand connections',
             onClick: () => {
                 if (nzbn) onExpandStructure(nodeId, nzbn, nodeLabel);
                 onClose();
@@ -104,7 +104,7 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
         },
         {
             icon: Minimize2,
-            label: 'Collapse Branch',
+            label: 'Collapse connections',
             onClick: () => {
                 if (nzbn) onCollapseBranch(nodeId, nzbn, nodeLabel);
                 onClose();

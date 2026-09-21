@@ -13,28 +13,15 @@ export const markDirectLineage = (
     const directLineageIds = new Set<string>();
     directLineageIds.add(rootId);
 
-    // Walk UP: Find all parents recursively
-    const findParents = (nodeId: string) => {
-        edges.forEach(edge => {
-            if (edge.target === nodeId && !directLineageIds.has(edge.source)) {
-                directLineageIds.add(edge.source);
-                findParents(edge.source); // Recursive
-            }
-        });
-    };
-
-    // Walk DOWN: Find all DIRECT children recursively (only through the target's own descendants)
-    const findDirectChildren = (nodeId: string) => {
-        edges.forEach(edge => {
-            if (edge.source === nodeId && !directLineageIds.has(edge.target)) {
-                directLineageIds.add(edge.target);
-                findDirectChildren(edge.target); // Recursive
-            }
-        });
-    };
-
-    findParents(rootId);
-    findDirectChildren(rootId);
+    // Begin with the target and immediate company connections. Keep the full
+    // network in memory for explicit expansion; historical filters apply later.
+    const companies = new Set(nodes.filter(n => n.type === 'companyNode').map(n => n.id));
+    for (const edge of edges) {
+        if (companies.has(edge.source) && companies.has(edge.target) && (edge.source === rootId || edge.target === rootId)) {
+            directLineageIds.add(edge.source);
+            directLineageIds.add(edge.target);
+        }
+    }
 
     // Mark nodes - ALL nodes remain in the array (they were already fetched)
     // We just mark which ones are visible by default (direct lineage only)
@@ -56,38 +43,25 @@ export const calculateHiddenDescendants = (
     nodes: GraphNode[],
     edges: GraphEdge[]
 ): GraphNode[] => {
-    const countHiddenDescendants = (nodeId: string, visited = new Set<string>()): number => {
-        if (visited.has(nodeId)) return 0;
-        visited.add(nodeId);
-
-        let count = 0;
-
-        // Find all children
-        edges.forEach(edge => {
-            if (edge.source === nodeId) {
-                const childNode = nodes.find(n => n.id === edge.target);
-                if (childNode && !childNode.data.isVisible) {
-                    count += 1; // This child is hidden
-                    count += countHiddenDescendants(edge.target, visited); // Add its hidden descendants
-                }
-            }
-        });
-
-        return count;
-    };
-
-
+    const hidden = new Set(nodes.filter(n => !n.data.isVisible).map(n => n.id));
+    const children = new Map<string, Set<string>>();
+    for (const edge of edges) if (hidden.has(edge.target)) {
+        if (!children.has(edge.source)) children.set(edge.source, new Set());
+        children.get(edge.source)!.add(edge.target);
+    }
     return nodes.map(node => {
-        const count = countHiddenDescendants(node.id);
-        return {
-            ...node,
-            data: {
-                ...node.data,
-                hiddenDescendantCount: count > 0 ? count : undefined
-            }
-        };
+        const seen = new Set([node.id]), stack = [...(children.get(node.id) || [])];
+        let count = 0;
+        while (stack.length) {
+            const id = stack.pop()!;
+            if (seen.has(id)) continue;
+            seen.add(id); count++;
+            for (const child of children.get(id) || []) if (!seen.has(child)) stack.push(child);
+        }
+        return { ...node, data: { ...node.data, hiddenDescendantCount: count || undefined } };
     });
 };
+
 
 /**
  * Expands a node's full subtree (makes all descendants visible)
