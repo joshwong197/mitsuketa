@@ -47,7 +47,9 @@ export async function getMember(req: VercelRequest): Promise<Member> {
     const auth = state.toAuth();
     if (!auth?.userId || auth.sessionClaims?.iss !== process.env.CLERK_ISSUER) {
         console.warn('[property-auth]', JSON.stringify({ status: state.status, reason: state.reason, hasUser: Boolean(auth?.userId), issuerMatches: auth?.sessionClaims?.iss === process.env.CLERK_ISSUER }));
-        throw new AccessError(401, 'unauthorised', 'Sign in to Mitsuketa.');
+        const diagnostic = process.env.VERCEL_ENV === 'preview'
+            ? ` (${auth?.userId ? 'issuer mismatch' : state.reason || state.status})` : '';
+        throw new AccessError(401, 'unauthorised', 'Sign in to Mitsuketa.' + diagnostic);
     }
     const user = await clerk.users.getUser(auth.userId);
     if (user.banned || user.locked) throw new AccessError(403, 'account_disabled', 'This account is not available.');
