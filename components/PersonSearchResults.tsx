@@ -8,6 +8,7 @@ import { InsolvencyRecord, isInsolvencyRecordCurrent, formatBirth } from '../src
 import { summariseAddresses } from '../utils/addressSummary';
 import { displaySubjectName } from '../utils/personName';
 import { usePrimarySignature } from '../hooks/usePrimarySignature';
+import { isActivePersonCompany } from '../utils/personCompanyStatus';
 
 // Nicely formats an API date string (drops timezone offset, e.g. "+1200").
 const formatDate = (dateString: string): string => {
@@ -429,9 +430,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
         if (filterMode === 'shareholders') return r.shareholding > 0;
         if (filterMode === 'active-only') {
             // Only active companies AND where person has active role (not resigned)
-            const isCompanyActive = (r.entityStatusCode || 0) < 80;
-            const isRoleActive = !r.isInactive;
-            return isCompanyActive && isRoleActive;
+            return isActivePersonCompany(r);
         }
         return true;
     });
@@ -458,11 +457,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
 
     const directorCount = results.filter(r => r.isDirector).length;
     const shareholderCount = results.filter(r => r.shareholding > 0).length;
-    const activeCount = results.filter(r => {
-        const isCompanyActive = (r.entityStatusCode || 0) < 80;
-        const isRoleActive = !r.isInactive;
-        return isCompanyActive && isRoleActive;
-    }).length;
+    const activeCount = results.filter(isActivePersonCompany).length;
 
     console.log('PersonSearchResults - activeCount:', activeCount, 'total:', results.length);
 

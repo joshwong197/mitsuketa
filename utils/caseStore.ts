@@ -2,6 +2,7 @@ import type {
   CaseNote,
   CaseSession,
   CompanyTab,
+  GraphEdge,
   GraphNode,
   GraphSnapshot,
   PersistedCompanyTab,
@@ -36,9 +37,17 @@ export const LEGACY_SNAPSHOTS_KEY = 'mitsuketa_snapshots';
 const stripTransients = (nodes: GraphNode[]): GraphNode[] =>
   nodes.map((n) => {
     const { isHighlighted: _h, isExpanding: _e, diff: _d, ...data } = n.data;
-    const { selected: _s, ...node } = n as GraphNode & { selected?: boolean };
+    const { selected: _s, style: _style, width: _width, height: _height, ...node } = n as GraphNode & { selected?: boolean; style?: unknown; width?: number; height?: number };
     return { ...node, data } as GraphNode;
   });
+
+/** Labels and presentation are rebuilt by styleEdgesByDepth on reload. */
+const stripEdgePresentation = (edges: GraphEdge[]): GraphEdge[] => edges.map(edge => {
+  const { style: _style, labelStyle: _labelStyle, labelBgStyle: _bg, labelBgPadding: _padding,
+    labelBgBorderRadius: _radius, markerEnd: _marker, className: _class, animated: _animated,
+    selected: _selected, ...rest } = edge as GraphEdge & Record<string, unknown>;
+  return rest as GraphEdge;
+});
 
 /**
  * CompanyTab → PersistedCompanyTab. Only allNodesInMemory + edges are kept;
@@ -51,7 +60,7 @@ export const toPersistedTab = (tab: CompanyTab): PersistedCompanyTab => ({
   nzbn: tab.nzbn,
   searchQuery: tab.searchQuery,
   allNodesInMemory: tab.graphIncomplete ? [] : stripTransients(tab.allNodesInMemory),
-  edges: tab.graphIncomplete ? [] : tab.edges,
+  edges: tab.graphIncomplete ? [] : stripEdgePresentation(tab.edges),
   ...(tab.compare ? { compare: tab.compare } : {}),
   openedAt: tab.openedAt,
   trail: tab.trail?.slice(-50),
@@ -70,6 +79,7 @@ const toStubTab = (tab: PersistedCompanyTab): PersistedCompanyTab => ({
   searchQuery: tab.searchQuery,
   allNodesInMemory: [],
   edges: [],
+  ...(tab.compare ? { compare: tab.compare } : {}),
   openedAt: tab.openedAt,
   trail: tab.trail,
   viewScope: tab.viewScope,
@@ -133,11 +143,13 @@ export const saveSession = (
         console.warn('caseStore: failed to save session', err);
         return { ok: false, droppedTabLabels };
       }
-      // Find the largest still-un-stubbed tab and stub it.
+      // Keep the active chart for reload where possible; trim other graphs first.
       let largestIdx = -1;
       let largestSize = 0;
+      const hasInactiveGraph = tabs.some(t => t.id !== activeCompanyTabId && (t.allNodesInMemory.length || t.edges.length));
       tabs.forEach((t, i) => {
         if (t.allNodesInMemory.length === 0 && t.edges.length === 0) return;
+        if (hasInactiveGraph && t.id === activeCompanyTabId) return;
         const size = JSON.stringify(t).length;
         if (size > largestSize) {
           largestSize = size;

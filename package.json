@@ -30,6 +30,7 @@
     "property:user": "node utils/property.pw.ts",
     "check:property-access": "tsx utils/propertyAccess.check.ts",
     "check:scope-view": "tsx utils/companyScope.check.ts",
+    "check:live-review": "tsx services/compareService.check.ts && tsx utils/caseStore.check.ts",
     "check:person-report": "tsx services/exportService.person.check.ts",
     "check:ui-feedback": "npm run check:scope-view && npm run check:company-scope && npm run check:entity-search && npm run check:entity-profile && npm run check:register-evidence && npm run check:register-document-sources && npm run check:entity-record-api && npm run check:person-report"
   },
