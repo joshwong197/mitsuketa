@@ -25,7 +25,6 @@
     "check:browser": "playwright test",
     "check:nzbn-link": "esbuild services/resolveEntityNzbn.selftest.ts --bundle --format=cjs --platform=node --log-level=warning | node",
     "check": "npm run check:memorials && npm run check:lds && npm run check:council-valuations && npm run check:nzbn-link && npm run check:property-audit && npm run check:property-access",
-    "build:graph-bundle": "esbuild mcp/templates/graph-bundle.entry.ts --bundle --format=iife --minify --target=es2020 --outfile=mcp/templates/graph-bundle.js --log-level=info",
     "build:export-viewer": "esbuild export-viewer.entry.tsx --bundle --format=iife --minify --target=es2020 --outfile=public/export-viewer.js --log-level=info && tailwindcss -i export-viewer.css -o public/export-viewer.css --minify",
     "property:user": "node utils/property.pw.ts",
     "check:property-access": "tsx utils/propertyAccess.check.ts",
@@ -40,7 +39,6 @@
     "@dagrejs/dagre": "^1.1.8",
     "@fontsource/shippori-mincho": "^5.2.8",
     "@fontsource/zen-kaku-gothic-new": "^5.2.7",
-    "@modelcontextprotocol/sdk": "^1.29.0",
     "@neon/config": "^1.4.2",
     "@neon/env": "^1.3.2",
     "@neondatabase/serverless": "^1.1.0",
@@ -52,8 +50,7 @@
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "reactflow": "^11.11.4",
-    "stripe": "^22.6.2",
-    "zod": "^4.4.3"
+    "stripe": "^22.6.2"
   },
   "devDependencies": {
     "@clerk/testing": "^2.2.34",
@@ -62,9 +59,6 @@
     "@types/node": "^22.14.0",
     "@vercel/node": "^5.6.10",
     "@vitejs/plugin-react": "^5.0.0",
-    "cytoscape": "^3.33.4",
-    "cytoscape-dagre": "^3.0.0",
-    "cytoscape-expand-collapse": "^4.1.1",
     "esbuild": "^0.28.0",
     "tailwindcss": "^4.3.2",
     "tsx": "^4.23.13",

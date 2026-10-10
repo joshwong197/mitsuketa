@@ -1,5 +1,4 @@
-// Shared API-key resolution used by both the browser-facing proxy
-// (api/proxy.ts) and the MCP server transport (api/mcp/[transport].ts).
+// Server-side API-key resolution for the browser-facing register proxy.
 //
 // Priority: user-provided key > org-level env-var key > empty string.
 

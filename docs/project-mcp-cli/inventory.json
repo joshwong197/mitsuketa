@@ -3,19 +3,9 @@
   "date": "2026-10-10",
   "branch": "codex/project-mcp-cli",
   "baseline": "aadf981 (origin/main)",
-  "summary": "Keep the website and give agents a second way into the same searches, checks and evidence. Most data functions are portable; browser-local state and legal/account actions need different treatment.",
-  "method": "Reviewed live production navigation and an existing saved graph without running new upstream searches. Audited main's App, services, API handlers, existing MCP tools, export viewers, property approval/audit logic and workspace persistence. This is a source-backed feasibility review, not an end-to-end test of all features.",
-  "existingTools": [
-    "mitsuketa_lookup_nzbn",
-    "mitsuketa_get_entity_full",
-    "mitsuketa_get_entity_status_history",
-    "mitsuketa_search_person",
-    "mitsuketa_get_company_directors",
-    "mitsuketa_check_disqualification",
-    "mitsuketa_check_insolvency",
-    "mitsuketa_get_company_status",
-    "mitsuketa_build_ownership_graph"
-  ],
+  "summary": "Expose searches, checks, evidence and report outputs through a new MCP/CLI design. Account management, administration, workspace and interface controls remain on the website. The previous nine-tool implementation is removed on this branch.",
+  "method": "Reviewed live production navigation and an existing saved graph without running new upstream searches. Audited main's App, services, API handlers, existing MCP tools, export viewers, property approval/audit logic and workspace persistence. This is a source-backed feasibility review, not an end-to-end test of all features. Updated after owner review: retired the legacy MCP implementation on this branch and excluded account, interface and workspace tools. Source links refer to the audited main baseline, including removed legacy files; this is not a production removal.",
+  "existingTools": [],
   "rows": [
     {
       "id": 1,
@@ -23,13 +13,14 @@
       "capability": "Search by company/entity name, partial name or NZBN; paginate and disambiguate matches",
       "proposed": "search_entities / company search",
       "feasibility": "New adapter",
-      "current": "mitsuketa_lookup_nzbn handles names + pagination; use stable IDs after selection",
+      "current": "Website entity lookup and pagination; previous MCP wrapper removed",
       "access": "Company",
       "note": "Retain ranking, partial-name and ampersand/and fallbacks. Never silently choose a similarly named company.",
       "sources": [
         "services/apiService.ts",
         "mcp/tools/lookupNzbn.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 2,
@@ -37,57 +28,61 @@
       "capability": "Simple search: immediate directors and shareholders",
       "proposed": "get_company_graph(scope=simple) / company graph --scope simple",
       "feasibility": "New adapter",
-      "current": "Shared Simple graph service; MCP graph tool lacks explicit scope",
+      "current": "Shared Simple graph service; new adapter proposed",
       "access": "Company",
       "note": "Call the same Simple crawler. A reduced Comprehensive response is not a fast Simple search.",
       "sources": [
         "services/apiService.ts",
         "utils/companyScope.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 3,
       "group": "Company & entity",
       "capability": "Comprehensive search: ownership chains, subsidiaries and related people",
       "proposed": "start_company_search(scope=comprehensive) / company graph --scope comprehensive",
-      "feasibility": "Existing MCP",
-      "current": "mitsuketa_build_ownership_graph exists; parity incomplete",
+      "feasibility": "New adapter",
+      "current": "Website graph crawler; previous MCP graph wrapper removed",
       "access": "Company",
       "note": "Add durable jobs, enforced traversal budgets and current/history parity; graph readiness and checks completion are separate.",
       "sources": [
         "mcp/tools/buildOwnershipGraph.ts",
         "services/apiService.ts",
         "App.tsx"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 4,
       "group": "Company & entity",
       "capability": "Upgrade Simple to Comprehensive; return to Simple using loaded data",
-      "proposed": "extend_search / search scope",
-      "feasibility": "Needs shared state",
+      "proposed": "Request a new company graph with scope=simple or comprehensive",
+      "feasibility": "New adapter",
       "current": "App fetch/confirmation and cached projection",
       "access": "Company",
-      "note": "Confirm extra work/cost when necessary; return a new projection from the same search rather than recrawling cached data.",
+      "note": "Scope is a search parameter. Do not read or modify a website file, tab or saved projection.",
       "sources": [
         "components/GraphScopeControl.tsx",
         "App.tsx"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 5,
       "group": "Company & entity",
       "capability": "Full company/entity identity, status, identifiers and registration dates",
       "proposed": "get_entity_record / company record",
-      "feasibility": "Existing MCP",
-      "current": "mitsuketa_get_entity_full returns raw entity details",
+      "feasibility": "New adapter",
+      "current": "Website entity details, EntityProfile and record evidence; previous wrapper removed",
       "access": "Company",
       "note": "Raw NZBN data is not the complete UI record; compose EntityProfile and record evidence.",
       "sources": [
         "services/entityProfile.ts",
         "services/entityRecordService.ts",
         "mcp/tools/getEntityFull.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 6,
@@ -101,21 +96,23 @@
       "sources": [
         "services/entityProfile.ts",
         "components/EntityRecord.tsx"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 7,
       "group": "Company & entity",
       "capability": "Current directors, supplied roles and appointment/resignation information",
       "proposed": "get_company_directors / company directors",
-      "feasibility": "Existing MCP",
-      "current": "mitsuketa_get_company_directors",
+      "feasibility": "New adapter",
+      "current": "Website director service; previous MCP wrapper removed",
       "access": "Company",
       "note": "Preserve role dates and current/former status; normalised names are display labels, not identity proof.",
       "sources": [
         "mcp/tools/getCompanyDirectors.ts",
         "services/directorService.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 8,
@@ -129,7 +126,8 @@
       "sources": [
         "services/entityProfile.ts",
         "components/EntityRecord.tsx"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 9,
@@ -144,22 +142,24 @@
         "services/entityRecordService.ts",
         "utils/registerEvidence.ts",
         "components/EntityRecord.tsx"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 10,
       "group": "Company & entity",
       "capability": "Current and past company statuses, liquidation/receivership/removal alerts",
       "proposed": "get_company_status / company status",
-      "feasibility": "Existing MCP",
-      "current": "mitsuketa_get_company_status + mitsuketa_get_entity_status_history",
+      "feasibility": "New adapter",
+      "current": "Website company status and status history services; previous MCP wrappers removed",
       "access": "Company",
       "note": "Current external administration is not the same as removal; historical alerts stay labelled historical.",
       "sources": [
         "mcp/tools/getCompanyStatus.ts",
         "mcp/tools/getEntityStatusHistory.ts",
         "src/api/companyStatusApi.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 11,
@@ -173,7 +173,8 @@
       "sources": [
         "utils/registerDocumentSource.ts",
         "services/entityProfile.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 12,
@@ -188,7 +189,8 @@
         "api/entity-record.ts",
         "services/entityProfile.ts",
         "components/EntityRecord.tsx"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 13,
@@ -201,7 +203,8 @@
       "note": "Use bounded allowlisted retrieval, MIME/size checks and provenance. Do not accept arbitrary fetch URLs.",
       "sources": [
         "api/documents.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 14,
@@ -216,21 +219,23 @@
         "api/entity-record.ts",
         "utils/registerDocumentSource.ts",
         "services/entityProfile.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 15,
       "group": "People & register checks",
       "capability": "Search people by full/partial name; return related company matches and roles",
       "proposed": "search_person / person search",
-      "feasibility": "Existing MCP",
-      "current": "mitsuketa_search_person",
+      "feasibility": "New adapter",
+      "current": "Website person/roles search; previous MCP wrapper removed",
       "access": "People",
       "note": "Existing description overstates completeness and calls register addresses residential. Qualify same-name matches; return known truncation/coverage.",
       "sources": [
         "mcp/tools/searchPerson.ts",
         "services/directorSearchService.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 16,
@@ -244,7 +249,8 @@
       "sources": [
         "components/PersonSubjectCard.tsx",
         "utils/personRoles.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 17,
@@ -257,7 +263,8 @@
       "note": "A result parameter, not three separate tools.",
       "sources": [
         "components/PersonSearchResults.tsx"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 18,
@@ -271,7 +278,8 @@
       "sources": [
         "components/PersonSearchResults.tsx",
         "utils/personRoles.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 19,
@@ -286,50 +294,54 @@
         "components/PersonSearchResults.tsx",
         "components/NodeContextMenu.tsx",
         "App.tsx"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 20,
       "group": "People & register checks",
       "capability": "Disqualified-director register search",
       "proposed": "check_disqualification / checks disqualification",
-      "feasibility": "Existing MCP",
-      "current": "mitsuketa_check_disqualification",
+      "feasibility": "New adapter",
+      "current": "Website disqualified-director register service; previous MCP wrapper removed",
       "access": "People",
       "note": "Return evidence with name-match qualification, dates and source status.",
       "sources": [
         "mcp/tools/checkDisqualification.ts",
         "src/api/disqualifiedDirectorsApi.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 21,
       "group": "People & register checks",
       "capability": "Personal insolvency register search, current and historic findings",
       "proposed": "check_insolvency / checks insolvency",
-      "feasibility": "Existing MCP",
-      "current": "mitsuketa_check_insolvency",
+      "feasibility": "New adapter",
+      "current": "Website insolvency register service; previous MCP wrapper removed",
       "access": "People",
       "note": "No name match, no current record, unavailable and incomplete are distinct outcomes.",
       "sources": [
         "mcp/tools/checkInsolvency.ts",
         "src/api/insolvencyApi.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 22,
       "group": "People & register checks",
       "capability": "Background checks for people/companies in a graph and progress display",
       "proposed": "start_checks + get_job / checks run --wait",
-      "feasibility": "Needs shared state",
-      "current": "Browser pooled enrichment and progress; MCP enrichment blocks",
+      "feasibility": "Needs job state",
+      "current": "Website pooled checks and progress; new job adapter proposed",
       "access": "People / Company",
       "note": "Make jobs resumable and bounded; preserve per-person failed/pending states, not only a percentage.",
       "sources": [
         "App.tsx",
         "utils/checkProgress.ts",
         "src/api/companyStatusApi.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 23,
@@ -344,7 +356,8 @@
         "components/PersonSearchResults.tsx",
         "components/KydVerificationPanel.tsx",
         "utils/addressSummary.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 24,
@@ -358,7 +371,8 @@
       "sources": [
         "api/consent-forms.ts",
         "hooks/usePrimarySignature.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 25,
@@ -373,20 +387,22 @@
         "components/KydVerificationPanel.tsx",
         "hooks/useSignatureExtractor.ts",
         "utils/signatureCrop.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 26,
       "group": "People & register checks",
       "capability": "View consent PDF pages, zoom and focus on signature area",
-      "proposed": "open_report / evidence viewer",
-      "feasibility": "Viewer / CLI setting",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "PDF viewer interaction",
       "access": "Evidence",
-      "note": "Expose document/crop/page resources and viewer link. These controls are not separate search tools.",
+      "note": "Excluded by owner direction. Keep this on the website or in the downloaded report viewer. Expose document/crop/page resources and viewer link. These controls are not separate search tools.",
       "sources": [
         "components/KydVerificationPanel.tsx"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 27,
@@ -399,292 +415,313 @@
       "note": "Return discovered shortest paths, max hops, work budget and truncation; bounded no-link result is not proof of no connection.",
       "sources": [
         "services/compareService.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 28,
       "group": "Compare & graph",
       "capability": "Compare progress, cancellation and no-link/reset handling",
       "proposed": "get_job + cancel_job / job status|cancel",
-      "feasibility": "Needs shared state",
+      "feasibility": "Needs job state",
       "current": "Compare UI progress/cancellation",
       "access": "Company / People",
       "note": "Durable job state for agents. Reset is client state; cancellation may not undo upstream requests already sent.",
       "sources": [
         "services/compareService.ts",
         "App.tsx"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 29,
       "group": "Compare & graph",
       "capability": "Select/highlight an entity and its incident relationships",
-      "proposed": "get_graph_view(focus_id=...) / graph view --focus",
-      "feasibility": "New adapter",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "Graph node selection",
       "access": "Company",
-      "note": "Return a focused projection and evidence IDs; visual highlight remains viewer presentation.",
+      "note": "Excluded by owner direction. Keep this on the website or in the downloaded report viewer. Return a focused projection and evidence IDs; visual highlight remains viewer presentation.",
       "sources": [
         "App.tsx",
         "utils/compareEmphasis.ts"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 30,
       "group": "Compare & graph",
       "capability": "Expand a company branch, fetch capped structures and collapse connections",
-      "proposed": "expand_graph / graph expand|collapse",
-      "feasibility": "Needs shared state",
+      "proposed": "get_company_graph(entity_id, scope, traversal_limits)",
+      "feasibility": "New adapter",
       "current": "Node context menu + cached graph",
       "access": "Company",
-      "note": "Distinguish fetching more data from changing visibility. Collapse must not delete evidence.",
+      "note": "Request bounded graph data for an explicit entity. Do not implement remote expand/collapse commands against the website canvas.",
       "sources": [
         "components/NodeContextMenu.tsx",
         "App.tsx"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 31,
       "group": "Compare & graph",
       "capability": "Expand all cached branches",
-      "proposed": "get_graph_view(expand_all=true) / graph view --expand-all",
-      "feasibility": "Needs shared state",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "Expand-all visibility action",
       "access": "Company",
-      "note": "No new crawl unless requested; use an explicit data budget when expanding beyond cache.",
+      "note": "Excluded by owner direction. Keep this on the website or in the downloaded report viewer. No new crawl unless requested; use an explicit data budget when expanding beyond cache.",
       "sources": [
         "components/NodeContextMenu.tsx",
         "utils/graphVisibility.ts",
         "App.tsx"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 32,
       "group": "Compare & graph",
       "capability": "Show/hide director-only people",
-      "proposed": "get_graph_view(include_people=...) / graph view --people",
+      "proposed": "get_company_graph(include_people=...)",
       "feasibility": "New adapter",
       "current": "Chart visibility controls",
       "access": "Company",
-      "note": "Retain a shareholder who also has a director role, matching the UI.",
+      "note": "A result-data parameter, not a command to toggle the website view.",
       "sources": [
         "components/CasePanel.tsx",
         "utils/graphVisibility.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 33,
       "group": "Compare & graph",
       "capability": "Include/exclude removed companies",
-      "proposed": "get_graph_view(include_removed=...) / graph view --include-removed",
+      "proposed": "get_company_graph(include_removed=...)",
       "feasibility": "New adapter",
       "current": "Comprehensive control",
       "access": "Company",
-      "note": "Only Comprehensive; removal is distinct from liquidation or receivership.",
+      "note": "A result-data parameter. Enforce the same current/company-status rules as the website.",
       "sources": [
         "components/CasePanel.tsx",
         "utils/relationshipStatus.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 34,
       "group": "Compare & graph",
       "capability": "Include/exclude former or unverified relationships",
-      "proposed": "get_graph_view(include_former=...,include_unverified=...) / graph view --history",
+      "proposed": "get_company_graph(include_former=..., include_unverified=...)",
       "feasibility": "New adapter",
       "current": "UI currently combines former/unverified in one control",
       "access": "Company",
-      "note": "Keep verified-current, former and unverified distinct in machine output. Do not silently call an unknown link current.",
+      "note": "A result-data parameter. Former and unverified edges remain explicitly qualified.",
       "sources": [
         "utils/companyScope.ts",
         "utils/relationshipStatus.ts",
         "components/CasePanel.tsx"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 35,
       "group": "Compare & graph",
       "capability": "Alert list, status colours, graph depth and legend",
-      "proposed": "get_search_summary / search summary",
+      "proposed": "Search result summary: counts, alerts and traversal limits",
       "feasibility": "New adapter",
       "current": "Graph/sidebar derivations",
       "access": "Company / People",
-      "note": "Return semantic alert types and evidence, not just colours or kanji. Do not equate finished checks with a clean result.",
+      "note": "Return evidence-backed summaries. Colours and legends remain presentation, not tools.",
       "sources": [
         "components/CasePanel.tsx",
         "components/StatusLegend.tsx",
         "utils/graphDepth.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 36,
       "group": "Compare & graph",
       "capability": "Drag nodes; pan, zoom, fit view and lock graph interaction",
-      "proposed": "open_report / graph viewer options",
-      "feasibility": "Viewer / CLI setting",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "React Flow controls",
       "access": "Company",
-      "note": "Keep in visual viewer; saved layout can be an export option. A CLI can open the same report.",
+      "note": "Excluded by owner direction. Keep this on the website or in the downloaded report viewer. Keep in visual viewer; saved layout can be an export option. A CLI can open the same report.",
       "sources": [
         "components/GraphViewer.tsx",
         "App.tsx"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 37,
       "group": "Compare & graph",
       "capability": "Tidy graph layout and undo tidy-up",
-      "proposed": "layout_graph / report export --layout",
-      "feasibility": "New adapter",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "Shared layout engine + browser undo state",
       "access": "Company",
-      "note": "Layout generation is portable; undo needs a previous layout revision, not fresh data.",
+      "note": "Excluded by owner direction. Keep this on the website or in the downloaded report viewer. Layout generation is portable; undo needs a previous layout revision, not fresh data.",
       "sources": [
         "services/layoutService.ts",
         "services/layoutOptimizer.ts",
         "App.tsx"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 38,
       "group": "Workspace & snapshots",
       "capability": "Open/list/switch/close company, person and property files/tabs",
-      "proposed": "list_files + open_file / files list|open|close",
-      "feasibility": "Needs shared state",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "Mostly browser memory; company sessions persisted locally",
       "access": "Workspace",
-      "note": "No cloud workspace API exists. Decide local CLI files vs account-owned shared workspace before promising cross-device continuity.",
+      "note": "Excluded by owner direction. Keep this on the website or in the downloaded report viewer. No cloud workspace API exists. Decide local CLI files vs account-owned shared workspace before promising cross-device continuity.",
       "sources": [
         "App.tsx",
         "utils/caseStore.ts"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 39,
       "group": "Workspace & snapshots",
       "capability": "Search trail, opening time, per-file scope/settings and workspace counts",
-      "proposed": "get_file / files show",
-      "feasibility": "Needs shared state",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "Tab-specific browser state",
       "access": "Workspace",
-      "note": "Expose derived metadata; account-owned IDs must replace browser tab IDs for shared work.",
+      "note": "Excluded by owner direction. Keep this on the website or in the downloaded report viewer. Expose derived metadata; account-owned IDs must replace browser tab IDs for shared work.",
       "sources": [
         "App.tsx",
         "components/CasePanel.tsx",
         "utils/caseStore.ts"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 40,
       "group": "Workspace & snapshots",
       "capability": "Recent searches, rerun a recent search and clear recents",
-      "proposed": "list_recent_searches / history list|rerun|clear",
-      "feasibility": "Needs shared state",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "Browser-local recents",
       "access": "Workspace",
-      "note": "Local CLI history is straightforward; sharing with the website requires new storage and retention decisions.",
+      "note": "Excluded by owner direction. Keep this on the website or in the downloaded report viewer. Local CLI history is straightforward; sharing with the website requires new storage and retention decisions.",
       "sources": [
         "utils/recentSearches.ts",
         "components/FindScreen.tsx"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 41,
       "group": "Workspace & snapshots",
       "capability": "Add, edit, flag, list and delete entity/company/person notes",
-      "proposed": "manage_notes / notes list|add|edit|delete",
-      "feasibility": "Needs shared state",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "Browser notes and flags",
       "access": "Workspace write",
-      "note": "Notes are user-authored data, separate from register evidence. Writes need account scoping and revisions.",
+      "note": "Excluded by owner direction. Keep this on the website or in the downloaded report viewer. Notes are user-authored data, separate from register evidence. Writes need account scoping and revisions.",
       "sources": [
         "components/NoteEditor.tsx",
         "utils/caseStore.ts",
         "App.tsx"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 42,
       "group": "Workspace & snapshots",
       "capability": "Named graph/person snapshots with captured context and view settings",
-      "proposed": "create_snapshot / snapshots save",
-      "feasibility": "Needs shared state",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "Browser-memory/local save points",
       "access": "Workspace write",
-      "note": "Preserve person-snapshot non-persistence rule until a retention policy is explicitly decided.",
+      "note": "Excluded by owner direction. Keep this on the website or in the downloaded report viewer. Preserve person-snapshot non-persistence rule until a retention policy is explicitly decided.",
       "sources": [
         "App.tsx",
         "utils/caseStore.ts"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 43,
       "group": "Workspace & snapshots",
       "capability": "List, restore into a new file and delete snapshots",
-      "proposed": "manage_snapshots / snapshots list|restore|delete",
-      "feasibility": "Needs shared state",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "App snapshots",
       "access": "Workspace write",
-      "note": "Restoration is point-in-time, not a fresh registry check. Destructive actions need clear confirmation and IDs.",
+      "note": "Excluded by owner direction. Keep this on the website or in the downloaded report viewer. Restoration is point-in-time, not a fresh registry check. Destructive actions need clear confirmation and IDs.",
       "sources": [
         "App.tsx",
         "utils/caseStore.ts"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 44,
       "group": "Workspace & snapshots",
       "capability": "Export one snapshot or all scoped/workspace snapshots as JSON",
-      "proposed": "export_snapshots / snapshots export",
-      "feasibility": "New adapter",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "Browser JSON download",
       "access": "Workspace",
-      "note": "Separate serialisation from browser download and define a versioned portable schema.",
+      "note": "Excluded by owner direction. Keep this on the website or in the downloaded report viewer. Separate serialisation from browser download and define a versioned portable schema.",
       "sources": [
         "App.tsx",
         "types.ts"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 45,
       "group": "Workspace & snapshots",
       "capability": "Import a bounded snapshot collection",
-      "proposed": "import_snapshots / snapshots import",
-      "feasibility": "New adapter",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "App JSON import validation",
       "access": "Workspace write",
-      "note": "Validate schema, size and collection limits; imports cannot confer account permissions or trustworthy register evidence.",
+      "note": "Excluded by owner direction. Keep this on the website or in the downloaded report viewer. Validate schema, size and collection limits; imports cannot confer account permissions or trustworthy register evidence.",
       "sources": [
         "App.tsx"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 46,
       "group": "Workspace & snapshots",
       "capability": "Check saved entities for changed statuses and jump to changed nodes",
-      "proposed": "check_snapshot_changes / snapshots diff",
-      "feasibility": "New adapter",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "Fresh status enrichment + diffStatuses",
       "access": "Company / People",
-      "note": "This is a status/check diff, not a complete historical shareholder/address diff or scheduled monitoring service.",
+      "note": "Excluded by owner direction. Keep this on the website or in the downloaded report viewer. This is a status/check diff, not a complete historical shareholder/address diff or scheduled monitoring service.",
       "sources": [
         "utils/statusDiff.ts",
         "App.tsx"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 47,
       "group": "Workspace & snapshots",
       "capability": "Find people in common across open files",
-      "proposed": "find_people_in_common / files common-people",
-      "feasibility": "New adapter",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "Computed from open company/person tabs",
       "access": "Workspace / People",
-      "note": "Name-normalisation creates candidate overlaps, not proven identities.",
+      "note": "Excluded by owner direction. Keep this on the website or in the downloaded report viewer. Name-normalisation creates candidate overlaps, not proven identities.",
       "sources": [
         "utils/peopleInCommon.ts",
         "components/casepanel/PeopleSection.tsx"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 48,
@@ -699,7 +736,8 @@
         "api/property.ts",
         "services/propertyService.ts",
         "utils/lds.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 49,
@@ -713,7 +751,8 @@
       "sources": [
         "api/property.ts",
         "utils/propertyAudit.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 50,
@@ -727,7 +766,8 @@
       "sources": [
         "services/propertyService.ts",
         "api/property.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 51,
@@ -741,7 +781,8 @@
       "sources": [
         "utils/lds.ts",
         "api/property.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 52,
@@ -755,21 +796,23 @@
       "sources": [
         "api/property.ts",
         "utils/property.cli.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 53,
       "group": "Property & council",
       "capability": "Enter a required matter reference; save, choose or remove saved references",
-      "proposed": "search parameters + manage_matters / matters list|save|remove",
-      "feasibility": "Needs shared state",
+      "proposed": "Required matter_reference parameter on property searches",
+      "feasibility": "New adapter",
       "current": "Matter enforcement on server; saved choices browser-local",
       "access": "Property / Workspace",
-      "note": "CLI must supply a matter. Favourite-reference storage is a separate local/shared workspace choice.",
+      "note": "A caller-supplied reference is required for auditing. No saved-reference list/save/remove tool.",
       "sources": [
         "components/MatterReference.tsx",
         "api/property.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 54,
@@ -783,7 +826,8 @@
       "sources": [
         "utils/titleReport.ts",
         "api/property.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 55,
@@ -797,7 +841,8 @@
       "sources": [
         "utils/titleReport.ts",
         "utils/lds.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 56,
@@ -811,7 +856,8 @@
       "sources": [
         "utils/titleReport.ts",
         "utils/memorials.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 57,
@@ -825,7 +871,8 @@
       "sources": [
         "utils/memorials.ts",
         "utils/titleReport.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 58,
@@ -839,7 +886,8 @@
       "sources": [
         "utils/titleReport.ts",
         "utils/memorials.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 59,
@@ -854,7 +902,8 @@
         "utils/titleReport.ts",
         "components/PropertyReport.tsx",
         "services/exportService.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 60,
@@ -869,23 +918,25 @@
         "utils/lds.ts",
         "services/propertyService.ts",
         "components/TitleMap.tsx"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 61,
       "group": "Property & council",
       "capability": "Aerial map, pan/zoom, scale bar, double-click refit and tile fallback",
-      "proposed": "export_property_map / property map --output",
+      "proposed": "Parcel imagery/map resource in report output",
       "feasibility": "New adapter",
       "current": "Browser map + server tile route + export map builder",
       "access": "Property",
-      "note": "GeoJSON and a rendered map/report are useful outputs. Pan/zoom controls stay in the viewer; preserve LINZ attribution.",
+      "note": "Return a report/map artifact with attribution; no tool controls pan, zoom, scale or refit.",
       "sources": [
         "components/TitleMap.tsx",
         "utils/tiles.ts",
         "services/exportService.ts",
         "api/property.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 62,
@@ -899,7 +950,8 @@
       "sources": [
         "utils/councilValuation.ts",
         "components/PropertyReport.tsx"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 63,
@@ -913,7 +965,8 @@
       "sources": [
         "utils/councilValuation.ts",
         "utils/titleReport.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 64,
@@ -928,22 +981,24 @@
         "utils/councilValuation.ts",
         "components/PropertyReport.tsx",
         "services/exportService.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 65,
       "group": "Property & council",
       "capability": "Search reference and audited report-opening continuity",
-      "proposed": "get_search_receipt / property receipt",
+      "proposed": "Search response includes operation_id and caller matter_reference",
       "feasibility": "New adapter",
       "current": "Actor-scoped one-row property search audit",
       "access": "Property",
-      "note": "Retries, candidate selection, title opening and exports reuse one operation. Audit count and future billing unit are separate decisions.",
+      "note": "Maintain audit/idempotency internally. No audit-log or account-history endpoint exposed to agents.",
       "sources": [
         "utils/propertyAudit.ts",
         "api/property.ts",
         "utils/audit.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 66,
@@ -953,12 +1008,13 @@
       "feasibility": "New adapter",
       "current": "Browser exportService + bundled viewer",
       "access": "Company / Reports",
-      "note": "Separate pure renderer from Blob/download. Existing MCP graph link is not the same report.",
+      "note": "Generate a standalone report from this search result. Do not load browser notes, snapshots or workspace files.",
       "sources": [
         "services/exportService.ts",
         "export-viewer.entry.tsx",
         "mcp/tools/buildOwnershipGraph.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 67,
@@ -971,7 +1027,8 @@
       "note": "Preserve check completion/time and evidence qualifications; include signature data only when explicitly requested.",
       "sources": [
         "services/exportService.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 68,
@@ -985,36 +1042,39 @@
       "sources": [
         "services/exportService.ts",
         "utils/titleReport.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 69,
       "group": "Reports & exports",
       "capability": "Offline report controls: scope/history/people, branch menus, record tabs, collapsed metadata, sorting/filtering and theme",
-      "proposed": "export_report(view_options=...) / report open",
-      "feasibility": "Viewer / CLI setting",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "Company/person/property exported viewers",
       "access": "Reports",
-      "note": "Keep rich interactive HTML. Tools generate the artifact and expose data; the human can still inspect the visual report.",
+      "note": "Excluded by owner direction. Keep this on the website or in the downloaded report viewer. Keep rich interactive HTML. Tools generate the artifact and expose data; the human can still inspect the visual report.",
       "sources": [
         "export-viewer.entry.tsx",
         "services/exportService.ts"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 70,
       "group": "Reports & exports",
-      "capability": "Existing MCP graph JSON and temporary React viewer link",
-      "proposed": "get_graph + export_report / graph export",
-      "feasibility": "Existing MCP",
-      "current": "build_ownership_graph + graphData GET",
+      "capability": "Retired legacy MCP graph JSON and temporary React viewer",
+      "proposed": "Removed; design report artifacts afresh",
+      "feasibility": "Removed legacy",
+      "current": "Legacy graph store, transport and standalone graph viewer removed on this branch",
       "access": "Company / Reports",
-      "note": "Map storage is per warm function instance, not durable or owner-scoped. Replace with authenticated artifact access, not permanent public URLs.",
+      "note": "No compatibility promise for the old tools or graph links. The current website and its HTML export remain intact.",
       "sources": [
         "api/mcp.ts",
         "mcp/lib/graphStore.ts",
         "mcp/tools/buildOwnershipGraph.ts"
-      ]
+      ],
+      "scope": "Removed legacy"
     },
     {
       "id": 71,
@@ -1022,14 +1082,15 @@
       "capability": "JSON/programmatic data output",
       "proposed": "get_search_result / search result --json",
       "feasibility": "New adapter",
-      "current": "Existing MCP emits JSON as text; snapshots export JSON",
+      "current": "Website search data and exports; fresh structured tool output proposed",
       "access": "Company / People / Property",
-      "note": "Add output schemas and structuredContent, pagination, source timestamps and machine-readable errors.",
+      "note": "Return bounded JSON from the current operation. Do not expose snapshot collection import/export.",
       "sources": [
         "mcp/server.ts",
         "mcp/schemas.ts",
         "types.ts"
-      ]
+      ],
+      "scope": "Proposed"
     },
     {
       "id": 72,
@@ -1044,238 +1105,253 @@
         "README.md",
         "services/exportService.ts",
         "App.tsx"
-      ]
+      ],
+      "scope": "Not live"
     },
     {
       "id": 73,
       "group": "Account & administration",
       "capability": "Sign in with Clerk password/email code; sign out and manage account credentials",
-      "proposed": "CLI login/logout + MCP OAuth connection",
-      "feasibility": "Human step",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "Clerk web authentication",
       "access": "Account",
-      "note": "Browser-hosted sign-in and delegated tokens. Do not ask an agent to store the user's password or distribute provider API keys.",
+      "note": "No account or administration tool. Existing website flow remains authoritative. Authentication, approval, consent, entitlement checks and audit writes still run server-side where applicable.",
       "sources": [
         "components/AccessPage.tsx",
         "components/ClerkPropertyAccess.tsx",
         "utils/propertyAccount.ts"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 74,
       "group": "Account & administration",
       "capability": "Read own access status, approval/pending/rejected/suspended state and refresh access",
-      "proposed": "get_account_status / account status",
-      "feasibility": "New adapter",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "property-account status API",
       "access": "Account",
-      "note": "CLI connection does not confer property approval; check server permissions on every call.",
+      "note": "No account or administration tool. Existing website flow remains authoritative. Authentication, approval, consent, entitlement checks and audit writes still run server-side where applicable.",
       "sources": [
         "api/property-account.ts",
         "utils/propertyAccount.ts"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 75,
       "group": "Account & administration",
       "capability": "Apply for property access: email, optional organisation, intended use",
-      "proposed": "open_access_application / account apply",
-      "feasibility": "Human step",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "Main has basic application form/API",
       "access": "Account",
-      "note": "Prepare/display questions via tool if desired; human submits with current notice acceptance. More detailed LINZ-use questionnaire is unmerged work.",
+      "note": "No account or administration tool. Existing website flow remains authoritative. Authentication, approval, consent, entitlement checks and audit writes still run server-side where applicable.",
       "sources": [
         "components/PropertyApplication.tsx",
         "api/property-applications.ts"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 76,
       "group": "Account & administration",
       "capability": "Read current privacy/terms, scroll-gated consent and larger readers",
-      "proposed": "get_legal_documents + get_account_status / account terms",
-      "feasibility": "Human step",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "Published pages and notice acceptance",
       "access": "Account",
-      "note": "Reading can be a resource. An agent must not click acceptance for the user; return a human action URL when consent is absent/outdated.",
+      "note": "No account or administration tool. Existing website flow remains authoritative. Authentication, approval, consent, entitlement checks and audit writes still run server-side where applicable.",
       "sources": [
         "components/NoticeAcceptance.tsx",
         "components/Privacy.tsx",
         "components/Terms.tsx"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 77,
       "group": "Account & administration",
       "capability": "Admin lists applications and existing members",
-      "proposed": "list_access_applications + list_members / admin applications|members",
-      "feasibility": "New adapter",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "Admin-only APIs",
       "access": "Admin read",
-      "note": "Separate optional admin tool set; never expose under a normal paying-user grant.",
+      "note": "No account or administration tool. Existing website flow remains authoritative. Authentication, approval, consent, entitlement checks and audit writes still run server-side where applicable.",
       "sources": [
         "api/property-applications.ts",
         "api/property-account.ts"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 78,
       "group": "Account & administration",
       "capability": "Admin approves/invites, resends/retries invitation emails",
-      "proposed": "review_application / admin applications invite|resend",
-      "feasibility": "Human step",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "Application review/invitation service",
       "access": "Admin write",
-      "note": "Technically callable, but access grants and outbound emails need explicit administrator confirmation. Not in customer MVP.",
+      "note": "No account or administration tool. Existing website flow remains authoritative. Authentication, approval, consent, entitlement checks and audit writes still run server-side where applicable.",
       "sources": [
         "utils/propertyInvitations.ts",
         "api/property-applications.ts"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 79,
       "group": "Account & administration",
       "capability": "Admin rejects/revokes applications or approves/rejects/suspends existing member access",
-      "proposed": "review_access / admin access set",
-      "feasibility": "Human step",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "Admin review endpoints",
       "access": "Admin write",
-      "note": "Record the actual administrator, decision and reason; fail closed if access changes during a long job.",
+      "note": "No account or administration tool. Existing website flow remains authoritative. Authentication, approval, consent, entitlement checks and audit writes still run server-side where applicable.",
       "sources": [
         "api/property-applications.ts",
         "api/property-account.ts"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 80,
       "group": "Account & administration",
       "capability": "Admin search-audit view, filter by searcher, user/query/date/time/matter/opened titles",
-      "proposed": "list_search_audit / admin audit",
-      "feasibility": "New adapter",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "Admin property audit endpoint/UI",
       "access": "Admin read",
-      "note": "MCP audit read must be authenticated and scoped; do not return other users' records to normal accounts.",
+      "note": "No account or administration tool. Existing website flow remains authoritative. Authentication, approval, consent, entitlement checks and audit writes still run server-side where applicable.",
       "sources": [
         "components/PropertyAudit.tsx",
         "api/property.ts",
         "utils/audit.ts"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 81,
       "group": "Account & administration",
       "capability": "Credit balance, sandbox checkout and Stripe webhook/ledger",
-      "proposed": "get_entitlements / account usage; browser checkout",
-      "feasibility": "Not live",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "Main has off/sandbox billing hooks; Stripe webhook/ledger scaffold is branch-only",
       "access": "Paid account",
-      "note": "Not a launched payment product. Build paid-agent entitlement separately from property approval; payment stays browser-hosted and human-controlled.",
+      "note": "No account or administration tool. Existing website flow remains authoritative. Authentication, approval, consent, entitlement checks and audit writes still run server-side where applicable.",
       "sources": [
         "utils/propertyBilling.ts",
         "api/property-account.ts",
         "utils/propertyAccount.ts"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 82,
       "group": "Navigation & presentation",
       "capability": "Search command palette (Ctrl+K), navigation, new search and return home preserving open files",
-      "proposed": "CLI subcommands + open_file / search",
-      "feasibility": "Viewer / CLI setting",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "App/palette navigation",
       "access": "Client",
-      "note": "Human usability remains valuable. CLI shortcuts are client conveniences, not separate backend tools.",
+      "note": "Excluded by owner direction. Keep this on the website or in the downloaded report viewer. Human usability remains valuable. CLI shortcuts are client conveniences, not separate backend tools.",
       "sources": [
         "components/CommandPalette.tsx",
         "App.tsx"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 83,
       "group": "Navigation & presentation",
       "capability": "Light/dark theme, sidebar collapse/resize and collapsible sections",
-      "proposed": "CLI/display preferences + report options",
-      "feasibility": "Viewer / CLI setting",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "Local UI preferences",
       "access": "Client",
-      "note": "Avoid exposing every visual toggle as an MCP tool.",
+      "note": "Excluded by owner direction. Keep this on the website or in the downloaded report viewer. Avoid exposing every visual toggle as an MCP tool.",
       "sources": [
         "components/ConfigBar.tsx",
         "components/CasePanel.tsx",
         "App.tsx"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 84,
       "group": "Navigation & presentation",
       "capability": "About, feature explanations, iconography and data-source notices",
-      "proposed": "help resources / help",
-      "feasibility": "Viewer / CLI setting",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "Current main About overlay + published legal routes",
       "access": "Client",
-      "note": "Return help/resources and links. Full separate About redesign is not current main.",
+      "note": "Excluded by owner direction. Keep this on the website or in the downloaded report viewer. Return help/resources and links. Full separate About redesign is not current main.",
       "sources": [
         "components/AboutPage.tsx",
         "components/ConfigBar.tsx",
         "index.tsx"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 85,
       "group": "Navigation & presentation",
       "capability": "Loading, errors, register check progress and retry feedback",
-      "proposed": "get_job + typed errors / --wait",
-      "feasibility": "Needs shared state",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "Browser phase/progress and error UI",
       "access": "All data scopes",
-      "note": "Agents need typed errors, Retry-After, partial-result state and next action; cannot infer success from an HTTP 200 or a green icon.",
+      "note": "Excluded by owner direction. Keep this on the website or in the downloaded report viewer. Agents need typed errors, Retry-After, partial-result state and next action; cannot infer success from an HTTP 200 or a green icon.",
       "sources": [
         "App.tsx",
         "utils/checkProgress.ts"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 86,
       "group": "Navigation & presentation",
       "capability": "Bring-your-own MBIE keys/configuration",
-      "proposed": "No customer requirement; server-owned credentials",
-      "feasibility": "Not live",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "Legacy/config code remains; not an exposed main settings workflow",
       "access": "Internal",
-      "note": "Do not ship organisational MBIE/LINZ/Clerk secrets to CLI users. New CLI calls Mitsuketa's hosted service.",
+      "note": "Excluded by owner direction. Keep this on the website or in the downloaded report viewer. Do not ship organisational MBIE/LINZ/Clerk secrets to CLI users. New CLI calls Mitsuketa's hosted service.",
       "sources": [
         "mcp/lib/keys.ts",
         "mcp/lib/config.ts",
         "App.tsx"
-      ]
+      ],
+      "scope": "Excluded"
     },
     {
       "id": 87,
       "group": "Navigation & presentation",
       "capability": "Marketing/parallax/payment prototypes, annotation overlay, revised legal drafts and richer application form",
-      "proposed": "Outside current-main parity",
-      "feasibility": "Not live",
+      "proposed": "No MCP tool or website-parity CLI command",
+      "feasibility": "Excluded",
       "current": "Unmerged/draft/internal work, not current public functionality",
       "access": "Internal",
-      "note": "Keep this project's baseline tied to main. This review is not terms approval or replacement for the owner's pending E2E test.",
+      "note": "Excluded by owner direction. Keep this on the website or in the downloaded report viewer. Keep this project's baseline tied to main. This review is not terms approval or replacement for the owner's pending E2E test.",
       "sources": [
         "index.tsx",
         "App.tsx"
-      ]
+      ],
+      "scope": "Excluded"
     }
   ],
   "findings": [
-    "The main code already registers nine MCP tools at /api/mcp. They cover public company/person checks, not approved property access or a paid-agent product.",
-    "The MCP transport creates no verified user/account context and has no paid entitlement gate. Property permission helpers are not wired into MCP; there are no property MCP tools today.",
-    "The existing MCP graph tool accepts depth but never enforces it. Direction filtering occurs after a full crawl, so it does not reduce upstream work. It has no Simple scope or parity options for former/removed relationships.",
-    "The graph tool waits for crawl/enrichment inside a 60-second function. Large production searches can take longer. A stream alone does not create a durable background job.",
-    "The MCP graph tool description promises a self-contained offline Cytoscape file, while the handler returns a React viewer URL backed by an in-memory map. Graph IDs are not owner-scoped; links can disappear on cold starts or another function instance. No new exposure has been enabled by this review.",
-    "Existing tool responses mostly contain JSON text. Add output schemas, structured results, source/retrieval times, limits, qualified evidence states and predictable errors.",
-    "Per-IP in-memory MCP throttling is not account billing, a durable quota or a shared upstream throttle across server instances. Do not use more API keys to evade MBIE limits.",
-    "The developer property CLI uses LINZ_API_KEY and bypasses the approved/audited API by design. It is a developer test utility, not a safe paying-user CLI.",
-    "Current Clerk verification is built around web-session tokens and authorised web parties, and POST routes expect approved Origin headers. Do not copy browser cookies or remove those checks for CLI access; add a delegated-token adapter.",
-    "Files, notes, favourites and snapshots mostly live in browser state/localStorage. Company session storage deliberately excludes Individual tab persistence. There is no automatic web/CLI workspace sharing.",
-    "Current main exports HTML and snapshot JSON. Older README PNG/PDF claims are not evidence of working current export tools. Revised terms, richer LINZ-use applications and marketing prototypes remain separate work."
+    "The previous nine MCP tools, transport, diagnostics, temporary graph store/viewer and MCP-only dependencies are removed on this branch. Main and production have not been changed.",
+    "Rate-limit and API-key helpers were shared with website APIs. They are preserved under utils/apiRateLimit.ts and utils/apiKeys.ts; only their import locations change.",
+    "The new tool catalog will be designed from the selected search/check/report functions, not by retaining the old nine wrappers.",
+    "Account, administrator, audit-reading, workspace and interface operations are excluded from the proposed catalog and CLI parity scope.",
+    "Server-side identity, paid-agent entitlement, property approval, human legal acceptance and matter/audit enforcement are still necessary. Excluding account tools does not bypass these controls.",
+    "Search jobs need durable IDs, bounded traversal, cancellation and status; these are operational state, not a website workspace migration.",
+    "Long searches need upstream throttling/backoff and durable execution beyond a request timeout. Sharing the website domain services is preferable to a second search engine.",
+    "Reports and JSON should be generated from the current operation, without reading browser files, notes, recents or snapshots. Return qualified evidence, sources, dates and incomplete-check states.",
+    "The developer property CLI still requires a provider key and bypasses the approved/audited API by design. It is not a customer CLI.",
+    "The full inventory remains for review, with excluded and retired items labelled rather than presented as proposed tools."
   ],
   "architecture": [
     "One hosted domain service owns the business rules. Web UI, MCP adapter and CLI adapter all invoke it. Avoid three independently maintained search engines.",
@@ -1283,45 +1359,35 @@
     "Clerk documents MCP OAuth server support, so it is a viable route to investigate rather than a new identity system. Verify our SDK, Clerk instance settings, account plan and target-client compatibility in a spike before promising a working connection.",
     "Paid-agent entitlement is separate from company-web access, LINZ property approval, current legal acceptance and administrator permissions. Check the relevant grants on every call and again before returning protected async results.",
     "Use durable job IDs for Comprehensive graphs, large person searches, comparisons and background checks. Return a usable chart result first, checks pending separately, with get_job/get_search_result/cancel_job and bounded pagination.",
-    "Use account-owned artifact IDs and authenticated expiring downloads. Factor HTML builders out of browser Blob/download code and preserve the same Mitsuketa visual reports.",
+    "Generate operation-scoped report artifacts with authorised downloads. Authentication binds an operation to its caller internally; it does not expose account-management or website workspace tools.",
     "Carry stable entity/search/operation IDs, matter references, source URLs, retrieved times, scope, freshness, current/former/unverified status and incomplete/failed checks through both interfaces.",
     "CLI favours compact tables for humans and --json for agents, stable exit codes, --wait, --timeout and --output. MCP returns bounded structured data plus artifact/resource links, not an entire enormous graph in the model context by default."
   ],
   "access": [
-    "Proposed customer scopes: company:read, people:read, evidence:read (opt-in), property:read, reports:create and workspace:read/write. Admin scopes are separate and not part of the initial customer connection.",
+    "Proposed scopes: company:read, people:read, evidence:read (opt-in), property:read and reports:create. No workspace, account or administrator tool scopes.",
     "Property tool use requires a verified account + active paid-agent entitlement + administrator-approved property access + current human legal acceptance + matter reference. Paying alone does not grant access.",
     "Keep one actor-scoped property search operation through address resolution, candidate choice and title report opening; retry with the same idempotency key. Define billing separately: one audited search may open more than one title, so audit count is not automatically a billing unit.",
-    "Customer-facing service refuses missing/outdated terms with a human action URL. No accept_terms tool in the customer catalog.",
+    "Missing/outdated terms return a permission error and website action URL. The user completes acceptance on the website; no legal-document or accept_terms tool.",
     "Agent/CLI access sends returned data outside Mitsuketa to the user's chosen client/model provider and may create local logs/files. Terms and consent review must cover that reality, permitted use, retention and onward sharing. Do not assume LINZ's short approval email resolves every downstream-client arrangement.",
-    "Treat registry text, documents, imports and tool results as untrusted evidence. Tool descriptions/annotations help clients but server-side account checks and write permissions remain authoritative.",
+    "Treat registry text, documents and tool results as untrusted evidence. Tool descriptions/annotations help clients but server-side account checks and write permissions remain authoritative.",
     "Cache according to source/licence policy and scope personal-data outputs. Evidence/signature images are optional, not included in every person response. Do not expose an automated 'verified identity' or 'safe company' conclusion."
   ],
   "phases": [
     {
       "phase": "1 — secure company pilot",
-      "deliver": "Shared auth/entitlement adapter; harden existing tools; Simple/company record/filings; individual results; current/history/check qualification; comparison; job lifecycle; JSON + authenticated company/person HTML. Thin CLI with browser login. No property or admin writes initially.",
+      "deliver": "Connection authentication and paid entitlement enforcement; newly designed Simple/Comprehensive company tools, records/filings, person results, qualified checks, comparison, job lifecycle and JSON/HTML outputs. No property tools initially; no account, admin, interface or workspace tools.",
       "proof": "Test an entitled account, an unentitled account, expired/revoked token, cross-account IDs, incomplete checks, 429 backoff and one large bounded graph. Compare tool output with the same web service."
     },
     {
       "phase": "2 — approved property pilot",
-      "deliver": "Address/owner/title tools, explicit ambiguous-address resolution, title interests/geometry/valuation/council links, matter/audit continuity and property HTML.",
+      "deliver": "Address/owner/title tools, explicit ambiguous-address resolution, title interests/geometry/valuation/council links, matter/audit continuity and property HTML. No property-account, audit-history or saved-matter tools.",
       "proof": "Test paid but unapproved, approved but unpaid, stale consent, missing matter, account suspension during a job, identical retries and candidate/title continuation producing one audit row. Preserve all source attribution."
-    },
-    {
-      "phase": "3 — workspace parity",
-      "deliver": "Decide local CLI workspace vs shared account storage; notes, named snapshots/import/export/status diffs and people in common. Keep the human report viewer.",
-      "proof": "Tenant isolation, revision conflicts, malformed imports, intended retention and person non-persistence policy. Never silently upload old browser-local work."
-    },
-    {
-      "phase": "4 — optional admin tools",
-      "deliver": "Admin read-only application/member/audit tools first. Invitation/access changes only after explicit design and confirmation controls.",
-      "proof": "Customer tokens cannot invoke admin tools; confirmed writes retain administrator attribution; invite retries do not send uncontrolled duplicate emails."
     }
   ],
   "example": {
     "status": "Proposed syntax; not implemented by this review.",
     "commands": [
-      "mitsuketa login",
+      "# Authorise the connection in the browser before running searches.",
       "mitsuketa company search \"Fletcher Steel Limited\" --json",
       "mitsuketa company graph 9429037626563 --scope simple --output fletcher.html",
       "mitsuketa company graph 9429037626563 --scope comprehensive --checks background --wait",
@@ -1351,5 +1417,33 @@
       "title": "Clerk scoped OAuth access",
       "url": "https://clerk.com/docs/guides/configure/auth-strategies/oauth/scoped-access"
     }
-  ]
+  ],
+  "retiredTools": [
+    "mitsuketa_lookup_nzbn",
+    "mitsuketa_get_entity_full",
+    "mitsuketa_get_entity_status_history",
+    "mitsuketa_search_person",
+    "mitsuketa_get_company_directors",
+    "mitsuketa_check_disqualification",
+    "mitsuketa_check_insolvency",
+    "mitsuketa_get_company_status",
+    "mitsuketa_build_ownership_graph"
+  ],
+  "scope": {
+    "included": [
+      "Company/entity and person searches",
+      "Register checks and qualified evidence",
+      "Connections and graph data with search parameters",
+      "Approved property/title searches, interests, geometry and council valuations",
+      "Structured results and standalone report outputs",
+      "Job status/cancellation for long-running searches"
+    ],
+    "excluded": [
+      "Account/profile/credentials and entitlement management tools",
+      "Applications, invitations, approval, legal acceptance and administrator/audit tools",
+      "Workspace files/tabs, recents, notes, saved matters and snapshots",
+      "UI navigation, themes, selection, layout, pan/zoom and interaction controls"
+    ],
+    "boundary": "Authentication and permission enforcement are connection/server requirements, not tools that expose accounts. Search jobs and generated report IDs are operational state, not access to the user's website workspace. Data filters such as current/history remain search parameters; visual controls are not remote operations."
+  }
 }

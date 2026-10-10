@@ -1512,7 +1512,4 @@ export const expandNodeDownstream = async (
     return await spider.expandNode(targetNzbn, targetName, existingNodeIds, maxDepth);
 };
 
-// Expose the OrgSpider class for MCP tools that need direct access (e.g. upstream-only crawls).
-export { OrgSpider };
-
 export const getDirectors = fetchDirectorsByEntityName;
