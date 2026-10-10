@@ -1,4 +1,5 @@
 import { removedCompany } from './utils/relationshipStatus';
+import { isActivePersonCompany } from './utils/personCompanyStatus';
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import ReactFlow, {
   Controls,
@@ -164,6 +165,8 @@ const rehydrateTab = (pt: PersistedCompanyTab): CompanyTab => {
     trail: pt.trail || [],
     viewScope: pt.viewScope,
     hideDirectors: pt.hideDirectors,
+    hideInactiveCompanies: pt.hideInactiveCompanies,
+    hideInactiveDirectors: pt.hideInactiveDirectors,
     restoredSnapshotId: pt.restoredSnapshotId,
     ...(pt.compare ? { compare: pt.compare } : {}),
   };
@@ -551,12 +554,19 @@ function App({ entrySearch = false }: { entrySearch?: boolean }) {
   // and never written: person tabs are session-only (compliance — the same
   // rule as person snapshots; disqualified/insolvency matches live only on
   // IndividualTab and so are auto-excluded).
+  const storageNoticeRef = useRef('');
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const result = saveSession(graphTabs, activeCompanyTabId, caseNotes);
-      if (result.droppedTabLabels.length > 0) {
-        setNotice(`Storage full: re-search ${result.droppedTabLabels.join(', ')} to reload its graph`);
+      const warning = !result.ok
+        ? 'Browser storage is full. This session could not be saved for reload. Your open charts are still usable; export anything you need to keep.'
+        : result.droppedTabLabels.length > 0
+          ? `Browser storage is full. Charts for ${result.droppedTabLabels.join(', ')} will need a fresh search after reload. Your open charts are still usable.`
+          : '';
+      if (warning && warning !== storageNoticeRef.current) {
+        setNotice(warning);
       }
+      storageNoticeRef.current = warning;
     }, 1500);
     return () => window.clearTimeout(timer);
   }, [graphTabs, activeCompanyTabId, caseNotes, logTrail]);
@@ -807,7 +817,7 @@ function App({ entrySearch = false }: { entrySearch?: boolean }) {
     setCompareProgress({ hop: 1, entitiesExamined: 0, apiCalls: 0 });
 
     try {
-      const result = await findConnection(a, b, { ...config, includeInactive: true }, {
+      const result = await findConnection(a, b, { ...config, includeInactive: false }, {
         maxHops,
         onProgress: setCompareProgress,
         onLog: handleLog,
@@ -2197,7 +2207,7 @@ function App({ entrySearch = false }: { entrySearch?: boolean }) {
   const caseOpened = timeLabel(currentCompanyTab?.openedAt) || trail[0]?.time;
 
   // Individual case-file derived values
-  const personActiveCount = personSearchResults.filter(r => !r.isInactive).length;
+  const personActiveCount = personSearchResults.filter(isActivePersonCompany).length;
   const personAlerts = personSearchResults.flatMap(r => {
     const alerts = entityStatus(r as any).alerts;
     return alerts.length ? [{ label: `${r.companyName} · ${alerts.map(a => a.label).join('; ')}`,

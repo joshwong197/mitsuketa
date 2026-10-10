@@ -2,6 +2,7 @@ import { ApiConfig, GraphEdge, GraphNode, LoggerCallback, NodeType } from '../ty
 import { fetchEntityDetails, fetchRolesByEntityName, resolveEntityNzbn } from './apiService.js';
 import { searchByPersonName } from './directorSearchService.js';
 import { personId, displayPersonName } from '../utils/personId.js';
+import { removedCompany, shareholderStatus } from '../utils/relationshipStatus.js';
 
 export { personId, displayPersonName };
 
@@ -179,6 +180,21 @@ export async function findConnection(
     requestTimes.push(Date.now());
   };
 
+  // Share verification and expansion reuse the same detail request.
+  const detailRequests = new Map<string, ReturnType<typeof fetchEntityDetails>>();
+  const getDetails = (nzbn: string) => {
+    const cached = detailRequests.get(nzbn);
+    if (cached) return cached;
+    if (shouldCancel?.() || apiCalls >= MAX_API_CALLS || Date.now() - startTime > MAX_WALL_CLOCK_MS) {
+      truncated = true;
+      return Promise.reject(new Error('Compare request budget reached'));
+    }
+    apiCalls++;
+    const request = smartDelay().then(() => fetchEntityDetails(nzbn, config, '/api/proxy', onLog));
+    detailRequests.set(nzbn, request);
+    return request;
+  };
+
   // Everything discovered during the search — reused (no extra calls) as the
   // 1-hop context around the found path.
   const discoveredNodes = new Map<string, GraphNode>();
@@ -196,11 +212,9 @@ export async function findConnection(
   /** All upstream neighbors + directors of a company: ONE cheap call. */
   const expandCompanyUpstream = async (nzbn: string): Promise<Neighbor[]> => {
     const neighbors: Neighbor[] = [];
-    await smartDelay();
-    apiCalls++;
     let details;
     try {
-      details = await fetchEntityDetails(nzbn, config, '/api/proxy', onLog);
+      details = await getDetails(nzbn);
     } catch (e) {
       console.warn(`[Compare] Entity fetch failed for ${nzbn}`, e);
       return neighbors;
@@ -327,8 +341,17 @@ export async function findConnection(
           holding.sharePercentage !== undefined && holding.sharePercentage > 0
             ? `▼ Shareholder (${holding.sharePercentage}%)`
             : '▼ Shareholder';
-        const node = makeCompanyNode(childNzbn, holding.associatedCompanyName || 'Unknown Company');
-        neighbors.push({ node, edge: makeEdge(nzbn, childNzbn, shareLabel, 'subsidiary') });
+        let child = null;
+        // An explicitly ended role needs no extra verification request.
+        if (shareholderStatus(nzbn, name, null, holding, role) !== 'former') {
+          try { child = await getDetails(childNzbn); } catch { /* Keep unavailable evidence unverified. */ }
+        }
+        const status = shareholderStatus(nzbn, name, child, holding, role);
+        const node = makeCompanyNode(childNzbn, child?.entityName || holding.associatedCompanyName || 'Unknown Company', child?.entityStatusDescription);
+        const suffix = status === 'former' ? ' · Former' : status === 'unverified' ? ' · Current status unverified' : '';
+        const edge = makeEdge(nzbn, childNzbn, shareLabel + suffix, 'subsidiary', status === 'former');
+        edge.data.currentUnverified = status === 'unverified';
+        neighbors.push({ node, edge });
       }
     }
     return neighbors;
@@ -541,7 +564,7 @@ export async function findConnection(
         } else {
           const isEndpointCompany = side.depth === 0;
           neighbors = await expandCompanyUpstream(id);
-          if (isEndpointCompany) {
+          if (isEndpointCompany && !neighbors.some(n => other.visited.has(n.node.id))) {
             // Depth 0 only: the slow downstream call (max 2 across the whole run)
             const name = node.data.entityName || node.data.label;
             try {
@@ -562,6 +585,8 @@ export async function findConnection(
 
     for (const { id: fromId, neighbors } of expansions) {
       for (const { node, edge } of neighbors) {
+        // Historical or missing ownership evidence must not establish a current path.
+        if (edge.data.isCeased || edge.data.currentUnverified || removedCompany(node.data)) continue;
         recordNode(node);
         recordEdge(edge);
         const existing = side.visited.get(node.id);

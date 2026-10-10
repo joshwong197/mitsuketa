@@ -217,7 +217,7 @@ export const AboutPage: React.FC<Props> = ({ onClose }) => {
                                 },
                                 {
                                     title: 'Property titles (restricted)',
-                                    body: 'Searches the LINZ Record of Title register by address, registered owner, or title reference. Access is granted to named individuals only — if you have not been given an account, you do not have access, and there is no way to request one from inside the app.',
+                                    body: 'Search the LINZ Record of Title register by address, registered owner, or title reference. Apply for access through the site; property searches unlock only after approval and sign-in.',
                                 },
                             ].map((f) => (
                                 <div key={f.title} className="bg-paper p-3.5">
@@ -279,8 +279,8 @@ export const AboutPage: React.FC<Props> = ({ onClose }) => {
                                 }
                             >
                                 A green <strong className="font-bold text-green">"Registered"</strong> status
-                                line means the company is active and in good standing. Active companies get
-                                no coloured border — plain ink is the healthy state.
+                                line means the company is registered. It does not establish financial health
+                                or confirm that there are no other alerts. Registered companies have a plain ink border.
                             </LegendRow>
                             <LegendRow
                                 swatch={
@@ -292,8 +292,10 @@ export const AboutPage: React.FC<Props> = ({ onClose }) => {
                             >
                                 <strong className="font-bold text-ink">Lines are relationships.</strong> A
                                 solid ink line is a current role — a shareholding or directorship held today.
-                                A dashed, washed-out line is a ceased role, shown when "Include inactive" is
-                                switched on. Lines also fade with distance from the search target.
+                                Former roles are labelled and shown when "Include former / unverified relationships" is
+                                switched on in a comprehensive chart. Removed companies have a separate toggle.
+                                Director lines are dashed even for current roles; check the relationship label.
+                                Lines also fade with distance from the search target.
                             </LegendRow>
                         </div>
                     </section>
@@ -305,7 +307,7 @@ export const AboutPage: React.FC<Props> = ({ onClose }) => {
                             The third mode on the Find screen, marked{' '}
                             <span className="text-ink" style={{ ...SERIF, fontSize: 14 }}>比</span>, answers one
                             question: are these two connected? Pick two companies or people — A and B — and
-                            Mitsuketa traces the shortest chain of ownership and directorship between them,
+                            Mitsuketa traces the shortest verified current chain of ownership and directorship between them,
                             up to 4 steps deep. If nothing turns up, you can retry deeper, to 6 steps.
                             A Stop button cancels the trace at any point.
                         </p>
@@ -313,7 +315,7 @@ export const AboutPage: React.FC<Props> = ({ onClose }) => {
                             When a link is found, it opens as its own "A ↔ B" tab: the connecting path is
                             drawn in full ink, and the surrounding context is dimmed almost to nothing so the
                             chain reads at a glance. Right-click the canvas and choose{' '}
-                            <strong className="font-bold text-ink">Show all</strong> to bring the dimmed
+                            <strong className="font-bold text-ink">Expand all branches</strong> to bring the dimmed
                             context back.
                         </p>
                         <p className="text-ink-pale" style={{ fontSize: 12, lineHeight: 1.6 }}>
@@ -339,13 +341,13 @@ export const AboutPage: React.FC<Props> = ({ onClose }) => {
                             </span>
                             <p className="text-ink-mid" style={BODY}>
                                 <strong className="font-bold text-ink">This function is restricted to named
-                                individuals.</strong> Accounts are issued directly; there is no sign-up, and no
-                                way to request access from inside the app. If you have not been given an
-                                account, you do not have access — the tab will simply refuse to unlock.
+                                individuals.</strong> <a href="/?access=request" className="text-accent underline">Apply for access</a> and
+                                explain your intended use of property data. An application does not grant access.
+                                Once approved, follow your invitation and sign in through Clerk.
                             </p>
                         </div>
                         <p className="mb-2 text-ink-mid" style={BODY}>
-                            The third tab, marked{' '}
+                            The Property tab, marked{' '}
                             <span className="text-ink" style={{ ...SERIF, fontSize: 14 }}>地</span>, searches the
                             LINZ Record of Title register. It takes three kinds of query:
                         </p>
@@ -377,6 +379,11 @@ export const AboutPage: React.FC<Props> = ({ onClose }) => {
                             Personal Data — which also forbids using it for marketing or any unsolicited
                             approach.
                         </p>
+                        <p className="mt-2 text-ink-mid" style={BODY}>
+                            Each search requires a matter reference. Council rating values appear where an
+                            approved source is available; elsewhere, the report links to the official council
+                            search. Rating values are not market valuations.
+                        </p>
                     </section>
 
                     {/* Command palette */}
@@ -395,8 +402,9 @@ export const AboutPage: React.FC<Props> = ({ onClose }) => {
                         <SectionHeader>Recent searches</SectionHeader>
                         <p className="text-ink-mid" style={BODY}>
                             The Find screen keeps your last 8 searches so you can pick an investigation back
-                            up with one click. They are stored only in this browser — nothing is sent to or
-                            kept on any server — and a Clear control removes them whenever you like.
+                            up with one click. This recent-search list is stored in your browser, and its
+                            Clear control removes the list. Property searches are also logged against your
+                            account on the server; clearing the list does not delete those audit records.
                         </p>
                     </section>
 
@@ -405,8 +413,8 @@ export const AboutPage: React.FC<Props> = ({ onClose }) => {
                         <SectionHeader>Data source &amp; terms of use</SectionHeader>
                         <div className="border border-rule p-3.5">
                             <p className="mb-2 text-ink-mid" style={BODY}>
-                                Everything Mitsuketa shows is sourced directly from publicly accessible New
-                                Zealand Government registers administered by the Ministry of Business,
+                                Company and person records come from New Zealand Government registers
+                                administered by the Ministry of Business,
                                 Innovation and Employment (MBIE):
                             </p>
                             <ul className="mb-2 space-y-0.5 text-ink-mid" style={BODY}>
@@ -415,6 +423,10 @@ export const AboutPage: React.FC<Props> = ({ onClose }) => {
                                 <li className="pl-3.5" style={{ textIndent: -14 }}>· New Zealand Insolvency Register</li>
                                 <li className="pl-3.5" style={{ textIndent: -14 }}>· Disqualified Directors Register</li>
                             </ul>
+                            <p className="mb-2 text-ink-mid" style={BODY}>
+                                Property title data comes from LINZ. Council rating values and links identify
+                                their council source in the property report.
+                            </p>
                             <p className="text-ink-mid" style={BODY}>
                                 Mitsuketa does not guarantee the accuracy, completeness, or timeliness of this
                                 data — MBIE provides it "as is". You must not knowingly or recklessly use, or
