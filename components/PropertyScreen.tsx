@@ -599,7 +599,9 @@ const PropertyContent: React.FC<PropertyScreenProps> = ({ onOpenReport }) => {
 
     const face = !session
         ? <SignIn />
-        : !session.acknowledged
+        // ClerkPropertyAccess already checks the current server-recorded notice.
+        // The local acknowledgement belongs only to the legacy password flow.
+        : !session.acknowledged && !usesClerk()
             ? <Notice searcher={session.searcher} />
             : <Search
                 searcher={session.searcher}
