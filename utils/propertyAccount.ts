@@ -46,6 +46,7 @@ export async function getMember(req: VercelRequest): Promise<Member> {
     const state = await clerk.authenticateRequest(new Request(origins[0] + '/api/property', { headers }), { authorizedParties: origins });
     const auth = state.toAuth();
     if (!auth?.userId || auth.sessionClaims?.iss !== process.env.CLERK_ISSUER) {
+        console.warn('[property-auth]', JSON.stringify({ status: state.status, reason: state.reason, hasUser: Boolean(auth?.userId), issuerMatches: auth?.sessionClaims?.iss === process.env.CLERK_ISSUER }));
         throw new AccessError(401, 'unauthorised', 'Sign in to Mitsuketa.');
     }
     const user = await clerk.users.getUser(auth.userId);
