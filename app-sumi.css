@@ -1,0 +1,490 @@
+/*
+ * Sumi application skin.
+ *
+ * The app still uses Tailwind utility classes for layout and responsive
+ * behaviour. This scoped layer supplies the working visual system because the
+ * legacy /index.css path is not compiled by the current Vite setup. Token
+ * values intentionally mirror components/marketing.tsx.
+ */
+.sumi-app {
+  color-scheme: light;
+  --paper: oklch(0.952 0.007 85);
+  --paper2: oklch(0.930 0.008 85);
+  --ink: oklch(0.235 0.014 65);
+  --ink-mid: oklch(0.44 0.012 65);
+  --ink-pale: oklch(0.62 0.010 70);
+  --ink-wash: oklch(0.78 0.009 75);
+  --rule: oklch(0.855 0.008 80);
+  --accent: oklch(0.40 0.095 265);
+  --accent-ink: oklch(0.965 0.006 85);
+  --crit: oklch(0.55 0.17 30);
+  --amber: oklch(0.60 0.10 78);
+  --green: oklch(0.50 0.08 150);
+  --serif: "Shippori Mincho", "Yu Mincho", serif;
+  --gothic: "Zen Kaku Gothic New", "Yu Gothic UI", "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --grain-opacity: 0.2;
+  isolation: isolate;
+  background: var(--paper) !important;
+  color: var(--ink);
+  font-family: var(--gothic);
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+:root[data-theme="dark"] .sumi-app {
+  color-scheme: dark;
+  --paper: oklch(0.185 0.008 75);
+  --paper2: oklch(0.225 0.009 75);
+  --ink: oklch(0.905 0.012 85);
+  --ink-mid: oklch(0.68 0.012 85);
+  --ink-pale: oklch(0.50 0.010 80);
+  --ink-wash: oklch(0.35 0.009 75);
+  --rule: oklch(0.30 0.010 75);
+  --accent: oklch(0.72 0.085 260);
+  --accent-ink: oklch(0.185 0.008 75);
+  --crit: oklch(0.66 0.17 30);
+  --amber: oklch(0.72 0.10 78);
+  --green: oklch(0.68 0.09 150);
+  --grain-opacity: 0.12;
+}
+
+/* A single fixed, pointer-transparent washi layer above opaque app surfaces. */
+.sumi-app::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: var(--grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.45 0 0 0 0 0.42 0 0 0 0 0.38 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+.sumi-app *,
+.sumi-app *::before,
+.sumi-app *::after {
+  box-sizing: border-box;
+}
+
+.sumi-app :is(button, input, select, textarea) {
+  border-radius: 0 !important;
+  font-family: var(--gothic);
+}
+
+.sumi-app :is(button, input, select, textarea, [role="button"]):focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
+}
+
+.sumi-app input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+
+.sumi-app :is(h1, h2, h3) {
+  color: var(--ink);
+  font-family: var(--serif);
+  letter-spacing: -0.01em;
+}
+
+.sumi-app :is(.font-mono, [class*="font-mono"]) {
+  font-family: var(--mono) !important;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Square, hairline construction; retain circles only where geometry matters. */
+.sumi-app :is(.rounded, .rounded-sm, .rounded-md, .rounded-lg, .rounded-xl, .rounded-2xl, .rounded-t, .rounded-t-lg, .rounded-l, .rounded-r, .rounded-r-md, .rounded-full) {
+  border-radius: 0 !important;
+}
+
+.sumi-app .border-2 {
+  border-width: 1px !important;
+}
+
+.sumi-app :is([class~="border-l-2"], [class~="border-l-4"]) {
+  border-left-width: 1px !important;
+}
+
+.sumi-app :is(.animate-spin, .react-flow__handle) {
+  border-radius: 999px !important;
+}
+
+.sumi-app [class*="shadow"] {
+  box-shadow: none !important;
+}
+
+/* Paper surfaces. */
+.sumi-app :is([class~="bg-white"], [class~="bg-slate-50"], [class~="bg-gray-50"], [class~="bg-slate-950"], [class~="bg-gray-950"]) {
+  background-color: var(--paper) !important;
+}
+
+.sumi-app :is([class~="bg-white/50"], [class~="bg-white/80"], [class~="bg-slate-950/50"]) {
+  background-color: color-mix(in oklch, var(--paper) 82%, transparent) !important;
+}
+
+.sumi-app :is([class~="bg-slate-100"], [class~="bg-gray-100"], [class~="bg-slate-200"], [class~="bg-gray-200"], [class~="bg-slate-800"], [class~="bg-gray-800"], [class~="bg-slate-900"]) {
+  background-color: var(--paper2) !important;
+}
+
+.sumi-app :is([class~="bg-slate-800/50"], [class~="bg-slate-800/90"], [class~="bg-slate-900/30"], [class~="bg-slate-900/50"], [class~="bg-slate-900/80"], [class~="bg-slate-900/90"], [class~="bg-gray-800/50"]) {
+  background-color: color-mix(in oklch, var(--paper2) 86%, transparent) !important;
+}
+
+:root[data-theme="dark"] .sumi-app :is([class~="dark:bg-slate-950"], [class~="dark:bg-gray-950"], [class~="dark:bg-slate-900"], [class~="dark:bg-white"]) {
+  background-color: var(--paper) !important;
+}
+
+:root[data-theme="dark"] .sumi-app :is([class~="dark:bg-slate-800"], [class~="dark:bg-gray-800"], [class~="dark:bg-slate-700"], [class~="dark:bg-gray-700"]) {
+  background-color: var(--paper2) !important;
+}
+
+:root[data-theme="dark"] .sumi-app :is([class~="dark:bg-slate-800/50"], [class~="dark:bg-slate-800/90"], [class~="dark:bg-slate-900/30"], [class~="dark:bg-slate-900/50"], [class~="dark:bg-slate-900/80"], [class~="dark:bg-slate-900/90"], [class~="dark:bg-slate-950/50"], [class~="dark:bg-gray-800/50"]) {
+  background-color: color-mix(in oklch, var(--paper2) 86%, transparent) !important;
+}
+
+/* Ink hierarchy. */
+.sumi-app :is([class~="text-gray-900"], [class~="text-slate-900"], [class~="text-slate-800"], [class~="text-gray-800"], [class~="text-white"]) {
+  color: var(--ink) !important;
+}
+
+.sumi-app :is([class~="text-gray-700"], [class~="text-slate-700"], [class~="text-gray-600"], [class~="text-slate-600"]) {
+  color: var(--ink-mid) !important;
+}
+
+.sumi-app :is([class~="text-gray-500"], [class~="text-slate-500"], [class~="text-gray-400"], [class~="text-slate-400"], [class~="text-gray-300"], [class~="text-slate-300"]) {
+  color: var(--ink-pale) !important;
+}
+
+:root[data-theme="dark"] .sumi-app :is([class~="dark:text-white"], [class~="dark:text-gray-100"], [class~="dark:text-slate-100"], [class~="dark:text-gray-200"], [class~="dark:text-slate-200"]) {
+  color: var(--ink) !important;
+}
+
+:root[data-theme="dark"] .sumi-app :is([class~="dark:text-gray-300"], [class~="dark:text-slate-300"], [class~="dark:text-gray-400"], [class~="dark:text-slate-400"]) {
+  color: var(--ink-mid) !important;
+}
+
+:root[data-theme="dark"] .sumi-app :is([class~="dark:text-gray-500"], [class~="dark:text-slate-500"], [class~="dark:text-gray-600"], [class~="dark:text-slate-600"]) {
+  color: var(--ink-pale) !important;
+}
+
+.sumi-app :is([class~="placeholder-gray-400"], [class~="placeholder-slate-500"])::placeholder,
+:root[data-theme="dark"] .sumi-app :is([class~="dark:placeholder-gray-500"], [class~="dark:placeholder-slate-500"])::placeholder {
+  color: var(--ink-pale) !important;
+  opacity: 0.82;
+}
+
+/* Hairline rules replace the blue-grey frame. */
+.sumi-app :is([class~="border-slate-100"], [class~="border-slate-200"], [class~="border-slate-300"], [class~="border-slate-600"], [class~="border-slate-700"], [class~="border-slate-800"], [class~="border-gray-200"], [class~="border-gray-300"], [class~="border-gray-400"], [class~="border-gray-600"], [class~="border-gray-700"], [class~="border-white"]) {
+  border-color: var(--rule) !important;
+}
+
+:root[data-theme="dark"] .sumi-app :is([class~="dark:border-slate-600"], [class~="dark:border-slate-700"], [class~="dark:border-slate-800"], [class~="dark:border-gray-600"], [class~="dark:border-gray-700"], [class~="dark:border-slate-900"]) {
+  border-color: var(--rule) !important;
+}
+
+/* Indigo is the sole interaction accent; former blue and purple converge here. */
+.sumi-app :is([class~="text-blue-200/80"], [class~="text-blue-300"], [class~="text-blue-400"], [class~="text-blue-500"], [class~="text-blue-600"], [class~="text-blue-700"], [class~="text-blue-800"], [class~="text-blue-900/80"], [class~="text-purple-300"], [class~="text-purple-400"], [class~="text-purple-500"], [class~="text-purple-600"], [class~="text-purple-700"]) {
+  color: var(--accent) !important;
+}
+
+:root[data-theme="dark"] .sumi-app :is([class~="dark:text-blue-200/80"], [class~="dark:text-blue-300"], [class~="dark:text-blue-400"], [class~="dark:text-purple-300"], [class~="dark:text-purple-400"]) {
+  color: var(--accent) !important;
+}
+
+.sumi-app :is([class~="!bg-blue-500"], [class~="bg-blue-500"], [class~="bg-blue-600"], [class~="bg-blue-700"], [class~="bg-purple-500"], [class~="bg-purple-600"]) {
+  background-color: var(--accent) !important;
+}
+
+.sumi-app :is([class~="bg-blue-50"], [class~="bg-blue-50/50"], [class~="bg-blue-100"], [class~="bg-blue-200"], [class~="bg-purple-50"], [class~="bg-purple-100"]) {
+  background-color: color-mix(in oklch, var(--accent) 10%, var(--paper)) !important;
+}
+
+:root[data-theme="dark"] .sumi-app :is([class~="dark:bg-blue-800/20"], [class~="dark:bg-blue-800/40"], [class~="dark:bg-blue-900/10"], [class~="dark:bg-blue-900/20"], [class~="dark:bg-blue-900/30"], [class~="dark:bg-blue-900/40"], [class~="dark:bg-blue-900/50"], [class~="dark:bg-blue-950/20"], [class~="dark:bg-purple-900/20"], [class~="dark:bg-purple-900/30"], [class~="dark:bg-purple-900/40"], [class~="dark:bg-purple-900/60"]) {
+  background-color: color-mix(in oklch, var(--accent) 14%, var(--paper)) !important;
+}
+
+.sumi-app :is([class~="border-blue-200"], [class~="border-blue-300"], [class~="border-blue-400"], [class~="border-blue-500"], [class~="border-blue-600"], [class~="border-purple-300"], [class~="border-purple-400"]) {
+  border-color: var(--accent) !important;
+}
+
+:root[data-theme="dark"] .sumi-app :is([class~="dark:border-blue-400"], [class~="dark:border-blue-500"], [class~="dark:border-blue-600"], [class~="dark:border-blue-700"], [class~="dark:border-blue-800"], [class~="dark:border-purple-400"], [class~="dark:border-purple-700"]) {
+  border-color: var(--accent) !important;
+}
+
+.sumi-app :is([class~="ring-blue-300"], [class~="ring-blue-400"], [class~="ring-blue-500/20"], [class~="ring-blue-500/50"], [class~="ring-purple-300"], [class~="ring-purple-700"]) {
+  --tw-ring-color: color-mix(in oklch, var(--accent) 55%, transparent) !important;
+}
+
+.sumi-app :is([class~="bg-blue-500"], [class~="bg-blue-600"], [class~="bg-blue-700"], [class~="bg-purple-500"], [class~="bg-purple-600"])[class~="text-white"],
+.sumi-app :is([class~="bg-blue-500"], [class~="bg-blue-600"], [class~="bg-purple-500"]) [class~="text-white"] {
+  color: var(--accent-ink) !important;
+}
+
+.sumi-app :is([class~="hover:bg-blue-500"], [class~="hover:bg-blue-600"], [class~="hover:bg-blue-700"]):hover {
+  background-color: color-mix(in oklch, var(--accent) 88%, var(--ink)) !important;
+}
+
+.sumi-app :is([class~="hover:bg-blue-50"], [class~="hover:bg-blue-100"]):hover,
+.sumi-app .group:hover :is([class~="group-hover:bg-blue-100"], [class~="group-hover:bg-blue-200"]) {
+  background-color: color-mix(in oklch, var(--accent) 14%, var(--paper)) !important;
+}
+
+.sumi-app :is([class~="hover:text-blue-500"], [class~="hover:text-blue-600"], [class~="hover:text-blue-700"], [class~="hover:text-blue-800"]):hover,
+.sumi-app .group:hover :is([class~="group-hover:text-blue-300"], [class~="group-hover:text-blue-400"], [class~="group-hover:text-blue-600"], [class~="group-hover:text-blue-700"]) {
+  color: var(--accent) !important;
+}
+
+:root[data-theme="dark"] .sumi-app :is([class~="dark:hover:bg-blue-900/30"], [class~="dark:hover:bg-blue-900/40"]):hover,
+:root[data-theme="dark"] .sumi-app .group:hover :is([class~="dark:group-hover:bg-blue-800/40"], [class~="dark:group-hover:bg-blue-900/30"]) {
+  background-color: color-mix(in oklch, var(--accent) 16%, var(--paper)) !important;
+}
+
+:root[data-theme="dark"] .sumi-app :is([class~="dark:hover:text-blue-300"], [class~="dark:hover:text-blue-400"]):hover,
+:root[data-theme="dark"] .sumi-app .group:hover :is([class~="dark:group-hover:text-blue-300"], [class~="dark:group-hover:text-blue-400"]) {
+  color: var(--accent) !important;
+}
+
+.sumi-app :is([class~="hover:border-blue-300"], [class~="hover:border-blue-400"], [class~="hover:border-blue-500"], [class~="hover:border-blue-500/50"]):hover,
+:root[data-theme="dark"] .sumi-app :is([class~="dark:hover:border-blue-400"], [class~="dark:hover:border-blue-500"], [class~="dark:hover:border-blue-600"]):hover {
+  border-color: var(--accent) !important;
+}
+
+.sumi-app :is([class~="focus:border-blue-500"], [class~="focus:ring-blue-500"]):focus {
+  border-color: var(--accent) !important;
+  --tw-ring-color: color-mix(in oklch, var(--accent) 45%, transparent) !important;
+}
+
+/* Semantic status colours. Red remains danger-only. */
+.sumi-app :is([class~="text-red-300"], [class~="text-red-400"], [class~="text-red-500"], [class~="text-red-600"], [class~="text-red-700"], [class~="text-red-800"]) {
+  color: var(--crit) !important;
+}
+
+.sumi-app :is([class~="bg-red-50"], [class~="bg-red-100"], [class~="bg-red-900/20"], [class~="bg-red-900/30"], [class~="bg-red-900/40"], [class~="bg-red-900/60"], [class~="bg-red-950/30"]) {
+  background-color: color-mix(in oklch, var(--crit) 11%, var(--paper)) !important;
+}
+
+.sumi-app :is([class~="bg-red-600"], [class~="bg-red-800"]) {
+  background-color: var(--crit) !important;
+}
+
+.sumi-app :is([class~="border-red-200"], [class~="border-red-300"], [class~="border-red-500"], [class~="border-red-700"], [class~="border-red-800"], [class~="border-red-800/50"], [class~="border-red-900"]) {
+  border-color: var(--crit) !important;
+}
+
+.sumi-app :is([class~="bg-red-600"], [class~="bg-red-800"])[class~="text-white"] {
+  color: var(--paper) !important;
+}
+
+.sumi-app :is([class~="text-amber-200/80"], [class~="text-amber-300"], [class~="text-amber-400"], [class~="text-amber-500"], [class~="text-amber-500/60"], [class~="text-amber-600"], [class~="text-amber-600/70"], [class~="text-amber-700"], [class~="text-amber-800"], [class~="text-amber-900/80"], [class~="text-orange-300"], [class~="text-orange-400"], [class~="text-orange-500"], [class~="text-orange-600"], [class~="text-orange-700"], [class~="text-yellow-500"], [class~="text-yellow-600"]) {
+  color: var(--amber) !important;
+}
+
+.sumi-app :is([class~="bg-amber-50"], [class~="bg-amber-50/50"], [class~="bg-amber-100"], [class~="bg-amber-900/10"], [class~="bg-amber-900/20"], [class~="bg-amber-900/30"], [class~="bg-amber-900/40"], [class~="bg-orange-100"], [class~="bg-orange-900/30"], [class~="bg-orange-900/40"], [class~="bg-yellow-50"]) {
+  background-color: color-mix(in oklch, var(--amber) 12%, var(--paper)) !important;
+}
+
+.sumi-app :is([class~="bg-orange-500"], [class~="bg-amber-500"], [class~="bg-yellow-500"]) {
+  background-color: var(--amber) !important;
+}
+
+.sumi-app :is([class~="bg-orange-500"], [class~="bg-amber-500"], [class~="bg-yellow-500"])[class~="text-white"] {
+  color: var(--paper) !important;
+}
+
+.sumi-app :is([class~="border-amber-200"], [class~="border-amber-300"], [class~="border-amber-500"], [class~="border-amber-700"], [class~="border-amber-800"], [class~="border-orange-200"], [class~="border-orange-400"], [class~="border-orange-500"], [class~="border-orange-700"], [class~="border-orange-800"]) {
+  border-color: var(--amber) !important;
+}
+
+.sumi-app :is([class~="text-green-300"], [class~="text-green-400"], [class~="text-green-500"], [class~="text-green-600"], [class~="text-green-700"], [class~="text-emerald-300"], [class~="text-emerald-400"], [class~="text-emerald-600"], [class~="text-emerald-700"]) {
+  color: var(--green) !important;
+}
+
+.sumi-app :is([class~="bg-green-100"], [class~="bg-green-900/30"], [class~="bg-green-900/50"], [class~="bg-emerald-50/50"], [class~="bg-emerald-100"], [class~="bg-emerald-900/10"], [class~="bg-emerald-900/20"], [class~="bg-emerald-900/30"], [class~="bg-emerald-900/40"], [class~="bg-emerald-900/60"]) {
+  background-color: color-mix(in oklch, var(--green) 11%, var(--paper)) !important;
+}
+
+.sumi-app :is([class~="bg-green-500"], [class~="bg-emerald-500"], [class~="bg-emerald-600"]) {
+  background-color: var(--green) !important;
+}
+
+.sumi-app :is([class~="bg-green-500"], [class~="bg-emerald-500"], [class~="bg-emerald-600"])[class~="text-white"] {
+  color: var(--paper) !important;
+}
+
+.sumi-app [class~="bg-slate-600"][class~="text-white"] {
+  background-color: var(--ink) !important;
+  color: var(--paper) !important;
+}
+
+.sumi-app [class~="hover:bg-slate-700"]:hover {
+  background-color: color-mix(in oklch, var(--ink) 88%, var(--accent)) !important;
+  color: var(--paper) !important;
+}
+
+/* Remove legacy decorative gradients; retain an indigo data fill. */
+.sumi-app :is([class~="from-blue-50"], [class~="from-purple-50"], [class~="dark:from-blue-900/20"], [class~="dark:from-purple-900/20"]) {
+  background-image: none !important;
+  background-color: var(--paper2) !important;
+}
+
+.sumi-app .h-full[class~="bg-gradient-to-r"] {
+  background-image: none !important;
+  background-color: var(--accent) !important;
+}
+
+/* Legacy gradient headings become solid ink; gradient text is not part of Sumi. */
+.sumi-app [class~="bg-clip-text"][class~="text-transparent"] {
+  background: none !important;
+  color: var(--ink) !important;
+  -webkit-background-clip: border-box !important;
+  background-clip: border-box !important;
+}
+
+/* Hover states stay quiet and paper-like. */
+.sumi-app :is([class~="hover:bg-slate-50"], [class~="hover:bg-slate-100"], [class~="hover:bg-slate-200"], [class~="hover:bg-gray-100"]):hover,
+:root[data-theme="dark"] .sumi-app :is([class~="dark:hover:bg-slate-700"], [class~="dark:hover:bg-slate-800"]):hover {
+  background-color: color-mix(in oklch, var(--accent) 7%, var(--paper2)) !important;
+}
+
+.sumi-app :is([class~="disabled:bg-gray-300"], [class~="dark:disabled:bg-gray-700"]):disabled {
+  background-color: var(--ink-wash) !important;
+  color: var(--paper) !important;
+}
+
+.sumi-app [class~="bg-slate-600"][class~="text-white"] {
+  background-color: var(--ink) !important;
+  color: var(--paper) !important;
+}
+
+.sumi-app [class~="hover:bg-slate-700"]:hover {
+  background-color: var(--accent) !important;
+  color: var(--accent-ink) !important;
+}
+
+/* App-specific chrome and graph controls. */
+.sumi-app-header {
+  background-color: color-mix(in oklch, var(--paper) 92%, transparent) !important;
+  border-color: var(--rule) !important;
+  backdrop-filter: blur(12px);
+}
+
+.sumi-brand-seal,
+.sumi-status-mark {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--serif);
+  font-weight: 700;
+  line-height: 1;
+}
+
+.sumi-brand-seal {
+  width: 2.25rem;
+  height: 2.25rem;
+  font-size: 1.2rem;
+}
+
+.sumi-brand-name {
+  color: var(--ink) !important;
+  font-family: var(--serif) !important;
+  font-weight: 600 !important;
+}
+
+.sumi-status-mark {
+  width: 1.15rem;
+  height: 1.15rem;
+  font-size: 0.66rem;
+}
+
+.sumi-status-mark--amber {
+  background: var(--amber);
+  color: var(--paper);
+}
+
+.sumi-status-mark--crit {
+  background: var(--crit);
+  color: oklch(0.97 0.006 85);
+}
+
+.sumi-status-mark--wash {
+  background: var(--ink-mid);
+  color: var(--paper);
+}
+
+.sumi-status-mark--role {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}
+
+.sumi-target-seal {
+  gap: 0.35rem;
+  background: var(--accent) !important;
+  color: var(--accent-ink) !important;
+  font-family: var(--gothic);
+  text-transform: uppercase;
+}
+
+.sumi-target-seal .sumi-status-mark {
+  width: 1rem;
+  height: 1rem;
+  background: transparent;
+  color: inherit;
+  font-size: 0.72rem;
+}
+
+.sumi-app .react-flow__background {
+  background-color: var(--paper) !important;
+}
+
+.sumi-app .react-flow__controls {
+  border: 1px solid var(--rule) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.sumi-app .react-flow__controls-button {
+  background: var(--paper2) !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--rule) !important;
+  border-radius: 0 !important;
+}
+
+.sumi-app .react-flow__controls-button:hover {
+  background: color-mix(in oklch, var(--accent) 9%, var(--paper2)) !important;
+}
+
+.sumi-app .react-flow__controls-button svg {
+  fill: var(--ink-mid) !important;
+}
+
+.sumi-app ::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.sumi-app ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sumi-app ::-webkit-scrollbar-thumb {
+  border-radius: 0;
+  background: var(--ink-wash);
+}
+
+.sumi-app ::-webkit-scrollbar-thumb:hover {
+  background: var(--ink-pale);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sumi-app *,
+  .sumi-app *::before,
+  .sumi-app *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

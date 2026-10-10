@@ -9,30 +9,35 @@ import { loadEnv } from 'vite';
 import type { IncomingMessage, ServerResponse } from 'http';
 
 // Server-side env vars the handlers read: the four org API keys used by
-// mcp/lib/keys.ts, plus the LINZ key and shared password used by api/property.ts.
+// mcp/lib/keys.ts, plus LINZ, Neon and audit-admin configuration.
 // Loaded from .env (or the process environment) and copied onto process.env so
 // the handlers -- which read process.env directly -- see them exactly as they
-// would on Vercel. Without PROPERTY_PASS, /api/property fails closed in dev too.
+// would on Vercel. Missing required configuration fails closed in dev too.
 const SERVER_ENV_KEYS = [
     'ORG_NZBN_KEY',
     'ORG_COMPANIES_KEY',
     'ORG_DISQUALIFIED_KEY',
     'ORG_INSOLVENCY_KEY',
     'LINZ_API_KEY',
-    'PROPERTY_PASS',
+    'LINZ_BASEMAPS_KEY',
+    'DATABASE_URL',
+    'PROPERTY_AUDIT_ADMINS',
 ] as const;
 
 // Per-user property credentials are one variable each and their names are not
 // known up front (PROPERTY_PW_<slugged email>), so they are matched by prefix
-// rather than listed. Without this, dev sees no users, falls back to the shared
-// password, and per-user auth looks broken locally while working in production.
-const SERVER_ENV_PREFIXES = ['PROPERTY_PW_'] as const;
+// rather than listed. Local and Vercel handlers use the same per-user gate.
+const SERVER_ENV_PREFIXES = ['PROPERTY_', 'CLERK_', 'STRIPE_'] as const;
 
 const API_ROUTES: Record<string, string> = {
     '/api/proxy': '/api/proxy.ts',
     '/api/consent-forms': '/api/consent-forms.ts',
     '/api/documents': '/api/documents.ts',
+    '/api/entity-record': '/api/entity-record.ts',
     '/api/property': '/api/property.ts',
+    '/api/property-account': '/api/property-account.ts',
+    '/api/property-applications': '/api/property-applications.ts',
+    '/api/stripe-webhook': '/api/stripe-webhook.ts',
 };
 
 // Vercel parses cookies onto req.cookies; Node's http server does not.
@@ -134,8 +139,11 @@ export default function apiPlugin(): Plugin {
                     }
                     (req as any).query = query;
                     (req as any).cookies = parseCookies(req.headers.cookie);
+                    // Match Vercel's trusted proxy metadata for loopback dev.
+                    req.headers['x-forwarded-proto'] = 'http';
+                    req.headers['x-forwarded-for'] = req.socket.remoteAddress;
 
-                    if (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH') {
+                    if (pathname !== '/api/stripe-webhook' && (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH')) {
                         (req as any).body = await readJsonBody(req);
                     }
 

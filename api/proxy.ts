@@ -15,6 +15,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const clientIp = (req.headers['x-forwarded-for'] as string) || 'anonymous';
     const rl = checkRateLimit(clientIp, 'proxy', PROXY_LIMIT_PER_MINUTE);
     if (!rl.allowed) {
+        res.setHeader('Retry-After', '60');
+        res.setHeader('X-RateLimit-Scope', 'proxy');
         return res.status(429).json({
             error: 'Rate limit exceeded',
             message: `You have exceeded the request limit of ${rl.limit} per minute. This is an anti-abuse measure. Please wait a moment and try again.`
@@ -48,6 +50,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
         });
 
+        const retryAfter = response.headers.get('retry-after');
+        if (retryAfter) res.setHeader('Retry-After', retryAfter);
+        res.setHeader('Cache-Control', 'no-store');
         // Check if the response is JSON before parsing
         const contentType = response.headers.get('content-type');
         if (contentType && contentType.includes('application/json')) {

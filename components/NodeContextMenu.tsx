@@ -1,5 +1,7 @@
+import { useViewportPopover } from '../hooks/useViewportPopover';
 import React from 'react';
 import { Users, Maximize2, Eye, Minimize2, ExternalLink, PenLine } from 'lucide-react';
+import { registerLink } from '../services/entityProfile';
 
 interface NodeContextMenuProps {
     nodeId: string;
@@ -7,7 +9,10 @@ interface NodeContextMenuProps {
     nodeType: string;
     nzbn?: string;
     isCapped?: boolean;
+    simpleSearch?: boolean;
     sourceRegisterUniqueId?: string; // NZCN - Company number
+    sourceRegister?: string;
+    onEntityDetails?: (nzbn: string) => void;
     position: { x: number; y: number };
     onClose: () => void;
     onRecenter: (nodeId: string, nzbn: string, label: string) => void;
@@ -26,7 +31,10 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
     nodeType,
     nzbn,
     isCapped,
+    simpleSearch = false,
     sourceRegisterUniqueId,
+    sourceRegister,
+    onEntityDetails,
     position,
     onClose,
     onRecenter,
@@ -40,6 +48,13 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
 }) => {
     const menuItems = [
         {
+            icon: Eye,
+            label: 'Details',
+            onClick: () => { if (nzbn) onEntityDetails?.(nzbn); onClose(); },
+            disabled: !nzbn,
+            hide: nodeType === 'personNode' || !onEntityDetails,
+        },
+        {
             icon: PenLine,
             label: 'Add note',
             onClick: () => {
@@ -52,17 +67,18 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
             icon: ExternalLink,
             label: 'View on Register',
             onClick: () => {
-                if (sourceRegisterUniqueId) {
-                    window.open(`https://app.companiesoffice.govt.nz/companies/app/ui/pages/companies/${sourceRegisterUniqueId}`, '_blank');
+                if (nzbn || sourceRegisterUniqueId) {
+                    window.open(registerLink(sourceRegister || '', sourceRegisterUniqueId || '').url, '_blank', 'noopener,noreferrer');
                 }
                 onClose();
             },
-            disabled: !sourceRegisterUniqueId,
-            description: 'Open company page on Companies Office website'
+            disabled: !nzbn && !sourceRegisterUniqueId,
+            hide: nodeType === 'personNode',
+            description: 'Open the relevant source register'
         },
         {
             icon: Eye,
-            label: 'Show All',
+            label: 'Expand all branches',
             onClick: () => {
                 onShowAll();
                 onClose();
@@ -75,20 +91,20 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
                 if (nzbn) onShowDirectors(nodeId, nzbn, nodeLabel);
                 onClose();
             },
-            disabled: !nzbn,
+            disabled: !nzbn || simpleSearch,
         },
         {
             icon: Maximize2,
-            label: isCapped ? 'Fetch & Expand Structure' : 'Expand Full Structure',
+            label: isCapped ? 'Fetch & Expand Structure' : 'Expand connections',
             onClick: () => {
                 if (nzbn) onExpandStructure(nodeId, nzbn, nodeLabel);
                 onClose();
             },
-            disabled: !nzbn,
+            disabled: !nzbn || simpleSearch,
         },
         {
             icon: Minimize2,
-            label: 'Collapse Branch',
+            label: 'Collapse connections',
             onClick: () => {
                 if (nzbn) onCollapseBranch(nodeId, nzbn, nodeLabel);
                 onClose();
@@ -107,6 +123,7 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
         }
     ];
 
+    const popover = useViewportPopover(position);
     const visibleItems = menuItems.filter(item => !item.hide);
 
     return (
@@ -119,10 +136,11 @@ export const NodeContextMenu: React.FC<NodeContextMenuProps> = ({
 
             {/* Context Menu */}
             <div
-                className="fixed z-50 bg-paper border border-rule py-1 min-w-[200px]"
+                ref={popover.ref}
+                className="fixed z-50 bg-paper border border-rule py-1 min-w-[200px] max-w-[calc(100vw-24px)] max-h-[calc(100vh-24px)] overflow-y-auto"
                 style={{
-                    left: `${position.x}px`,
-                    top: `${position.y}px`,
+                    left: popover.left,
+                    top: popover.top,
                 }}
             >
                 {/* Header */}

@@ -1,19 +1,6 @@
-// Audit trail for property searches.
-//
-// The LINZ Licence for Personal Data wants a record of who searched for what.
-// With a shared credential the log records *why* (the reference the searcher
-// typed) rather than *who*, plus whatever name they entered — unverified, but
-// recorded.
-//
-// Record the INPUT, never the OUTPUT. The query is the accountable act; copying
-// the personal data returned into a second store gives it a second retention
-// story and makes the log its own privacy problem.
-//
-// ponytail: writes structured JSON to stdout, which on Vercel means the platform
-// log — durable, but only readable via `vercel logs`, not in-app. Swap the body
-// of add() for an INSERT when the Neon Postgres database is provisioned; that
-// also unlocks the admin view, which needs a queryable store and a stated
-// retention period with a deletion routine.
+// Property searches and report opens go to Neon through propertyAudit.ts.
+// Store only the input, matter reference and authenticated credential. Access
+// events remain structured platform logs. No returned owner data is stored.
 
 export type AuditAction =
     | 'sign-in'
@@ -26,7 +13,7 @@ export type AuditAction =
 export interface AuditEvent {
     at: string;
     action: AuditAction;
-    /** The matter/file reference the searcher supplied. Required on searches. */
+    /** Optional matter/file reference supplied with the search. */
     reference?: string;
     /** What was typed. Never what came back. */
     query?: string;
@@ -41,10 +28,32 @@ export interface AuditEvent {
      */
     verified?: boolean;
     ip?: string;
+    accountId?: string;
+    actor?: string;
+    operationId?: string;
+    continuation?: boolean;
+    titleNo?: string;
 }
 
-export async function add(event: Omit<AuditEvent, 'at'>): Promise<void> {
+import { continueSearch, recordSearch } from './propertyAudit.js';
+
+export async function add(event: Omit<AuditEvent, 'at'>): Promise<string | undefined> {
+    const mode = event.action === 'search-address' ? 'address'
+        : event.action === 'search-owner' ? 'owner'
+        : event.action === 'report-opened' ? 'title' : null;
+    if (mode) {
+        if (!event.searcher || !event.query || !event.operationId) throw new Error('Search audit input is incomplete');
+        if (event.continuation) {
+            return continueSearch({ searcher: event.searcher, reference: event.reference,
+                accountId: event.accountId, actor: event.actor, operationId: event.operationId,
+                titleNo: event.titleNo });
+        }
+        return recordSearch({ mode, query: event.query, searcher: event.searcher,
+            reference: event.reference, ip: event.ip, accountId: event.accountId, actor: event.actor,
+            operationId: event.operationId, titleNo: event.titleNo });
+    }
     const record: AuditEvent = { at: new Date().toISOString(), verified: false, ...event };
-    // One line, prefixed so it can be grepped out of the platform log.
+    // Access events remain platform logs. Searches above must reach Neon before
+    // any LINZ request; a failed audit write blocks the search.
     console.log(`[property-audit] ${JSON.stringify(record)}`);
 }

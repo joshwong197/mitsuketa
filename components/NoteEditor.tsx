@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useViewportPopover } from '../hooks/useViewportPopover';
 
 /**
  * Inline case-note editor (Stage B, design/CASES_PLAN.md §Notes).
@@ -35,6 +36,7 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
     onDelete,
     onCancel,
 }) => {
+    const popover = useViewportPopover(position);
     const [text, setText] = useState(initialText);
     const [flag, setFlag] = useState(initialFlag);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -55,8 +57,9 @@ export const NoteEditor: React.FC<NoteEditorProps> = ({
             <div className="fixed inset-0 z-40" onClick={onCancel} />
 
             <div
-                className="fixed z-50 bg-paper border border-rule w-[280px]"
-                style={{ left: `${position.x}px`, top: `${position.y}px` }}
+                ref={popover.ref}
+                className="fixed z-50 bg-paper border border-rule w-[280px] max-w-[calc(100vw-24px)] max-h-[calc(100vh-24px)] overflow-y-auto"
+                style={{ left: popover.left, top: popover.top }}
                 onKeyDown={(e) => {
                     if (e.key === 'Escape') { e.stopPropagation(); onCancel(); }
                 }}

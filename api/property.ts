@@ -36,10 +36,13 @@
 // `verified: false` accordingly. See design/PROPERTY_ACCESS_PLAN.md §3.
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createHmac, createHash, timingSafeEqual } from 'node:crypto';
-import { add } from '../utils/audit.js';
+import { add as addAudit } from '../utils/audit.js';
+import { AuditUnavailableError, canReadAudit, recentSearches as listAudit } from '../utils/propertyAudit.js';
 import { authenticate, configuredUserKeys, envKeyFor, hasUsers, storedCredential, userSessionSecret } from '../utils/propertyUsers.js';
+import { AccessError, authMode, getMember, requireApproved, sendAccessError, passBalance, accountQuery, NOTICE_VERSION, type Member } from '../utils/propertyAccount.js';
+import { billingEnabled } from '../utils/propertyBilling.js';
 import {
-    LDSClient, searchAddress, searchOwner, titleReport,
+    LDSClient, searchAddress as lookupAddress, searchOwner as lookupOwner, titleReport as lookupTitle,
 } from '../utils/lds.js';
 
 // LINZ Basemaps aerial imagery, CC BY 4.0. Proxied rather than hit from the
@@ -54,6 +57,7 @@ const COOKIE = 'mitsuketa_property';
 const SESSION_HOURS = 12;
 const MAX_QUERY = 200;
 const MAX_REFERENCE = 100;
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 // --------------------------------------------------------------------------- //
 // Login throttle
@@ -184,9 +188,32 @@ function readSession(req: VercelRequest): Session | null {
 
 const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+// Injectable service boundary lets regression tests prove that an audit failure
+// prevents the LDS call, without touching live records or provider credentials.
+export function createPropertyHandler(overrides: {
+    add?: typeof addAudit;
+    recentSearches?: typeof listAudit;
+    searchAddress?: typeof lookupAddress;
+    searchOwner?: typeof lookupOwner;
+    titleReport?: typeof lookupTitle;
+    member?: typeof getMember;
+    balance?: typeof passBalance;
+    consume?: (id: string, reference: string) => Promise<boolean>;
+} = {}) {
+const add = overrides.add || addAudit;
+const recentSearches = overrides.recentSearches || listAudit;
+const searchAddress = overrides.searchAddress || lookupAddress;
+const searchOwner = overrides.searchOwner || lookupOwner;
+const titleReport = overrides.titleReport || lookupTitle;
+const resolveMember = overrides.member || getMember;
+const balance = overrides.balance || passBalance;
+const consume = overrides.consume || (async (id, reference) => Boolean((await accountQuery('SELECT sandbox_consume_pass($1,$2) AS ok', [id, reference]))[0].ok));
+return async function handler(req: VercelRequest, res: VercelResponse) {
+    res.setHeader('Cache-Control', 'no-store');
     const mode = str(req.query.mode);
     const ip = (req.headers['x-forwarded-for'] as string) || undefined;
+    let useClerk: boolean;
+    try { useClerk = authMode() === 'clerk'; } catch (error) { return sendAccessError(res, error); }
 
     // Fail closed: an unconfigured feature is an unreachable one.
     //
@@ -195,8 +222,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // vars at BUILD time, so a deployment built before a variable was added
     // will land here until it is redeployed. Check `vercel logs <url>`.
     const missing = [
-        !hasUsers() && 'at least one PROPERTY_PW_* credential',
+        !useClerk && !hasUsers() && 'at least one PROPERTY_PW_* credential',
         !process.env.LINZ_API_KEY && 'LINZ_API_KEY',
+        !process.env.DATABASE_URL && 'DATABASE_URL',
     ].filter(Boolean);
     if (missing.length > 0) {
         console.error(`[property] disabled — not set on this deployment: ${missing.join(', ')}`
@@ -210,6 +238,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const secure = (req.headers['x-forwarded-proto'] as string) !== 'http';
 
     if (mode === 'login') {
+        if (useClerk) return res.status(400).json({ error: 'use_clerk', message: 'Use Mitsuketa sign-in.' });
         if (req.method !== 'POST') return res.status(405).json({ error: 'POST required' });
 
         // Which mode is live, and which accounts exist. Without this, "the
@@ -264,7 +293,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         await add({ action: 'sign-in', searcher, ip });
         const secret = userSessionSecret(storedCredential(searcher)!);
         res.setHeader('Set-Cookie', issueCookie(searcher, secret, secure));
-        return res.status(200).json({ ok: true, searcher });
+        return res.status(200).json({ ok: true, searcher, canAudit: canReadAudit(searcher) });
     }
 
     if (mode === 'logout') {
@@ -274,13 +303,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json({ ok: true });
     }
 
-    const session = readSession(req);
+    let member: Member | undefined;
+    if (useClerk) {
+        try { member = await resolveMember(req); } catch (error) { return sendAccessError(res, error); }
+    }
+    const session = member || readSession(req);
     if (!session) {
         await add({ action: 'refused', query: mode, ip });
         return res.status(401).json({ error: 'unauthorised' });
     }
 
     if (req.method !== 'GET') return res.status(405).json({ error: 'GET required' });
+
+    if (mode === 'audit') {
+        // Read from server configuration on every request, never the client.
+        if (!(member ? member.canAudit : canReadAudit(session.searcher))) return res.status(403).json({ error: 'forbidden' });
+        try {
+            return res.status(200).json({ rows: await recentSearches(str(req.query.searcher)) });
+        } catch {
+            return res.status(503).json({ error: 'audit_unavailable', message: 'The search log is temporarily unavailable.' });
+        }
+    }
+
+    if (member) {
+        try {
+            requireApproved(member);
+            if (member.accepted_notice_version !== NOTICE_VERSION) throw new AccessError(403, 'notice_required', 'Accept the current privacy notice before searching.');
+        } catch (error) { return sendAccessError(res, error); }
+    }
 
     // Aerial tiles sit above the reference gate on purpose. A tile is imagery,
     // not a register search — it discloses nothing about a person and there is
@@ -329,15 +379,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).send(Buffer.from(await upstream.arrayBuffer()));
     }
 
-    // A matter reference is no longer required. It existed because one shared
-    // credential could not say WHO searched, so the reference had to say WHY;
-    // per-user sign-in records the account on every entry, so the field was
-    // costing a keystroke per search and buying nothing. Still recorded when a
-    // caller sends one, so older clients lose nothing.
-    const reference = str(req.query.ref).slice(0, MAX_REFERENCE) || undefined;
+    // Every register request needs a matter, independently of the credential.
+    const reference = str(req.query.ref);
+    if (!reference) {
+        return res.status(400).json({ error: 'reference_required', message: 'Enter a matter reference before searching.' });
+    }
+    if (reference && (reference.length > MAX_REFERENCE || /[\x00-\x1f\x7f]/.test(reference))) {
+        return res.status(400).json({ error: 'bad_reference', message: 'Use a matter reference of up to 100 characters, without control characters.' });
+    }
 
     const query = str(req.query.q).slice(0, MAX_QUERY);
-    const base = { reference, searcher: session.searcher, ip };
+    const operationId = str(req.query.search_id);
+    if (!UUID.test(operationId)) {
+        return res.status(400).json({ error: 'search_id_required', message: 'Start this search again.' });
+    }
+    const base = { reference, searcher: session.searcher, ip,
+        operationId,
+        ...(member ? { accountId: member.id, actor: `clerk:${member.issuer}#${member.subject}`, verified: true } : {}) };
 
     try {
         const client = new LDSClient();
@@ -355,25 +413,53 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             if (!query && addressId === undefined) {
                 return res.status(400).json({ error: 'query_required' });
             }
-            await add({ ...base, action: 'search-address', query: query || `address_id=${addressId}` });
-            return res.status(200).json(await searchAddress(client, query, addressId));
+            const auditReference = await add({ ...base, action: 'search-address',
+                query: query || `address_id=${addressId}`, continuation: addressId !== undefined });
+            res.setHeader('X-Search-Reference', auditReference!);
+            return res.status(200).json({ ...await searchAddress(client, query, addressId),
+                audit_reference: auditReference, matter_reference: reference });
         }
 
         if (mode === 'owner') {
             if (!query) return res.status(400).json({ error: 'query_required' });
-            await add({ ...base, action: 'search-owner', query });
-            return res.status(200).json(await searchOwner(client, query));
+            const auditReference = await add({ ...base, action: 'search-owner', query });
+            res.setHeader('X-Search-Reference', auditReference!);
+            return res.status(200).json({ ...await searchOwner(client, query),
+                audit_reference: auditReference, matter_reference: reference });
         }
 
         if (mode === 'title') {
             const titleNo = str(req.query.title_no).slice(0, MAX_QUERY);
             if (!titleNo) return res.status(400).json({ error: 'title_no_required' });
-            await add({ ...base, action: 'report-opened', query: titleNo });
-            return res.status(200).json(await titleReport(client, titleNo));
+            const rawAddressId = str(req.query.address_id);
+            const addressId = rawAddressId ? Number(rawAddressId) : undefined;
+            if (addressId !== undefined && (!Number.isInteger(addressId) || addressId < 0)) {
+                return res.status(400).json({ error: 'bad_address_id' });
+            }
+            const metered = !!member && billingEnabled();
+            if (metered && await balance(member!.id) < 1) throw new AccessError(402, 'passes_required', 'Add sandbox report passes from your account panel.');
+            const startsSearch = str(req.query.search_start) === '1';
+            const auditReference = await add({ ...base, action: 'report-opened', query: titleNo,
+                titleNo, continuation: !startsSearch });
+            res.setHeader('X-Search-Reference', auditReference!);
+            const report = await titleReport(client, titleNo, addressId);
+            // No debit for upstream failure or a missing title. Recheck approval
+            // and the last pass atomically before returning a successful report.
+            if (metered && report.title && !await consume(member!.id, auditReference!)) {
+                throw new AccessError(402, 'passes_required', 'Access or your pass balance changed. Refresh your account panel.');
+            }
+            return res.status(200).json({ ...report,
+                audit_reference: auditReference, matter_reference: reference });
         }
 
         return res.status(400).json({ error: 'unknown_mode' });
     } catch (err: any) {
+        if (err instanceof AccessError) return sendAccessError(res, err);
+        if (err instanceof AuditUnavailableError) {
+            console.error('[property] audit write unavailable; search blocked');
+            return res.status(503).json({ error: 'audit_unavailable',
+                message: 'Your search could not be logged. Please try again shortly.' });
+        }
         // Belt and braces: LDSClient already strips the URL from its errors, but
         // anything logged here gets the key scrubbed regardless of its source.
         const safe = String(err?.message ?? 'error').replace(/;key=[^/\s]+/g, ';key=REDACTED');
@@ -381,3 +467,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(502).json({ error: 'upstream_failed' });
     }
 }
+}
+
+export default createPropertyHandler();

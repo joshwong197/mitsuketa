@@ -19,6 +19,8 @@ export interface FindScreenProps {
   onResultSelect: (item: EntitySearchResultItem) => void;
   isLoading: boolean;
   searchMode: 'company' | 'person';
+  companySearchScope?: 'simple' | 'comprehensive';
+  onCompanySearchScopeChange?: (scope: 'simple' | 'comprehensive') => void;
   onSearchModeChange: (m: 'company' | 'person') => void;
   // Compare mode (A ↔ B connection search)
   onCompare: (a: CompareEndpoint, b: CompareEndpoint, maxHops?: number) => void;
@@ -194,6 +196,8 @@ export const FindScreen: React.FC<FindScreenProps> = ({
   onResultSelect,
   isLoading,
   searchMode,
+  companySearchScope = 'comprehensive',
+  onCompanySearchScopeChange,
   onSearchModeChange,
   onCompare,
   onCompareCancel,
@@ -206,6 +210,7 @@ export const FindScreen: React.FC<FindScreenProps> = ({
   onOpenPropertyReport,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [recent, setRecent] = useState<RecentSearch[]>(() => loadRecentSearches());
   // Compare mode — third face of the mode line. Slots + last-used hop budget.
@@ -214,6 +219,12 @@ export const FindScreen: React.FC<FindScreenProps> = ({
   // itself lives in utils/propertySession.ts, so leaving this screen and coming
   // back does not ask again; only a reload or a new tab does.
   const [propertyMode, setPropertyMode] = useState(startOnProperty);
+  useEffect(() => {
+    // The main Property tab can change while this search screen stays mounted.
+    // Keep its face in step with that navigation, not only its initial value.
+    setPropertyMode(startOnProperty);
+    if (startOnProperty) setCompareMode(false);
+  }, [startOnProperty]);
   // The mode line now has four faces. These keep the JSX guards legible.
   const findFace = !compareMode && !propertyMode;
   // One place to flip the 地 face, so the app's main tab never drifts from it.
@@ -237,6 +248,12 @@ export const FindScreen: React.FC<FindScreenProps> = ({
     setSelectedIndex(0);
   }, [results]);
 
+  // Keep the keyboard-selected row visible inside the scrollable list.
+  useEffect(() => {
+    const el = listRef.current?.children[selectedIndex] as HTMLElement | undefined;
+    el?.scrollIntoView({ block: 'nearest' });
+  }, [selectedIndex]);
+
   useEffect(() => {
     const p = pendingRerun.current;
     if (p && p.q === searchQuery && p.mode === searchMode) {
@@ -245,7 +262,9 @@ export const FindScreen: React.FC<FindScreenProps> = ({
     }
   }, [searchQuery, searchMode, onSearchSubmit]);
 
-  const visibleResults = results.slice(0, MAX_SUGGESTIONS);
+  // Show every result the search returned — the register can hold far more than
+  // a handful for a common name, and the list below scrolls.
+  const visibleResults = results;
 
   const recordSearch = (q: string) => {
     if (q.trim()) setRecent(addRecentSearch({ q, mode: searchMode }));
@@ -356,6 +375,23 @@ export const FindScreen: React.FC<FindScreenProps> = ({
         </h2>
 
         {/* Big search */}
+        {findFace && searchMode === 'company' && onCompanySearchScopeChange && (
+          <div style={{ marginBottom: 18 }}>
+            <div role="group" aria-label="Company search scope" className="flex justify-center gap-2">
+              {(['simple', 'comprehensive'] as const).map(scope => <button key={scope} type="button"
+                aria-pressed={companySearchScope === scope} disabled={isLoading}
+                onClick={() => onCompanySearchScopeChange(scope)}
+                style={{ padding: '7px 14px', border: '1px solid var(--rule)',
+                  background: companySearchScope === scope ? 'var(--ink)' : 'transparent',
+                  color: companySearchScope === scope ? 'var(--paper)' : 'var(--ink-mid)' }}>
+                {scope === 'simple' ? 'Simple' : 'Comprehensive'}
+              </button>)}
+            </div>
+            <p style={{ marginTop: 8, fontSize: 12, color: 'var(--ink-mid)' }}>
+              {companySearchScope === 'simple' ? 'Selected company, immediate shareholders and directors.' : 'Ownership chains, subsidiaries and related entities.'}
+            </p>
+          </div>
+        )}
         {findFace && (
         <div
           className="find-bigsearch flex text-left relative overflow-hidden"
@@ -374,7 +410,7 @@ export const FindScreen: React.FC<FindScreenProps> = ({
             onChange={(e) => onSearchQueryChange(e.target.value)}
             onKeyDown={handleKeyDown}
             aria-label="Search company or person"
-            placeholder={searchMode === 'company' ? 'Search by company name or NZBN' : 'Search by person name'}
+            placeholder={searchMode === 'company' ? 'Company, entity name or NZBN' : 'Search by person name'}
             className="flex-1 bg-transparent"
             style={{
               border: 'none',
@@ -418,9 +454,10 @@ export const FindScreen: React.FC<FindScreenProps> = ({
         {findFace && visibleResults.length > 0 && (
           <div
             className="text-left"
-            style={{ border: '1px solid var(--rule)', borderTop: 'none', background: 'var(--paper)' }}
+            style={{ border: '1px solid var(--rule)', borderTop: 'none', background: 'var(--paper)', maxHeight: 360, overflowY: 'auto' }}
             role="listbox"
             aria-label="Search suggestions"
+            ref={listRef}
           >
             {visibleResults.map((item, i) => (
               <div
@@ -446,7 +483,8 @@ export const FindScreen: React.FC<FindScreenProps> = ({
                   background: i === selectedIndex ? 'oklch(from var(--accent) l c h / .12)' : undefined,
                 }}
               >
-                <b style={{ fontWeight: 600, fontSize: 13.5 }}>{item.entityName}</b>
+                <div><b style={{ fontWeight: 600, fontSize: 13.5 }}>{item.entityName}</b>
+                  <p className="text-ink-mid" style={{ fontSize: 11, marginTop: 3 }}>{item.entityTypeDescription || item.entityTypeCode || 'Entity type not supplied'}</p></div>
                 <span
                   className="whitespace-nowrap text-ink-mid"
                   style={{ fontFamily: 'var(--mono)', fontSize: 11, fontVariantNumeric: 'tabular-nums' }}
@@ -583,7 +621,7 @@ export const FindScreen: React.FC<FindScreenProps> = ({
           {([
             {
               kanji: '社',
-              label: 'Companies',
+              label: 'Companies & entities',
               active: findFace && searchMode === 'company',
               onClick: () => { setCompareMode(false); setProperty(false); onSearchModeChange('company'); },
             },

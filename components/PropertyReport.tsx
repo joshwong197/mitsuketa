@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { ArrowLeft, Download } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, Download, ExternalLink } from 'lucide-react';
 import { PropertyStyles } from './PropertyStyles';
 import { TitleMap } from './TitleMap';
 import type { TitleReport } from '../services/propertyService.js';
@@ -92,6 +92,16 @@ const State: React.FC<{ children: React.ReactNode; live?: boolean }> = ({ childr
     </span>
 );
 
+const money = (value?: number) => value === undefined
+    ? '—'
+    : new Intl.NumberFormat('en-NZ', { style: 'currency', currency: 'NZD', maximumFractionDigits: 0 }).format(value);
+
+const sourceDate = (value?: string) => {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : formatDate(date);
+};
+
 const EventRow: React.FC<{ event: MemorialEvent; onJump: (id: string) => void }> = ({ event, onJump }) => {
     const [open, setOpen] = useState(false);
     const closed = !!event.closed_by;
@@ -173,8 +183,11 @@ export const PropertyReport: React.FC<PropertyReportProps> = ({
 }) => {
     const view = useMemo(() => buildTitleView(report), [report]);
     const [filter, setFilter] = useState<FilterKey>('all');
+    const [councilCopyState, setCouncilCopyState] = useState<'idle' | 'copied' | 'failed'>('idle');
     // Oldest first, the way a title is read. The toggle flips it.
     const [newestFirst, setNewestFirst] = useState(false);
+
+    useEffect(() => setCouncilCopyState('idle'), [view.address]);
 
     const rows = useMemo(() => {
         const kept = view.chronology.filter(e => matchesFilter(e, filter));
@@ -199,6 +212,32 @@ export const PropertyReport: React.FC<PropertyReportProps> = ({
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         el.classList.add('ev-flash');
         setTimeout(() => el.classList.remove('ev-flash'), 1400);
+    };
+
+    const copyCouncilAddress = async () => {
+        if (!view.address) {
+            setCouncilCopyState('failed');
+            return;
+        }
+        try {
+            if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(view.address);
+            } else {
+                const field = document.createElement('textarea');
+                field.value = view.address;
+                field.setAttribute('readonly', '');
+                field.style.position = 'fixed';
+                field.style.opacity = '0';
+                document.body.appendChild(field);
+                field.select();
+                const copied = document.execCommand('copy');
+                field.remove();
+                if (!copied) throw new Error('Clipboard unavailable');
+            }
+            setCouncilCopyState('copied');
+        } catch {
+            setCouncilCopyState('failed');
+        }
     };
 
     const shownBurdens = view.burdens.filter(e => matchesFilter(e, filter));
@@ -231,8 +270,12 @@ export const PropertyReport: React.FC<PropertyReportProps> = ({
                 )}
             </div>
 
-            {/* Masthead — the title number is this document's proper noun, and the
-                hanko is the one stamp on the page. */}
+            {report.audit_reference && <p className="text-ink-mid" style={{ fontFamily: 'var(--mono)', fontSize: 11, marginBottom: 14 }}>
+                Search reference: {report.audit_reference}
+                {report.matter_reference && <> · Matter: {report.matter_reference}</>}
+            </p>}
+
+            {/* Masthead puts the address first when LINZ supplies one. */}
             <header
                 className="flex items-start justify-between flex-wrap"
                 style={{ gap: 20, borderBottom: '2px solid var(--ink)', paddingBottom: 14, marginBottom: 4 }}
@@ -254,11 +297,9 @@ export const PropertyReport: React.FC<PropertyReportProps> = ({
                             fontVariantNumeric: 'tabular-nums',
                         }}
                     >
-                        {view.titleNo}
+                        {view.address || view.titleNo}
                     </h3>
-                    {view.address && (
-                        <p style={{ fontSize: 14, margin: '8px 0 0' }}>{view.address}</p>
-                    )}
+                    {view.address && <p className="text-ink-mid" style={{ fontFamily: 'var(--mono)', fontSize: 12, margin: '8px 0 0' }}>Title {view.titleNo}</p>}
                     <p className="text-ink-mid" style={{ fontSize: 12.5, margin: '3px 0 0' }}>{view.meta}</p>
                 </div>
                 <div className="flex flex-col items-center" style={{ gap: 7, paddingTop: 4 }}>
@@ -280,6 +321,20 @@ export const PropertyReport: React.FC<PropertyReportProps> = ({
             <div style={{ borderTop: '1px solid var(--ink)', marginBottom: 30 }} />
 
             <div className="doc-body">
+                <section className="property-summary" aria-labelledby="property-summary-title">
+                    <h4 id="property-summary-title">Title summary</h4>
+                    <dl className="property-summary-grid">
+                        <div className="property-summary-item"><dt>Address</dt><dd>{view.address || 'Not supplied'}</dd></div>
+                        <div className="property-summary-item"><dt>Title number</dt><dd>{view.summary.titleNo}</dd></div>
+                        <div className="property-summary-item"><dt>Registered owners</dt><dd>{view.summary.owners.join(' · ') || 'Not supplied'}</dd></div>
+                        <div className="property-summary-item"><dt>Tenure / type</dt><dd>{view.summary.tenure}</dd></div>
+                        <div className="property-summary-item"><dt>Status</dt><dd>{view.summary.status}</dd></div>
+                        <div className="property-summary-item"><dt>Land district</dt><dd>{view.summary.landDistrict}</dd></div>
+                        <div className="property-summary-item"><dt>Area</dt><dd>{view.summary.area}</dd></div>
+                        <div className="property-summary-item"><dt>Issue date</dt><dd>{view.summary.issueDate}</dd></div>
+                        <div className="property-summary-item property-summary-interests"><dt>Current mortgages, caveats and leases</dt><dd>{view.summary.interests.length ? <ul>{view.summary.interests.map(event=><li key={event.id}>{event.headline}{event.instrument?` · ${event.instrument}`:''}</li>)}</ul> : 'None recorded'}</dd></div>
+                    </dl>
+                </section>
                 {report.bbox && report.geometry && (
                     <Section mark="地図" title="Parcel">
                         <TitleMap geometry={report.geometry} bbox={report.bbox} />
@@ -303,6 +358,77 @@ export const PropertyReport: React.FC<PropertyReportProps> = ({
                         ))}
                     </dl>
                 </Section>
+
+                {view.ratingValuation && (
+                    <Section
+                        mark="評価"
+                        title="Council rating valuation"
+                        aside={<span className="count">{view.ratingValuation.council}</span>}
+                    >
+                        {view.ratingValuation.status === 'matched' ? (
+                            <>
+                                <dl className="ledger">
+                                    <dt>Capital value</dt><dd style={{ fontFamily: 'var(--mono)' }}>{money(view.ratingValuation.capitalValue)}</dd>
+                                    <dt>Land value</dt><dd style={{ fontFamily: 'var(--mono)' }}>{money(view.ratingValuation.landValue)}</dd>
+                                    <dt>{view.ratingValuation.improvementsValueSource === 'calculated_cv_minus_lv' ? 'Improvements (CV − LV)' : 'Improvements'}</dt><dd style={{ fontFamily: 'var(--mono)' }}>{money(view.ratingValuation.improvementsValue)}</dd>
+                                    {view.ratingValuation.valuationNumber && <><dt>Valuation reference</dt><dd style={{ fontFamily: 'var(--mono)' }}>{view.ratingValuation.valuationNumber}</dd></>}
+                                    {view.ratingValuation.valuationDate && <><dt>Valuation date</dt><dd style={{ fontFamily: 'var(--mono)' }}>{sourceDate(view.ratingValuation.valuationDate)}</dd></>}
+                                    {view.ratingValuation.sourceUpdatedAt && <><dt>Source updated</dt><dd style={{ fontFamily: 'var(--mono)' }}>{sourceDate(view.ratingValuation.sourceUpdatedAt)}</dd></>}
+                                    <dt>Retrieved</dt><dd style={{ fontFamily: 'var(--mono)' }}>{sourceDate(view.ratingValuation.retrievedAt)}</dd>
+                                    {view.ratingValuation.sourceName && <><dt>Source</dt><dd>{view.ratingValuation.sourceName}</dd></>}
+                                </dl>
+                                <p className="text-ink-pale" style={{ fontSize: 11.5, margin: '10px 0 0', maxWidth: '64ch' }}>
+                                    Official council rating data matched to this address. For rating purposes; this is not a current market valuation.
+                                </p>
+                            </>
+                        ) : (
+                            <p className="text-ink-mid" style={{ fontSize: 12.5, margin: 0, maxWidth: '64ch' }}>
+                                {view.ratingValuation.status === 'ambiguous'
+                                    ? 'More than one council rating unit may cover this title. Check the official council record to choose the correct property.'
+                                    : view.ratingValuation.note?.includes('unavailable')
+                                        ? 'The council valuation service did not respond in time. Reopen this report to try again, or use the official council search.'
+                                    : 'Open the official council property search to view the current rating valuation for this address.'}
+                            </p>
+                        )}
+                        <div className="flex flex-wrap items-center" style={{ gap: '6px 18px', marginTop: 12 }}>
+                            <a
+                                href={view.ratingValuation.officialUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="property-link text-accent"
+                                onClick={view.ratingValuation.status === 'matched' ? undefined : () => { void copyCouncilAddress(); }}
+                            >
+                                {view.ratingValuation.status === 'matched'
+                                    ? 'Open official council valuation'
+                                    : councilCopyState === 'copied'
+                                        ? 'Address copied · open council search'
+                                        : 'Copy address & open council search'} <ExternalLink size={11} strokeWidth={1.6} />
+                            </a>
+                            {view.ratingValuation.sourceUrl && (
+                                <a href={view.ratingValuation.sourceUrl} target="_blank" rel="noopener noreferrer" className="property-link text-ink-pale">
+                                    Source data <ExternalLink size={10} strokeWidth={1.6} />
+                                </a>
+                            )}
+                            {view.ratingValuation.licenceUrl && (
+                                <a href={view.ratingValuation.licenceUrl} target="_blank" rel="noopener noreferrer" className="property-link text-ink-pale">
+                                    CC BY 4.0 <ExternalLink size={10} strokeWidth={1.6} />
+                                </a>
+                            )}
+                        </div>
+                        {view.ratingValuation.status !== 'matched' && (
+                            <p aria-live="polite" className="text-ink-pale" style={{ fontSize: 10.5, margin: '8px 0 0' }}>
+                                {councilCopyState === 'copied'
+                                    ? 'Paste the copied address into the council search.'
+                                    : councilCopyState === 'failed'
+                                        ? `Clipboard access was blocked. Copy this address: ${view.address ?? 'Address unavailable'}`
+                                        : 'The exact report address will be copied before the council site opens.'}
+                            </p>
+                        )}
+                        {view.ratingValuation.note && (
+                            <p className="text-ink-pale" style={{ fontSize: 10.5, margin: '8px 0 0' }}>{view.ratingValuation.note}</p>
+                        )}
+                    </Section>
+                )}
 
                 {view.owners.length > 0 && (
                     <Section
@@ -466,10 +592,10 @@ export const PropertyReport: React.FC<PropertyReportProps> = ({
 
             {/* Colophon */}
             <p
-                className="text-ink-pale"
+                className="property-colophon text-ink-pale"
                 style={{
-                    fontSize: 11, lineHeight: 1.65, marginTop: 40,
-                    borderTop: '1px solid var(--ink-wash)', paddingTop: 14, maxWidth: '78ch',
+                    fontSize: 11, lineHeight: 1.65,
+                    borderTop: '1px solid var(--ink-wash)', paddingTop: 14,
                 }}
             >
                 <span style={{ fontFamily: 'var(--serif)', letterSpacing: '.18em', marginRight: 8, color: 'var(--ink-mid)' }}>
