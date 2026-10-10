@@ -1,0 +1,14 @@
+import assert from 'node:assert/strict';
+import { shareholderStatus, removedCompany } from './relationshipStatus';
+import type { NZBNFullEntity } from '../types';
+const entity = (holders: any[], extensive = false): NZBNFullEntity => ({ nzbn: 'child', entityName: 'Child', entityStatusDescription: 'Registered', 'company-details': { extensiveShareholding: extensive, shareholding: { shareAllocation: [{ allocation: 100, shareholder: holders }] } } });
+assert.equal(shareholderStatus('owner', 'Owner Ltd', entity([{ otherShareholder: { nzbn: 'owner' } }]), {}, {}), 'current');
+assert.equal(shareholderStatus('owner', 'Owner Ltd', entity([{ otherShareholder: { currentEntityName: 'OWNER LIMITED' } }]), {}, {}), 'current');
+assert.equal(shareholderStatus('owner', 'Owner Ltd', entity([{ otherShareholder: { nzbn: 'another' } }]), {}, {}), 'former');
+assert.equal(shareholderStatus('owner', 'Owner Ltd', null, {}, {}), 'unverified');
+assert.equal(shareholderStatus('owner', 'Owner Ltd', entity([], true), {}, {}), 'unverified');
+assert.equal(shareholderStatus('owner', 'Owner Ltd', null, { endDate: '2010-01-01' }, {}), 'former');
+assert.equal(shareholderStatus('owner', 'Owner Ltd', null, {}, { status: 'inactive' }), 'former');
+assert.equal(removedCompany({ status: 'Removed', entityStatusDescription: 'Historic liquidation' }), true);
+assert.equal(removedCompany({ status: 'In Liquidation' }), false);
+console.log('Relationship status checks passed');

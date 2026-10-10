@@ -22,6 +22,31 @@ export const MIN_ZOOM = 1;
 
 export interface TileRef { z: number; x: number; y: number }
 
+export const TILE_FALLBACK_LEVELS = 4;
+
+/**
+ * Locate the lower-resolution ancestor covering one missing tile. `offsetX`
+ * and `offsetY` identify the original tile's 256px crop within that ancestor.
+ */
+export function tileFallback(tile: TileRef, depth: number): TileRef & {
+    depth: number;
+    scale: number;
+    offsetX: number;
+    offsetY: number;
+} {
+    const safeDepth = Math.min(Math.max(0, Math.floor(depth)), Math.max(0, tile.z - MIN_ZOOM));
+    const scale = 2 ** safeDepth;
+    return {
+        z: tile.z - safeDepth,
+        x: Math.floor(tile.x / scale),
+        y: Math.floor(tile.y / scale),
+        depth: safeDepth,
+        scale,
+        offsetX: tile.x % scale,
+        offsetY: tile.y % scale,
+    };
+}
+
 export interface TileGrid {
     z: number;
     tiles: (TileRef & { left: number; top: number })[];

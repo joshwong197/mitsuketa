@@ -1,6 +1,11 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { ArrowRight, Loader2, Lock, Search as SearchIcon } from 'lucide-react';
 import { PropertyStyles } from './PropertyStyles';
+import { PropertyAudit } from './PropertyAudit';
+import { MatterReference } from './MatterReference';
+import { NoticeAcceptance } from './NoticeAcceptance';
+import { usesClerk } from '../utils/propertyAuthClient';
+const ClerkPropertyAccess = React.lazy(() => import('./ClerkPropertyAccess'));
 import {
     fetchTitleReport, login, logout, searchAddress, searchOwner,
     PropertyError,
@@ -133,7 +138,8 @@ const SignIn: React.FC = () => {
         setBusy(true);
         setError(null);
         try {
-            signIn(await login(name.trim(), password));
+            const identity = await login(name.trim(), password);
+            signIn(identity.searcher, identity.canAudit);
         } catch (err) {
             setError(err instanceof PropertyError ? err.message : 'Sign-in failed.');
             setPassword('');
@@ -233,8 +239,13 @@ const Notice: React.FC<{ searcher: string }> = ({ searcher }) => {
                     <>The data is a <strong className="text-ink">reference copy, not a title search</strong>.
                         It may lag the register and is not legal advice. Obtain a formal search from
                         LINZ before relying on it.</>,
-                    <><strong className="text-ink">Every search you run is logged</strong> — your account,
-                        the time, and what you typed. The log is visible to the administrator.</>,
+                    <><strong className="text-ink">Every submitted search is logged once</strong> — your account,
+                        time, search mode, search text or title number, matter reference, audit ID and IP address
+                        where available. Address choices and title references opened from the result stay on that
+                        search record. Authorised administrators can view the log in Neon. Returned report contents
+                        are not stored in the audit.</>,
+                    <>Use a case or file code as your required matter reference. Saved references stay in this
+                        browser. Review the privacy notice and terms below.</>,
                 ].map((item, i) => (
                     <li key={i} style={{ display: 'flex', gap: 10, marginBottom: 9 }}>
                         <span className="text-accent" style={{ fontFamily: 'var(--serif)', flexShrink: 0 }}>—</span>
@@ -243,22 +254,7 @@ const Notice: React.FC<{ searcher: string }> = ({ searcher }) => {
                 ))}
             </ul>
 
-            <label
-                className="flex items-start gap-3"
-                style={{ marginTop: 18, fontSize: 12.5, cursor: 'pointer' }}
-            >
-                <input
-                    type="checkbox"
-                    checked={agreed}
-                    onChange={(e) => setAgreed(e.target.checked)}
-                    style={{ marginTop: 2, width: 15, height: 15, accentColor: 'var(--accent)', flexShrink: 0 }}
-                />
-                <span>
-                    I have read the above and confirm my searches will be for a lawful
-                    property-related purpose, consistent with the Privacy Act 2020 and the LINZ
-                    Licence for Personal Data.
-                </span>
-            </label>
+            <NoticeAcceptance accepted={agreed} onChange={setAgreed} />
 
             <div style={{ marginTop: 18 }}>
                 <Button disabled={!agreed} onClick={acknowledge}>Agree and continue</Button>
@@ -276,11 +272,14 @@ const ResultRow: React.FC<{
     main: string;
     meta?: string;
     onClick: () => void;
-}> = ({ left, main, meta, onClick }) => (
+    disabled?: boolean;
+}> = ({ left, main, meta, onClick, disabled }) => (
     <button
         onClick={onClick}
+        disabled={disabled}
         className="property-row w-full flex items-center gap-3.5 text-left transition-colors duration-150"
-        style={{ borderTop: '1px solid var(--rule)', padding: '11px 13px' }}
+        style={{ borderTop: '1px solid var(--rule)', padding: '11px 13px',
+            opacity: disabled ? 0.55 : 1, cursor: disabled ? 'wait' : 'pointer' }}
     >
         <span
             className="text-accent flex-shrink-0"
@@ -307,20 +306,28 @@ const ResultList: React.FC<{ children: React.ReactNode }> = ({ children }) => (
 
 const Search: React.FC<{
     searcher: string;
+    canAudit: boolean;
     onOpenReport: (report: TitleReport, titleNo: string) => void;
-}> = ({ searcher, onOpenReport }) => {
+}> = ({ searcher, canAudit, onOpenReport }) => {
     const [mode, setMode] = useState<Mode>('address');
     const [query, setQuery] = useState('');
+    const [reference, setReference] = useState('');
+    const [submittedReference, setSubmittedReference] = useState('');
+    const [submittedSearchId, setSubmittedSearchId] = useState('');
+    const [showAudit, setShowAudit] = useState(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [address, setAddress] = useState<AddressResult | null>(null);
     const [owner, setOwner] = useState<OwnerResult | null>(null);
+    const busyRef = useRef(false);
 
     // A report is no longer a face of this screen — it opens as its own tab, so
     // it survives switching to a company or an individual and gets its own chip.
     const clear = () => { setAddress(null); setOwner(null); setError(null); };
 
     const run = async (fn: () => Promise<void>) => {
+        if (busyRef.current) return;
+        busyRef.current = true;
         setBusy(true);
         setError(null);
         try {
@@ -329,29 +336,38 @@ const Search: React.FC<{
             // A 401 already re-locked the screen via propertyService.
             setError(err instanceof PropertyError ? err.message : 'Something went wrong.');
         } finally {
+            busyRef.current = false;
             setBusy(false);
         }
     };
 
     const submit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!query.trim() || busy) return;
+        if (!query.trim() || !reference.trim() || busyRef.current) return;
         clear();
+        const matter = reference.trim();
+        const operationId = crypto.randomUUID();
+        setSubmittedReference(matter);
+        setSubmittedSearchId(operationId);
         run(async () => {
             // A title reference identifies exactly one record, so there is nothing
             // to choose between — open the report rather than listing one result.
-            if (mode === 'title') { await openTitle(query.trim().toUpperCase()); return; }
-            if (mode === 'address') setAddress(await searchAddress(query.trim()));
-            else setOwner(await searchOwner(query.trim()));
+            if (mode === 'title') { await openTitle(query.trim().toUpperCase(), matter, operationId, true); return; }
+            if (mode === 'address') setAddress(await searchAddress(query.trim(), undefined, matter, operationId));
+            else setOwner(await searchOwner(query.trim(), matter, operationId));
         });
     };
 
     const pickCandidate = (addressId: number) => run(async () => {
-        setAddress(await searchAddress(query.trim(), addressId));
+        setAddress(await searchAddress(address?.query || query.trim(), addressId, submittedReference, submittedSearchId));
     });
 
-    const openTitle = async (titleNo: string) => {
-        onOpenReport(await fetchTitleReport(titleNo), titleNo);
+    const openTitle = async (titleNo: string, matter = submittedReference,
+        operationId = submittedSearchId, startsSearch = false) => {
+        const addressId = mode === 'address'
+            ? Number(address?.resolved_address?.address_id) || undefined
+            : undefined;
+        onOpenReport(await fetchTitleReport(titleNo, matter, operationId, startsSearch, addressId), titleNo);
     };
 
     const titleRow = (t: TitleSummary) => (
@@ -361,6 +377,7 @@ const Search: React.FC<{
             main={t.owners || [t.type, t.status].filter(Boolean).join(' · ')}
             meta={t.owners ? [t.type, t.status, t.land_district].filter(Boolean).join(' · ') : (t.land_district ?? undefined)}
             onClick={() => run(() => openTitle(t.title_no))}
+            disabled={busy}
         />
     );
 
@@ -373,6 +390,8 @@ const Search: React.FC<{
     ];
     const placeholder = modes.find(m => m.id === mode)!.placeholder;
 
+    if (showAudit) return <PropertyAudit onBack={() => setShowAudit(false)} />;
+
     return (
         <div className="text-left">
             <div
@@ -382,6 +401,7 @@ const Search: React.FC<{
                 <span className="text-ink-mid" style={{ fontSize: 12 }}>
                     Signed in as <span className="text-ink">{searcher}</span>
                 </span>
+                {canAudit && <button type="button" onClick={() => setShowAudit(true)} className="text-accent" style={{ fontSize: 12 }}>Search audit</button>}
                 <button
                     onClick={() => { void logout(); }}
                     className="property-quiet text-ink-pale transition-colors duration-150"
@@ -392,6 +412,7 @@ const Search: React.FC<{
             </div>
 
             <form onSubmit={submit}>
+                <MatterReference searcher={searcher} value={reference} onChange={setReference} disabled={busy} />
                 {/* Fused search bar — the same frame as FindScreen's .find-bigsearch */}
                 <div
                     className="property-bigsearch flex relative overflow-hidden"
@@ -419,12 +440,12 @@ const Search: React.FC<{
                     />
                     <button
                         type="submit"
-                        disabled={!query.trim() || busy}
+                        disabled={!query.trim() || !reference.trim() || busy}
                         className="property-btn bg-ink text-paper inline-flex items-center gap-2 transition-colors duration-150 flex-shrink-0"
                         style={{
                             padding: '0 22px', fontSize: 14, letterSpacing: '.04em',
-                            opacity: !query.trim() || busy ? 0.45 : 1,
-                            cursor: !query.trim() || busy ? 'not-allowed' : 'pointer',
+                            opacity: !query.trim() || !reference.trim() || busy ? 0.45 : 1,
+                            cursor: !query.trim() || !reference.trim() || busy ? 'not-allowed' : 'pointer',
                         }}
                     >
                         {busy
@@ -434,10 +455,7 @@ const Search: React.FC<{
                     </button>
                 </div>
 
-                {/* Mode line. The file-reference chip that used to sit here is gone:
-                    with per-user sign-in the audit log records who ran a search, so
-                    the reference was no longer carrying the accountability it was
-                    added for — only friction on every query. */}
+                {/* Search modes share the same required matter reference. */}
                 <div
                     className="flex items-center flex-wrap text-ink-mid"
                     style={{ marginTop: 12, gap: 2, fontSize: 12.5 }}
@@ -447,7 +465,7 @@ const Search: React.FC<{
                             {i > 0 && <span className="text-ink-wash">·</span>}
                             <button
                                 type="button"
-                                onClick={() => { setMode(m.id); clear(); }}
+                                onClick={() => { setMode(m.id); setSubmittedSearchId(''); clear(); }}
                                 aria-current={mode === m.id}
                                 className="inline-flex items-baseline gap-1.5 transition-colors duration-150"
                                 style={{
@@ -471,6 +489,10 @@ const Search: React.FC<{
                 </div>
             </form>
 
+            {(address?.audit_reference || owner?.audit_reference) && <p className="text-ink-mid" style={{ fontFamily: 'var(--mono)', fontSize: 11, marginTop: 12 }}>
+                Search reference: {address?.audit_reference || owner?.audit_reference}
+                {submittedReference && <> · Matter: {submittedReference}</>}
+            </p>}
             {error && <ErrorNote>{error}</ErrorNote>}
 
             {/* Address results */}
@@ -488,6 +510,7 @@ const Search: React.FC<{
                                 meta={[c.suburb_locality, c.town_city, c.territorial_authority]
                                     .filter(Boolean).join(' · ')}
                                 onClick={() => pickCandidate(c.address_id)}
+                                disabled={busy}
                             />
                         ))}
                     </ResultList>
@@ -550,7 +573,8 @@ const Search: React.FC<{
                                             meta={[r.title?.type, r.title?.status,
                                                 r.title?.land_district ?? r.land_district]
                                                 .filter(Boolean).join(' · ')}
-                                            onClick={() => openTitle(r.title_no!)}
+                                            onClick={() => run(() => openTitle(r.title_no!))}
+                                            disabled={busy}
                                         />
                                     ))}
                                 </ResultList>
@@ -570,7 +594,7 @@ export interface PropertyScreenProps {
     onOpenReport: (report: TitleReport, titleNo: string) => void;
 }
 
-export const PropertyScreen: React.FC<PropertyScreenProps> = ({ onOpenReport }) => {
+const PropertyContent: React.FC<PropertyScreenProps> = ({ onOpenReport }) => {
     const session = useSyncExternalStore(subscribe, getSession, () => null);
 
     const face = !session
@@ -579,6 +603,7 @@ export const PropertyScreen: React.FC<PropertyScreenProps> = ({ onOpenReport }) 
             ? <Notice searcher={session.searcher} />
             : <Search
                 searcher={session.searcher}
+                canAudit={session.canAudit}
                 onOpenReport={onOpenReport}
               />;
 
@@ -588,4 +613,12 @@ export const PropertyScreen: React.FC<PropertyScreenProps> = ({ onOpenReport }) 
             <PropertyStyles />
         </>
     );
+};
+
+export const PropertyScreen: React.FC<PropertyScreenProps> = props => {
+    if (!usesClerk()) return <PropertyContent {...props} />;
+    if (!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY) return <p>Property sign-in is not configured on this deployment.</p>;
+    return <React.Suspense fallback={<p>Loading your account…</p>}>
+        <ClerkPropertyAccess><PropertyContent {...props} /></ClerkPropertyAccess>
+    </React.Suspense>;
 };

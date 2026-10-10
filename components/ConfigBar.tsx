@@ -18,20 +18,21 @@ export const ConfigBar: React.FC<Props> = ({ theme, toggleTheme }) => {
       <div className="fixed top-0 left-0 right-0 z-40 bg-paper border-b border-rule">
         <div className="h-[52px] flex items-center gap-3.5 px-[18px]">
           {/* Hanko + wordmark */}
-          <div
-            className="w-[30px] h-[30px] grid place-items-center flex-shrink-0 bg-accent text-accent-ink"
-            style={{ fontFamily: 'var(--serif)', fontWeight: 700, fontSize: 17, boxShadow: 'inset 0 0 14px oklch(0 0 0/.22)' }}
-            aria-hidden="true"
-          >
-            見
-          </div>
-          <div className="flex items-baseline gap-2">
-            <span style={{ fontFamily: 'var(--serif)', fontWeight: 600, fontSize: 18 }}>Mitsuketa</span>
-            <span className="text-ink-mid" style={{ fontFamily: 'var(--serif)', fontSize: 11, letterSpacing: '.24em' }}>
-              見つけた
-            </span>
-          </div>
-
+          <a href="#/" aria-label="Mitsuketa home" className="flex items-center gap-3.5 text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent focus-visible:outline-offset-4">
+            <div
+              className="w-[30px] h-[30px] grid place-items-center flex-shrink-0 bg-accent text-accent-ink"
+              style={{ fontFamily: 'var(--serif)', fontWeight: 700, fontSize: 17, boxShadow: 'inset 0 0 14px oklch(0 0 0/.22)' }}
+              aria-hidden="true"
+            >
+              見
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span style={{ fontFamily: 'var(--serif)', fontWeight: 600, fontSize: 18 }}>Mitsuketa</span>
+              <span className="text-ink-mid" style={{ fontFamily: 'var(--serif)', fontSize: 11, letterSpacing: '.24em' }}>
+                見つけた
+              </span>
+            </div>
+          </a>
           <div className="flex-1" />
 
           {/* MBIE disclaimer link */}

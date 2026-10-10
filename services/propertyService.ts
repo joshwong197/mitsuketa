@@ -1,5 +1,7 @@
 import type { MemorialRow } from '../utils/memorials.js';
-import { signOut } from '../utils/propertySession.js';
+import { signOut, sessionGeneration } from '../utils/propertySession.js';
+import { propertyAuthHeaders, exitPropertyAuth, usesClerk } from '../utils/propertyAuthClient';
+import type { CouncilRatingValuation, ResolvedPropertyAddress } from '../utils/councilValuation.js';
 
 /**
  * Client for /api/property — the LINZ Title Register feature (家族).
@@ -8,10 +10,8 @@ import { signOut } from '../utils/propertySession.js';
  * only and never reaches the browser. The session is an httpOnly cookie, so it is
  * not readable here either — `credentials: 'same-origin'` is what carries it.
  *
- * Searches no longer carry a matter reference. It existed because a shared
- * credential could not say WHO ran a search, so the reference had to say WHY;
- * per-user sign-in records the account instead, and the field was left as
- * friction on every query.
+ * Searches may carry a matter reference independently of the signed-in account.
+ * Responses include the durable Neon audit ID for the search/report request.
  */
 
 export class PropertyError extends Error {
@@ -39,7 +39,12 @@ export interface TitleSummary {
     owners?: string | null;
 }
 
-export interface AddressResult {
+export interface AuditReference {
+    audit_reference?: string;
+    matter_reference?: string;
+}
+
+export interface AddressResult extends AuditReference {
     resolution_status: 'ok' | 'not_found' | 'no_title' | 'no_geometry' | 'needs_confirmation';
     query: string;
     resolved_address?: Record<string, any>;
@@ -57,18 +62,20 @@ export interface OwnerRow {
     title?: TitleSummary | null;
 }
 
-export interface OwnerResult {
+export interface OwnerResult extends AuditReference {
     query: string;
     results: OwnerRow[];
     truncated: boolean;
 }
 
-export interface TitleReport {
+export interface TitleReport extends AuditReference {
     title: Record<string, any> | null;
     owners: Record<string, any>[];
     memorials: MemorialRow[];
     estates: Record<string, any>[];
     address: string | null;
+    address_details?: ResolvedPropertyAddress | null;
+    rating_valuation?: CouncilRatingValuation | null;
     /** Parcel outline for the aerial map; null when the title carries none. */
     geometry?: { type: string; coordinates: any } | null;
     bbox?: [number, number, number, number] | null;
@@ -84,9 +91,15 @@ export function tileUrl(z: number, x: number, y: number): string {
 
 
 async function request<T>(params: Record<string, string>): Promise<T> {
+    const generation = sessionGeneration();
     const url = `${ENDPOINT}?${new URLSearchParams(params)}`;
-    const resp = await fetch(url, { credentials: 'same-origin' });
-    if (resp.ok) return resp.json() as Promise<T>;
+    const resp = await fetch(url, { credentials: 'same-origin', headers: await propertyAuthHeaders() });
+    if (generation !== sessionGeneration()) throw new SessionExpiredError('Your account changed. Run the search again.', 'session_changed', 401);
+    if (resp.ok) {
+        const data = await resp.json() as T;
+        if (generation !== sessionGeneration()) throw new SessionExpiredError('Your account changed. Run the search again.', 'session_changed', 401);
+        return data;
+    }
 
     let code = 'request_failed';
     let message = `Request failed (${resp.status}).`;
@@ -105,13 +118,13 @@ async function request<T>(params: Record<string, string>): Promise<T> {
     }
     if (resp.status === 503) {
         throw new PropertyError(
-            'Property search is not enabled on this deployment.', code, 503);
+            code === 'audit_unavailable' ? message : 'Property search is not enabled on this deployment.', code, 503);
     }
     throw new PropertyError(message, code, resp.status);
 }
 
 /** Returns the searcher name the server recorded. Throws on bad credentials. */
-export async function login(searcher: string, password: string): Promise<string> {
+export async function login(searcher: string, password: string): Promise<{ searcher: string; canAudit: boolean }> {
     const resp = await fetch(`${ENDPOINT}?mode=login`, {
         method: 'POST',
         credentials: 'same-origin',
@@ -120,7 +133,7 @@ export async function login(searcher: string, password: string): Promise<string>
     });
     if (resp.ok) {
         const body = await resp.json();
-        return body.searcher ?? searcher;
+        return { searcher: body.searcher ?? searcher, canAudit: body.canAudit === true };
     }
     let code = 'login_failed';
     let message = 'Sign-in failed.';
@@ -140,6 +153,7 @@ export async function login(searcher: string, password: string): Promise<string>
 
 export async function logout(): Promise<void> {
     try {
+        if (usesClerk()) { await exitPropertyAuth(); return; }
         await fetch(`${ENDPOINT}?mode=logout`, {
             method: 'POST', credentials: 'same-origin',
         });
@@ -149,20 +163,41 @@ export async function logout(): Promise<void> {
 }
 
 export function searchAddress(
-    query: string, addressId?: number,
+    query: string, addressId: number | undefined, reference: string, operationId: string,
 ): Promise<AddressResult> {
-    const params: Record<string, string> = { mode: 'address' };
+    const params: Record<string, string> = { mode: 'address', search_id: operationId };
     if (addressId !== undefined) params.address_id = String(addressId);
     // Sent alongside address_id too, so the audit line records what was typed
     // rather than just the id that got picked from the candidate list.
     if (query) params.q = query;
+    if (reference) params.ref = reference;
     return request<AddressResult>(params);
 }
 
-export function searchOwner(query: string): Promise<OwnerResult> {
-    return request<OwnerResult>({ mode: 'owner', q: query });
+export function searchOwner(query: string, reference: string, operationId: string): Promise<OwnerResult> {
+    return request<OwnerResult>({ mode: 'owner', q: query, ref: reference, search_id: operationId });
 }
 
-export function fetchTitleReport(titleNo: string): Promise<TitleReport> {
-    return request<TitleReport>({ mode: 'title', title_no: titleNo });
+export function fetchTitleReport(titleNo: string, reference: string, operationId: string,
+    startsSearch = false, addressId?: number): Promise<TitleReport> {
+    return request<TitleReport>({ mode: 'title', title_no: titleNo, ref: reference,
+        search_id: operationId, ...(startsSearch ? { search_start: '1' } : {}),
+        ...(addressId !== undefined ? { address_id: String(addressId) } : {}) });
+}
+
+export interface SearchAuditRow {
+    audit_reference: string;
+    created_at: string;
+    mode: string;
+    query: string;
+    title_no: string | null;
+    opened_titles: string[];
+    actor: string | null;
+    searcher: string | null;
+    matter_ref: string | null;
+    ip: string | null;
+}
+
+export function fetchSearchAudit(searcher = ''): Promise<{ rows: SearchAuditRow[] }> {
+    return request({ mode: 'audit', searcher });
 }

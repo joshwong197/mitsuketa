@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import { immediateCompanyGraph } from './companyScope.ts';
+import { entityStatus } from './entityStatus.ts';
+import { NodeType, type GraphNode, type GraphEdge } from '../types.ts';
+const node = (id: string, person = false): GraphNode => ({ id, type: person ? 'personNode' : 'companyNode', position: { x: 0, y: 0 }, data: { label: id, type: person ? NodeType.PERSON : NodeType.COMPANY, isTarget: id === 'target' } });
+const edge = (source: string, target: string, roleKind?: 'director' | 'shareholder', isCeased = false): GraphEdge => ({ id: `${source}-${target}`, source, target, data: { percentage: 100, label: roleKind || 'Shareholder', relationshipType: 'parent', roleKind, isCeased } });
+const nodes = [node('target'), node('holder'), node('grandparent'), node('subsidiary'), node('person', true), node('former', true)];
+const edges = [edge('holder', 'target'), edge('grandparent', 'holder'), edge('target', 'subsidiary'), edge('person', 'target', 'director'), edge('person', 'subsidiary', 'shareholder'), edge('former', 'target', 'director', true)];
+const simple = immediateCompanyGraph(nodes, edges, 'target');
+assert.deepEqual(simple.nodes.map(n => n.id), ['target', 'holder', 'person']);
+assert.equal(simple.nodes.find(n => n.id === 'person')?.data.roleKind, 'director');
+assert.equal(simple.edges.length, 2);
+assert.equal(nodes.find(n => n.id === 'target')?.data.companySearchScope, undefined);
+assert.equal(entityStatus({ status: 'In Liquidation' }).bucket, 'warning');
+assert.equal(entityStatus({ status: 'Removed', hasHistoricInsolvency: true }).alerts.length, 2);
+assert.equal(entityStatus({ status: 'Registered', removalCommenced: true }).alerts[0].label, 'Removal commenced');
+console.log('ok - immediate graph projection, original graph preserved, shared status alerts');

@@ -8,9 +8,8 @@
 //   reload, new tab, or close and reopen       -> fresh module, locked again
 //
 // sessionStorage would survive a reload and localStorage would survive
-// everything, so neither is used. It also means the acknowledgement cannot be
-// forged: there is no cookie or storage key a user can set by hand to skip the
-// privacy notice, because the flag only ever exists in memory.
+// everything, so neither is used. This acknowledgement is a browser UX gate,
+// not proof of reading or an authorisation boundary. The API enforces access.
 //
 // The server keeps its own httpOnly session cookie for actual authorisation —
 // this state is the client's view of it, not the credential.
@@ -20,9 +19,12 @@ export interface PropertySession {
     searcher: string;
     /** Has the privacy notice been accepted this session? */
     acknowledged: boolean;
+    canAudit: boolean;
 }
 
 let current: PropertySession | null = null;
+let generation = 0;
+export function sessionGeneration() { return generation; }
 const listeners = new Set<() => void>();
 
 function emit() {
@@ -33,8 +35,9 @@ export function getSession(): PropertySession | null {
     return current;
 }
 
-export function signIn(searcher: string): void {
-    current = { searcher, acknowledged: false };
+export function signIn(searcher: string, canAudit = false): void {
+    generation++;
+    current = { searcher, acknowledged: false, canAudit };
     emit();
 }
 
@@ -46,6 +49,7 @@ export function acknowledge(): void {
 
 /** Called on sign-out and whenever the API reports the session is gone (401). */
 export function signOut(): void {
+    generation++;
     current = null;
     emit();
 }

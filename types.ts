@@ -7,6 +7,7 @@ export enum NodeType {
 }
 
 export interface ApiConfig {
+  companySearchScope?: 'simple' | 'comprehensive';
   nzbnKey: string;
   companiesKey: string;
   disqualifiedDirectorsKey: string;
@@ -41,6 +42,8 @@ export interface NodeData {
   type: NodeType;
   status?: string;
   entityTypeCode?: string; // e.g. "LimitedPartnershipNz"
+  sourceRegister?: string;
+  reportedRole?: string;
   entityTypeDescription?: string; // e.g. "Limited Partnership"
   isTarget?: boolean; // To identify the center of the "butterfly"
   isHighlighted?: boolean;
@@ -48,6 +51,7 @@ export interface NodeData {
   // Visibility/collapse tracking
   isVisible?: boolean;          // Should this node be rendered?
   isDirectLineage?: boolean;    // Is this in direct path from search root?
+  companySearchScope?: 'simple' | 'comprehensive'; // Recorded on the search target
   isBranchExpanded?: boolean;   // Has this node's hidden branch been expanded?
   hiddenDescendantCount?: number; // Total hidden descendants (for badge)
   isCapped?: boolean;           // Node was truncated during crawl (mega-node trustee)
@@ -62,6 +66,9 @@ export interface NodeData {
   hasHistoricInsolvency?: boolean;
   historicInsolvencyType?: string;
   isDisqualified?: boolean; // Person node: on the disqualified directors register (crit)
+  disqualifiedCheck?: 'pending' | 'complete' | 'unavailable';
+  insolvencyCheck?: 'pending' | 'complete' | 'unavailable';
+  companyCheck?: 'pending' | 'complete' | 'unavailable';
   // Person node: insolvency register match (crit regardless of discharged/current —
   // see utils/statusRamp.ts). Deduped by node id (personId), so this is set once per
   // unique person no matter how many edges/companies they're attached to.
@@ -92,6 +99,7 @@ export interface EdgeData {
   percentage: number;
   label: string;
   relationshipType?: 'parent' | 'subsidiary' | 'sibling' | 'common';
+  currentUnverified?: boolean; // Discovery hit without current ownership evidence
   isCeased?: boolean; // Role has ended (resigned/inactive) — rendered dashed ink-wash
   // Person → company edges only: which register relationship this specific edge
   // represents. A person's node-level roleKind is the union across all their edges;
@@ -128,7 +136,18 @@ export interface GraphSnapshot {
   edges: GraphEdge[];
   personResults?: PersonCompanyResult[]; // NEW: For person search snapshots
   notes?: CaseNote[]; // Case notes copied in at save time (Stage B populates)
+  subjectId?: string;
+  caseId?: string;
+  viewScope?: 'simple' | 'comprehensive';
+  hideDirectors?: boolean;
+  hideInactiveCompanies?: boolean;
+  hideInactiveDirectors?: boolean;
+  disqualifiedMatches?: any[];
+  insolvencyMatches?: any[];
+  registerChecks?: PersonRegisterChecks;
 }
+
+export interface CaseTrailEntry { time: string; text: string }
 
 // --- Cases workspace (see design/CASES_PLAN.md) ---
 
@@ -155,6 +174,13 @@ export interface PersistedCompanyTab {
   allNodesInMemory: GraphNode[];
   edges: GraphEdge[];
   compare?: CompanyTab['compare'];
+  openedAt?: number;
+  trail?: CaseTrailEntry[];
+  restoredSnapshotId?: string;
+  viewScope?: 'simple' | 'comprehensive';
+  hideDirectors?: boolean;
+  hideInactiveCompanies?: boolean;
+  hideInactiveDirectors?: boolean;
 }
 
 // The one implicit case in v1 — localStorage mitsuketa_session_v1.
@@ -213,6 +239,15 @@ export interface CompanyTab {
   edges: GraphEdge[];
   allNodesInMemory: GraphNode[];
   isLoading: boolean;
+  /** Temporary initial graph; never persist or export it as a completed search. */
+  graphIncomplete?: boolean;
+  openedAt?: number;
+  trail?: CaseTrailEntry[];
+  restoredSnapshotId?: string;
+  viewScope?: 'simple' | 'comprehensive';
+  hideDirectors?: boolean;
+  hideInactiveCompanies?: boolean;
+  hideInactiveDirectors?: boolean;
   // Present when this tab holds a Compare (A ↔ B) result rather than an org chart
   compare?: {
     aLabel: string;
@@ -231,6 +266,16 @@ export interface IndividualTab {
   disqualifiedMatches: any[];
   insolvencyMatches: any[];
   isEnriching: boolean; // True while fetching NZBN enrichment data
+  openedAt?: number;
+  trail?: CaseTrailEntry[];
+  restoredSnapshotId?: string;
+  registerChecks?: PersonRegisterChecks;
+}
+
+export interface PersonRegisterChecks {
+  disqualified: 'complete' | 'unavailable';
+  insolvency: 'complete' | 'unavailable';
+  checkedAt?: number;
 }
 
 /**
@@ -244,7 +289,7 @@ export interface IndividualTab {
  */
 export interface PropertyTab {
   id: string;
-  label: string;      // the title number
+  label: string;      // the resolved address, or title number when unavailable
   titleNo: string;
   report: unknown;    // TitleReport — typed at the use site to keep types.ts free of service imports
 }
@@ -253,6 +298,7 @@ export interface PropertyTab {
 
 // From /entities search response
 export interface EntitySearchResultItem {
+  entityTypeDescription?: string;
   nzbn: string;
   entityName: string;
   entityStatusDescription: string;
@@ -274,6 +320,9 @@ export interface EntitySearchResponse {
 // From /entities/{nzbn} (FullEntity schema)
 // Updated to use "company-details" as per JSON definition
 export interface NZBNFullEntity {
+  entityTypeCode?: string;
+  entityTypeDescription?: string;
+  sourceRegister?: string;
   nzbn: string;
   entityName: string;
   entityStatusDescription: string;
@@ -281,6 +330,7 @@ export interface NZBNFullEntity {
   "company-details"?: {
     extensiveShareholding?: boolean;
     shareholding?: {
+      numberOfShares?: number;
       shareAllocation: Array<{
         allocation: number;
         shareholder: Array<{
@@ -305,12 +355,15 @@ export interface NZBNFullEntity {
     };
   };
   roles?: Array<{
+    startDate?: string;
+    endDate?: string;
     roleType: string;
     roleStatus: string;
     rolePerson?: {
       firstName?: string;
       lastName?: string;
       middleName?: string;
+      middleNames?: string;
       fullName?: string;
     };
     roleEntity?: {
