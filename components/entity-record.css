@@ -78,3 +78,6 @@
 .entity-provenance button { color:var(--accent); cursor:pointer; font-size:12px; min-height:40px; }
 @media(max-width:900px) { .entity-people-column { grid-template-columns:1fr; } .entity-business .entity-facts { grid-template-columns:minmax(100px,.9fr) minmax(0,1.2fr); } }
 @media(max-width:600px) { .entity-card-spine { width:36px; } .entity-card-spine > span { font-size:22px; } .entity-card-main { padding:18px 18px 0; } .entity-card h3 { font-size:25px; } .entity-card-top { flex-wrap:wrap; } .entity-card-bottom { margin-top:16px; } .entity-card-actions { justify-content:flex-start; } .entity-record-section { padding:18px; } .entity-at-a-glance { gap:16px 28px; } .entity-at-a-glance strong { font-size:23px; } .entity-documents li > div { grid-template-columns:1fr; } .entity-documents small { grid-column:1; } }
+
+.entity-card-liquidation .entity-card-spine{background:var(--crit);color:var(--accent-ink)}
+.entity-card-liquidation .entity-status{color:var(--crit);border-color:var(--crit)}

@@ -91,12 +91,12 @@ test('company cases keep their case state while scope and home navigation do not
     await expect(page.getByText('Alpha-only note', { exact: true })).toBeVisible();
 
     await page.getByRole('button', { name: 'Workspace', exact: true }).click();
-    await expect(page.getByText('Open cases', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Open files', exact: true })).toBeVisible();
     await expect(page.getByText(alpha.entityName, { exact: true }).first()).toBeVisible();
     await expect(page.getByText(beta.entityName, { exact: true }).first()).toBeVisible();
 
     await page.getByRole('link', { name: /Mitsuketa/i }).click();
-    await expect(page.getByRole('button', { name: 'Start searching', exact: true }).first()).toBeVisible();
+    await expect(page.getByLabel('Search company or person')).toBeVisible();
     await page.goBack();
     await page.getByRole('button', { name: 'Companies, 2 open company tabs' }).click();
     await expect(page.getByText(alpha.entityName, { exact: true }).first()).toBeVisible();

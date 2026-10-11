@@ -33,7 +33,15 @@ function DocumentReader({ title, html, reachedEnd, onReachedEnd, initiallyOpen =
         return()=>{document.body.style.overflow=overflow;enlarge.current?.focus();};
     },[expanded]);
     const close=()=>{scrollPosition.current=viewport.current?.scrollTop||0;setExpanded(false);};
-    const reader=<div className="sumi-notice-reader" ref={viewport} tabIndex={0} role="region" aria-label={`${title} document`} onScroll={()=>{scrollPosition.current=viewport.current?.scrollTop||0;checkEnd();}}>
+    const reader=<div className="sumi-notice-reader" ref={viewport} tabIndex={0} role="region" aria-label={`${title} document`} onClick={e => {
+        const href = (e.target as HTMLElement).closest('a')?.getAttribute('href');
+        if (href !== '#/privacy' && href !== '#/terms') return;
+        e.preventDefault();
+        const headings = content.current?.querySelectorAll<HTMLHeadingElement>('h2');
+        headings?.forEach(heading => {
+            if (heading.textContent === (href === '#/privacy' ? 'Privacy notice' : 'Terms of use')) heading.scrollIntoView({ block: 'start' });
+        });
+    }} onScroll={()=>{scrollPosition.current=viewport.current?.scrollTop||0;checkEnd();}}>
         <div className="sumi-notice-text" ref={content} dangerouslySetInnerHTML={{__html:html}} />
         <p className="sumi-notice-end">End of {title.toLowerCase()}</p>
     </div>;
@@ -50,37 +58,21 @@ function DocumentReader({ title, html, reachedEnd, onReachedEnd, initiallyOpen =
 }
 
 export const NoticeAcceptance: React.FC<{ accepted: boolean; onChange: (value: boolean) => void }> = ({ accepted, onChange }) => {
-    const [privacyEnd, setPrivacyEnd] = useState(false);
-    const [termsEnd, setTermsEnd] = useState(false);
+    const [reachedEnd, setReachedEnd] = useState(false);
     const root = useRef<HTMLElement>(null);
     const description = useId();
-    const ready = privacyEnd && termsEnd;
+    const ready = reachedEnd;
     useEffect(() => { onChange(false); }, []);
-    return <section ref={root} className="sumi-notice-acceptance" aria-label="Review privacy notice and terms" onClick={e => {
-        // The terms cross-reference the notice. Keep that link inside this
-        // review instead of navigating away and discarding the application.
-        if ((e.target as HTMLElement).closest('a')?.getAttribute('href') !== '#/privacy') return;
-        e.preventDefault();
-        (e.target as HTMLElement).closest('dialog')?.close();
-        const privacy = root.current?.querySelector('details');
-        if (privacy) privacy.open = true;
-        requestAnimationFrame(() => {
-            const reader = privacy?.querySelector<HTMLElement>('[role="region"]');
-            reader?.focus({ preventScroll: true }); reader?.scrollIntoView({ block: 'nearest' });
-        });
-    }}>
+    return <section ref={root} className="sumi-notice-acceptance" aria-label="Review privacy notice and terms">
         <p id={description} className="sumi-notice-progress" role="status">
-            {ready ? 'Both documents reached the end. You can now confirm your acceptance.'
-                : privacyEnd ? 'Privacy notice complete. Open the terms and scroll to the end to continue.'
-                    : termsEnd ? 'Terms complete. Scroll to the end of the privacy notice to continue.'
-                        : 'Read both documents below. Acceptance unlocks when you reach the end of each.'}
+            {ready ? 'You have reached the end. You can now confirm your acceptance.'
+                : 'Read the privacy notice and terms below. Acceptance unlocks when you reach the end.'}
         </p>
-        <DocumentReader title="Privacy notice" html={PRIVACY_DOCUMENT_HTML} reachedEnd={privacyEnd} onReachedEnd={() => setPrivacyEnd(true)} initiallyOpen />
-        <DocumentReader title="Terms of use" html={TERMS_DOCUMENT_HTML} reachedEnd={termsEnd} onReachedEnd={() => setTermsEnd(true)} />
+        <DocumentReader title="Privacy notice and terms of use" html={`<h2>Privacy notice</h2>${PRIVACY_DOCUMENT_HTML}<hr /><h2>Terms of use</h2>${TERMS_DOCUMENT_HTML}`} reachedEnd={reachedEnd} onReachedEnd={() => setReachedEnd(true)} initiallyOpen />
         <label className="sumi-notice-confirm">
             <input type="checkbox" disabled={!ready} checked={ready && accepted} aria-describedby={description}
                 onChange={e => { if (ready) onChange(e.target.checked); }} />
-            <span>I have read and accept the privacy notice and terms and will use property information only for lawful property-related purposes.</span>
+            <span>I have read the privacy notice and accept the terms of use and will use property information only for lawful property-related purposes.</span>
         </label>
     </section>;
 }

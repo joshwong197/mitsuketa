@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { normaliseEntityProfile, registerLink, personName } from './entityProfile.js';
+import { normaliseEntityProfile, registerLink, personName, formatBusinessAddress } from './entityProfile.js';
 const profile = normaliseEntityProfile({
     nzbn: '123', entityName: 'EXAMPLE LIMITED', entityTypeCode: 'LTD', entityTypeDescription: 'NZ Limited Company',
     sourceRegister: 'COMPANY', sourceRegisterUniqueIdentifier: '12345', registrationDate: '2000-12-19T00:00:00+13:00',
@@ -20,6 +20,12 @@ assert.equal(profile.allocations[0].shares, 40);
 assert.equal(profile.allocations[0].holders.length, 2);
 assert.deepEqual(profile.websites, ['https://example.com']);
 assert.equal(profile.addresses.length, 1);
+assert.deepEqual(formatBusinessAddress(['Flat 302,100 Parnell Road,Auckland', 'Auckland', '1052', 'NZ']), {
+    text: 'Flat 302, 100 Parnell Road, Auckland, 1052, NZ',
+    rawText: 'Flat 302,100 Parnell Road,Auckland, Auckland, 1052, NZ',
+});
+assert.equal(formatBusinessAddress(['Flat 302,100 parnell', '100 Parnell Road']).text, 'Flat 302, 100 parnell, 100 Parnell Road', 'Similar fragments are not guessed to be duplicates or capitalised');
+assert.deepEqual(normaliseEntityProfile({emailAddresses:[{emailAddress:'Example@Example.com'},{emailAddress:'example@example.com'}]}).emails, ['Example@Example.com']);
 assert.equal(profile.register.url, 'https://app.companiesoffice.govt.nz/companies/app/ui/pages/companies/12345');
 for (const excluded of ['bank-secret', 'tax-secret', 'Personal address', 'Shareholder address']) assert.ok(!JSON.stringify(profile).includes(excluded));
 for (const [code, host] of [['I', 'is-register.companiesoffice.govt.nz'], ['T', 'ct-register.companiesoffice.govt.nz'], ['Y', 'lp-register.companiesoffice.govt.nz'], ['Trading_Trust', 'www.nzbn.govt.nz'], ['Partnership', 'www.nzbn.govt.nz']]) {

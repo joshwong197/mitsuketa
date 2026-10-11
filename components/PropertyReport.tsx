@@ -275,56 +275,13 @@ export const PropertyReport: React.FC<PropertyReportProps> = ({
                 {report.matter_reference && <> · Matter: {report.matter_reference}</>}
             </p>}
 
-            {/* Masthead puts the address first when LINZ supplies one. */}
-            <header
-                className="flex items-start justify-between flex-wrap"
-                style={{ gap: 20, borderBottom: '2px solid var(--ink)', paddingBottom: 14, marginBottom: 4 }}
-            >
-                <div style={{ minWidth: 0, flex: 1 }}>
-                    <p
-                        className="text-ink-pale"
-                        style={{ fontSize: 11.5, letterSpacing: '.02em', margin: '0 0 4px' }}
-                    >
-                        <span style={{ fontFamily: 'var(--serif)', letterSpacing: '.2em', marginRight: 8, color: 'var(--ink-mid)' }}>
-                            登記簿
-                        </span>
-                        Record of title · LINZ Title Register
-                    </p>
-                    <h3
-                        style={{
-                            fontFamily: 'var(--serif)', fontSize: 'clamp(30px, 5vw, 42px)', fontWeight: 600,
-                            margin: 0, lineHeight: 1.05, letterSpacing: '.01em',
-                            fontVariantNumeric: 'tabular-nums',
-                        }}
-                    >
-                        {view.address || view.titleNo}
-                    </h3>
-                    {view.address && <p className="text-ink-mid" style={{ fontFamily: 'var(--mono)', fontSize: 12, margin: '8px 0 0' }}>Title {view.titleNo}</p>}
-                    <p className="text-ink-mid" style={{ fontSize: 12.5, margin: '3px 0 0' }}>{view.meta}</p>
-                </div>
-                <div className="flex flex-col items-center" style={{ gap: 7, paddingTop: 4 }}>
-                    <span className={`hanko${isLive ? ' hanko-stamp' : ''}`} aria-hidden="true">
-                        {isLive ? '現' : '地'}
-                    </span>
-                    <span
-                        style={{
-                            fontFamily: 'var(--mono)', fontSize: 9.5, letterSpacing: '.1em',
-                            textTransform: 'uppercase',
-                            color: isLive ? 'var(--accent)' : 'var(--ink-pale)',
-                        }}
-                    >
-                        {view.status ?? 'Status unknown'}
-                    </span>
-                </div>
-            </header>
-            {/* Double rule under the masthead — a printing convention, not a border. */}
-            <div style={{ borderTop: '1px solid var(--ink)', marginBottom: 30 }} />
-
-            <div className="doc-body">
-                <section className="property-summary" aria-labelledby="property-summary-title">
-                    <h4 id="property-summary-title">Title summary</h4>
+            <header className="property-subject" aria-label="Title summary">
+                <div className="property-subject-spine" aria-hidden="true"><span>登記</span><small>見つけた</small></div>
+                <div className="property-subject-main">
+                    <p className="property-subject-source">Record of title · LINZ Title Register</p>
+                    <h3>{view.address || view.titleNo}</h3>
+                    <p className="property-subject-number">Title {view.titleNo} · {view.status ?? 'Status unknown'}</p>
                     <dl className="property-summary-grid">
-                        <div className="property-summary-item"><dt>Address</dt><dd>{view.address || 'Not supplied'}</dd></div>
                         <div className="property-summary-item"><dt>Title number</dt><dd>{view.summary.titleNo}</dd></div>
                         <div className="property-summary-item"><dt>Registered owners</dt><dd>{view.summary.owners.join(' · ') || 'Not supplied'}</dd></div>
                         <div className="property-summary-item"><dt>Tenure / type</dt><dd>{view.summary.tenure}</dd></div>
@@ -334,7 +291,10 @@ export const PropertyReport: React.FC<PropertyReportProps> = ({
                         <div className="property-summary-item"><dt>Issue date</dt><dd>{view.summary.issueDate}</dd></div>
                         <div className="property-summary-item property-summary-interests"><dt>Current mortgages, caveats and leases</dt><dd>{view.summary.interests.length ? <ul>{view.summary.interests.map(event=><li key={event.id}>{event.headline}{event.instrument?` · ${event.instrument}`:''}</li>)}</ul> : 'None recorded'}</dd></div>
                     </dl>
-                </section>
+                </div>
+            </header>
+
+            <div className="doc-body">
                 {report.bbox && report.geometry && (
                     <Section mark="地図" title="Parcel">
                         <TitleMap geometry={report.geometry} bbox={report.bbox} />
@@ -606,6 +566,7 @@ export const PropertyReport: React.FC<PropertyReportProps> = ({
                 fields — no interpretation has been added. Obtain a formal search from LINZ before
                 relying on it.
             </p>
+            <p>This report contains personal information. Share it only with a recipient who has accepted the LINZ Licence for Personal Data 2.3. Keep it secure, retain the source notices, and do not publish it on a publicly searchable page. A downloaded report does not update automatically; you may need to correct or delete copies if instructed. <a href="https://data.linz.govt.nz/license/linz-licence-for-personal-data-23/" target="_blank" rel="noopener noreferrer">Read the LINZ licence</a>.</p>
         </div>
     );
 };

@@ -14,6 +14,14 @@ import React from 'react';
  */
 export const PropertyStyles: React.FC = () => (
     <style>{`
+.property-subject{display:flex;border:1px solid var(--ink);margin-bottom:34px;box-shadow:5px 5px 0 var(--paper2)}
+.property-subject-spine{width:58px;flex-shrink:0;background:var(--accent);color:var(--accent-ink);display:flex;flex-direction:column;justify-content:space-between;align-items:center;padding:24px 0}
+.property-subject-spine span{writing-mode:vertical-rl;font-family:var(--serif);font-size:28px;letter-spacing:.25em}.property-subject-spine small{writing-mode:vertical-rl;font-family:var(--serif)}
+.property-subject-main{min-width:0;flex:1;padding:24px 28px}.property-subject-source{font-size:11px;letter-spacing:.08em;color:var(--ink-mid)}
+.property-subject h3{font-family:var(--gothic);font-weight:500;font-size:clamp(24px,3vw,34px);line-height:1.3;margin:18px 0 12px;overflow-wrap:anywhere}
+.property-subject-number{font-family:var(--gothic);font-size:15px;font-variant-numeric:tabular-nums;margin-bottom:20px}.property-subject .property-summary-item dd{font-size:15px}.property-subject .property-summary-item dt{font-size:11px}
+@media(max-width:600px){.property-subject-spine{width:36px}.property-subject-spine span{font-size:22px}.property-subject-main{padding:18px}.property-subject .property-summary-grid{grid-template-columns:1fr}}
+
 .property-btn:hover:not(:disabled) { background: var(--accent); color: var(--accent-ink); }
 .property-row:hover, .property-row:focus-visible {
   background: oklch(from var(--accent) l c h / .10);

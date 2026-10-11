@@ -7,6 +7,8 @@ export default function AccessPage({ mode }: { mode: string }) {
     const { isLoaded, user } = useUser();
     const [account, setAccount] = useState<AccountStatus | null>(null);
     const [accepted, setAccepted] = useState(false);
+    const [linzAccepted, setLinzAccepted] = useState(false);
+    useEffect(() => { setAccepted(false); setLinzAccepted(false); }, [account?.legal?.documentSet, account?.noticeVersion]);
     const [error, setError] = useState('');
     const [busy, setBusy] = useState(false);
     const refresh = async () => {
@@ -30,10 +32,12 @@ export default function AccessPage({ mode }: { mode: string }) {
                 {!account && !error && <p role="status">Connecting your approved access…</p>}
                 {account?.status === 'approved' && account.accepted_notice_version !== account.noticeVersion && <>
                     <h2>One last step</h2><p>Your access is approved. Read and accept the current notice before searching.</p>
-                    <NoticeAcceptance key={account.noticeVersion} accepted={accepted} onChange={setAccepted} />
-                    <button className="sumi-primary" disabled={!accepted || busy} onClick={async () => {
+                    <NoticeAcceptance key={account.legal?.documentSet || account.noticeVersion} accepted={accepted} onChange={setAccepted} />
+                    {account.legal && <label className="sumi-notice-confirm"><input type="checkbox" checked={linzAccepted} onChange={e => setLinzAccepted(e.target.checked)} />
+                        <span>I agree to the <a href={account.legal.linzUrl} target="_blank" rel="noopener noreferrer">LINZ Licence for Personal Data {account.legal.linzVersion}</a>, including its incorporated CC BY 4.0 terms, for property information I receive.</span></label>}
+                    <button className="sumi-primary" disabled={!accepted || busy || (!!account.legal && !linzAccepted)} onClick={async () => {
                         setBusy(true); setError('');
-                        try { await accountRequest('accept-notice', { noticeVersion: account.noticeVersion }); await refresh(); }
+                        try { await accountRequest('accept-notice', { noticeVersion: account.noticeVersion, documentSet: account.legal?.documentSet, acceptTerms: accepted, acknowledgePrivacy: accepted, acceptLinz: linzAccepted }); await refresh(); }
                         catch (e) { setError(e instanceof Error ? e.message : 'Please try again.'); }
                         finally { setBusy(false); }
                     }}>Continue to Property →</button>

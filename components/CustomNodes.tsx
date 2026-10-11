@@ -40,7 +40,7 @@ const NoteDogEar = ({ flagged, inset = 0 }: { flagged?: boolean; inset?: number 
   <span
     aria-hidden="true"
     className="absolute"
-    title="Has case note"
+    title="Has file note"
     style={{
       top: 0,
       left: inset,

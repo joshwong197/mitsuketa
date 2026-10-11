@@ -20,7 +20,7 @@ export function SnapshotNameDialog({ name, onChange, onSave, onCancel }: {
         if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
         else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
       }}>
-      <p className="sumi-eyebrow">写 · Keep this case</p>
+      <p className="sumi-eyebrow">写 · Keep this file</p>
       <h2 id="snapshot-name-title" className="text-ink mb-2" style={{ fontFamily: 'var(--serif)', fontSize: 25 }}>Save snapshot</h2>
       <p className="text-ink-mid mb-5" style={{ fontSize: 13 }}>Save the search and its notes in this workspace. You can download a copy later.</p>
       <label className="block text-ink-mid mb-2" htmlFor="snapshot-name" style={{ fontSize: 12 }}>Snapshot name</label>

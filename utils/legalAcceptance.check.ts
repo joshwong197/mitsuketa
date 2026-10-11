@@ -1,0 +1,23 @@
+import assert from 'node:assert/strict';
+import {createAccountHandler} from '../api/property-account';
+import {legalDocuments,validLegalAcceptance} from './legalAcceptance';
+import {NOTICE_VERSION,authMode,type Member} from './propertyAccount';
+process.env.PROPERTY_LEGAL_RELEASE='test-release';process.env.PROPERTY_AUTH_MODE='clerk';process.env.PROPERTY_BILLING_MODE='off';process.env.CLERK_AUTHORIZED_PARTIES='http://localhost:3000';
+const member:Member={id:'00000000-0000-4000-8000-000000000001',issuer:'test-issuer',subject:'test-subject',searcher:'test@example.invalid',status:'approved',canAudit:false,accepted_notice_version:null};
+let writes=0;let lastParams:any[]=[];
+const handler=createAccountHandler({member:async()=>member,query:async(sql,params)=>{writes++;lastParams=params||[];return [{id:'example',candidates:3}];},balance:async()=>{throw Error('Billing off must not query ledger')}});
+async function request(mode:string,body?:any){const res:any={code:200,setHeader(){},status(n:number){this.code=n;return this},json(v:any){this.body=v;return this}};await handler({method:body?'POST':'GET',query:{mode},headers:{origin:'http://localhost:3000'},body} as any,res);return res}
+const docs=legalDocuments(),valid={noticeVersion:NOTICE_VERSION,documentSet:docs.documentSet,acceptTerms:true,acknowledgePrivacy:true,acceptLinz:true};
+assert.equal(validLegalAcceptance(valid),true);
+assert.equal((await request('accept-notice',{...valid,acceptLinz:false})).code,400);assert.equal(writes,0);
+assert.equal((await request('accept-notice',{...valid,documentSet:'old'})).code,400);assert.equal(writes,0);
+assert.equal((await request('accept-notice',valid)).code,200);assert.equal(writes,1);assert.equal(lastParams[1],member.issuer);assert.equal(lastParams[2],member.subject);assert.ok(String(lastParams[9]).includes('<'));
+for(const mode of ['acceptance-history','retention-review','privacy-requests'])assert.equal((await request(mode)).code,403);
+assert.equal((await request('privacy-request',{kind:'access',reference:'CASE-1'})).code,403);
+assert.equal((await request('privacy-request-status',{id:'x',status:'closed'})).code,403);
+assert.equal((await request('status')).body.balance,0);
+member.canAudit=true;delete process.env.PROPERTY_AUDIT_REVIEW_DAYS;const before=writes;assert.equal((await request('retention-review')).body.configured,false);assert.equal(writes,before);
+process.env.PROPERTY_AUDIT_REVIEW_DAYS='365';assert.equal((await request('retention-review')).body.automaticDeletion,false);
+process.env.PROPERTY_LEGAL_RELEASE='next-release';assert.notEqual(legalDocuments().documentSet,docs.documentSet);assert.equal(validLegalAcceptance(valid),false);
+process.env.PROPERTY_AUTH_MODE='password';assert.throws(authMode);
+console.log('PASS: versioned explicit consent, authenticated identity, admin restrictions, safe retention review, billing-off access and legacy fail-closed cutover.');

@@ -7,7 +7,7 @@ export const registerDate=(date:string)=>{
     return m?`${m[3]} ${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][Number(m[2])-1]} ${m[1]}`:date||'Not supplied';
 };
 const month=(n:number|null)=>n&&n>=1&&n<=12?['January','February','March','April','May','June','July','August','September','October','November','December'][n-1]:'Not supplied';
-const addressType=(t:string)=>({REGISTERED:'Registered office',SERVICE:'Address for service',POSTAL:'Postal address',RECORDS:'Address for records'}[t]||t);
+const addressType=(t:string)=>({REGISTERED:'Registered office',SERVICE:'Address for service',POSTAL:'Postal address',RECORDS:'Address for records',OFFICE:'Office address',DELIVERY:'Delivery address'}[t.toUpperCase()]||t);
 const Facts=({rows}:{rows:[string,React.ReactNode][]})=><dl className="entity-facts">{rows.map(([name,value])=><React.Fragment key={name}><dt>{name}</dt><dd>{value||'Not supplied'}</dd></React.Fragment>)}</dl>;
 const Roles=({roles}:{roles:EntityProfile['roles']})=><div className="entity-people">{roles.map((r,i)=><div className="entity-person" key={i}><span className="entity-person-mark" aria-hidden="true">人</span><div><strong>{r.name||'Name not supplied'}</strong><p>{r.role} · {r.status||'Status not supplied'}</p><small>From {registerDate(r.startDate)}{r.endDate?` · To ${registerDate(r.endDate)}`:''}</small></div></div>)}</div>;
 
@@ -24,7 +24,7 @@ export function EntityRecord({profile,onRefresh,statusContext}:{profile:EntityPr
         :'No';
     const docList=(items:typeof documents)=><ul className="entity-documents">{items.map((d,i)=><li key={i}><div><time>{d.date||'Date not supplied'}</time><a href={d.url} target="_blank" rel="noreferrer">{d.title}<span aria-hidden="true"> ↗</span></a>{d.filing&&d.filing!==d.title&&<small>{d.filing}</small>}</div><span>{d.size}</span></li>)}</ul>;
     return <article className="entity-record">
-        <header className="entity-card">
+        <header className={`entity-card${/liquidation/i.test(profile.status) && !/removed|dissolved/i.test(profile.status) ? " entity-card-liquidation" : ""}`}>
             <div className="entity-card-spine" aria-hidden="true"><span>記録</span><small>見つけた</small></div>
             <div className="entity-card-main">
                 <div className="entity-card-top"><span>Mitsuketa · Entity record</span><span className={`entity-status entity-status-${status.bucket}`}>{status.label}</span></div>
@@ -54,12 +54,12 @@ export function EntityRecord({profile,onRefresh,statusContext}:{profile:EntityPr
                     ] as [string,React.ReactNode][]:[['Charity number',profile.charityNumber],['Balance date',registerDate(profile.balanceDate)]] as [string,React.ReactNode][]),
                 ]}/>
                 <h5>Business addresses & contact</h5>
-                {profile.addresses.map((a,i)=><div key={i} className="entity-address"><strong>{addressType(a.type)}</strong><p>{a.text}</p></div>)}
+                {profile.addresses.map((a,i)=><div key={i} className="entity-address"><strong>{addressType(a.type)}</strong><p>{a.text}</p>{a.rawText && a.rawText !== a.text && <details><summary>Original register text</summary><p>{a.rawText}</p></details>}</div>)}
                 {!profile.addresses.length&&<p>No public business addresses supplied in this response.</p>}
                 <Facts rows={[
                     ['Website',profile.websites.length?profile.websites.map(url=><a key={url} href={url} target="_blank" rel="noreferrer">{url}</a>):null],['Phone',profile.phones.join(', ')],['Email',profile.emails.join(', ')],
                 ]}/>
-                {!!profile.historicalAddresses?.length&&<details className="entity-history"><summary>Historical addresses ({profile.historicalAddresses.length})</summary>{profile.historicalAddresses.map((a,i)=><div key={i} className="entity-address"><strong>{addressType(a.type)}</strong><p>{a.text}</p><small>From {registerDate(a.startDate)} · To {registerDate(a.endDate)}</small></div>)}</details>}
+                {!!profile.historicalAddresses?.length&&<details className="entity-history"><summary>Historical addresses ({profile.historicalAddresses.length})</summary>{profile.historicalAddresses.map((a,i)=><div key={i} className="entity-address"><strong>{addressType(a.type)}</strong><p>{a.text}</p>{a.rawText && a.rawText !== a.text && <details><summary>Original register text</summary><p>{a.rawText}</p></details>}<small>From {registerDate(a.startDate)} · To {registerDate(a.endDate)}</small></div>)}</details>}
             </section>
             </div>
             <div className="entity-record-column entity-people-column">

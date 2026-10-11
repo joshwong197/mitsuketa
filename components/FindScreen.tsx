@@ -317,12 +317,12 @@ export const FindScreen: React.FC<FindScreenProps> = ({
 
   return (
     <div
-      className={`relative w-full h-full min-h-[620px] grid ${
+      className={`relative w-full h-full min-h-0 grid overflow-x-hidden ${
         // A title report is a long document, not a centred hero: it has to
         // scroll and start at the top, or most of the memorials are unreachable.
         propertyMode
           ? 'overflow-y-auto items-start justify-items-center py-10'
-          : 'overflow-hidden place-items-center'
+          : 'overflow-y-auto place-items-center py-6'
       }`}
       style={{ position: 'relative' }}
     >

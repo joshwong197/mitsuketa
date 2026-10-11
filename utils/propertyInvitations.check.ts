@@ -46,7 +46,8 @@ const request=async(mode: string,body?: any,origin='http://localhost:3000')=>{
     const res:any={code:200,setHeader(){},status(c:number){this.code=c;return this;},json(b:any){this.body=b;return this;}};
     await handler({method:body?'POST':'GET',headers:{origin},query:{mode},body} as any,res);return res;
 };
-const application={email:'new@example.test',organisation:'',purpose:'Property diligence',noticeVersion:NOTICE_VERSION};
+const application={email:'new@example.test',organisation:'',purpose:'Property diligence',noticeVersion:NOTICE_VERSION,
+    details:{version:1,fullName:'Test Applicant',role:'Private individual',use:'Property purchase or ownership',volume:'1–10 searches',sharing:'Only me',recipients:'No sharing',safeguards:'Private device; delete after review',confirmed:true}};
 assert.equal((await request('apply',application,'https://evil.example')).code,403); assert.equal(publicWrites,0);
 assert.equal((await request('apply',{...application,noticeVersion:'old'})).code,400); assert.equal(publicWrites,0);
 assert.equal((await request('apply',application)).code,200); assert.equal(publicWrites,1);

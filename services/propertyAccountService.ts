@@ -2,6 +2,7 @@ import { propertyAuthHeaders } from '../utils/propertyAuthClient';
 export interface AccountStatus {
     id: string; searcher: string; status: 'pending' | 'approved' | 'rejected' | 'suspended';
     canAudit: boolean; balance: number; billing: 'off' | 'sandbox'; noticeVersion: string;
+    legal?: { documentSet: string; release: string; linzVersion: string; linzUrl: string } | null;
     accepted_notice_version: string | null;
 }
 export async function accountRequest<T = any>(mode: string, body?: object): Promise<T> {

@@ -347,8 +347,8 @@ export const CasePanel: React.FC<CasePanelProps> = ({
         {isWorkspace && (
           <Section title="Workspace">
             <div className="px-[18px] pb-3.5">
-              <h3 className="text-ink" style={{ fontFamily: 'var(--serif)', fontWeight: 600, fontSize: 19, margin: '0 0 3px', lineHeight: 1.3 }}>Open cases</h3>
-              <p className="text-ink-mid" style={{ fontSize: 12 }}>{workspaceCases?.length ?? (companyTabs.length + individualTabs.length)} open {(workspaceCases?.length ?? (companyTabs.length + individualTabs.length)) === 1 ? 'case' : 'cases'}</p>
+              <h3 className="text-ink" style={{ fontFamily: 'var(--serif)', fontWeight: 600, fontSize: 19, margin: '0 0 3px', lineHeight: 1.3 }}>Open files</h3>
+              <p className="text-ink-mid" style={{ fontSize: 12 }}>{workspaceCases?.length ?? (companyTabs.length + individualTabs.length)} open {(workspaceCases?.length ?? (companyTabs.length + individualTabs.length)) === 1 ? 'file' : 'files'}</p>
               {workspaceCases && workspaceCases.length > 0 && <div className="mt-3 space-y-1.5">
                 {workspaceCases.map((item) => {
                   const content = <><span aria-hidden="true" className="text-accent" style={{ fontFamily: 'var(--serif)', fontSize: 14 }}>{item.type === 'individual' ? '人' : item.type === 'property' ? '地' : '社'}</span><span className="truncate">{item.label}</span></>;
@@ -361,7 +361,7 @@ export const CasePanel: React.FC<CasePanelProps> = ({
 
         {/* CASE FILE — reflects the ACTIVE main tab, not whichever entity loaded last */}
         {showCompanyFile && (
-          <Section title="Case file">
+          <Section title="File">
             <div className="px-[18px] pb-3.5 border-b border-rule">
               <h3 className="text-ink" style={{ fontFamily: 'var(--serif)', fontWeight: 600, fontSize: 17, margin: '0 0 3px', lineHeight: 1.3 }}>
                 {caseTarget?.data.entityName || caseTarget?.data.label}
@@ -378,7 +378,7 @@ export const CasePanel: React.FC<CasePanelProps> = ({
           </Section>
         )}
         {showPersonFile && (
-          <Section title="Case file">
+          <Section title="File">
             <div className="px-[18px] pb-3.5 border-b border-rule">
               <h3 className="text-ink" style={{ fontFamily: 'var(--serif)', fontWeight: 600, fontSize: 17, margin: '0 0 3px', lineHeight: 1.3 }}>
                 {personSearchName}
@@ -508,7 +508,7 @@ export const CasePanel: React.FC<CasePanelProps> = ({
 
         {/* PEOPLE IN COMMON — people appearing in ≥2 open tabs (Stage D);
                row expands to tab chips → jump + highlight by person key. */}
-        <PeopleSection people={peopleInCommon} onJumpToPerson={onJumpToPerson} title={isWorkspace ? 'Workspace people in common' : 'People in this case'} />
+        <PeopleSection people={peopleInCommon} onJumpToPerson={onJumpToPerson} title={isWorkspace ? 'Workspace people in common' : 'People in this file'} />
 
         {!isWorkspace && <AlertsSection alerts={alerts} />}
 
