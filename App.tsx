@@ -22,7 +22,7 @@ import { getSession as getPropertySession, subscribe as subscribePropertySession
 import { IntroAnimation, INTRO_SEEN_KEY } from './components/IntroAnimation';
 import { assignDepths } from './utils/graphDepth';
 import { computePersonRoleFlags } from './utils/personRoles';
-import { immediateCompanyGraph } from './utils/companyScope';
+import { immediateCompanyGraph, immediateCompanyView } from './utils/companyScope';
 import { entityStatus } from './utils/entityStatus';
 import { getStatusBucket } from './utils/statusRamp';
 import { CompanyNode, PersonNode, SummaryNode } from './components/CustomNodes';
@@ -40,7 +40,7 @@ import { CasePanel } from './components/CasePanel';
 import { enrichCompanyResults, enrichGraphNodes } from './src/api/companyStatusApi';
 import { enrichPersonNodes } from './src/api/personStatusApi';
 import { displaySubjectName } from './utils/personName';
-import { markDirectLineage, calculateHiddenDescendants, expandNodeSubtree, collapseNodeSubtree } from './utils/graphVisibility';
+import { markDirectLineage, syncPeopleVisibility, calculateHiddenDescendants, expandNodeSubtree, collapseNodeSubtree } from './utils/graphVisibility';
 import { getLayoutedElements } from './services/layoutService';
 import { tidyUpLayout } from './services/layoutOptimizer';
 import { dispatchStats } from './utils/dispatchGate';
@@ -172,7 +172,7 @@ const rehydrateTab = (pt: PersistedCompanyTab): CompanyTab => {
   };
   try {
     if (!pt.allNodesInMemory?.length) return base;
-    const depthNodes = assignDepths(computePersonRoleFlags(pt.allNodesInMemory, pt.edges), pt.edges);
+    const depthNodes = assignDepths(computePersonRoleFlags(syncPeopleVisibility(pt.allNodesInMemory, pt.edges), pt.edges), pt.edges);
     const nodesById = nodesToMap(depthNodes);
     // Compare tabs render the whole result; org charts filter to visible.
     const renderNodes = pt.compare ? depthNodes : depthNodes.filter(n => n.data.isVisible);
@@ -1649,7 +1649,7 @@ function App({ entrySearch = false }: { entrySearch?: boolean }) {
     } else {
       const savedNodes = structuredClone(snap.nodes);
       const savedEdges = structuredClone(snap.edges);
-      const depthNodes = assignDepths(computePersonRoleFlags(savedNodes, savedEdges), savedEdges);
+      const depthNodes = assignDepths(computePersonRoleFlags(syncPeopleVisibility(savedNodes, savedEdges), savedEdges), savedEdges);
       const laid = getLayoutedElements(depthNodes.filter(n => n.data.isVisible !== false), savedEdges as unknown as Edge[]);
       const styled = styleEdgesByDepth(laid.edges, nodesToMap(depthNodes));
       const target = depthNodes.find(n => n.data.isTarget) || depthNodes[0];
@@ -1682,7 +1682,7 @@ function App({ entrySearch = false }: { entrySearch?: boolean }) {
         const d = diffById.get(n.id);
         return d ? { ...n, data: { ...n.data, diff: { prevStatus: d.prevStatus, prevBucket: d.prevBucket } } } : n;
       });
-      const depthNodes = assignDepths(stamped, snap.edges);
+      const depthNodes = assignDepths(syncPeopleVisibility(stamped, snap.edges), snap.edges);
       const laid = getLayoutedElements(depthNodes.filter(n => n.data.isVisible !== false), snap.edges as unknown as Edge[]);
       const styled = styleEdgesByDepth(laid.edges, nodesToMap(depthNodes));
       setGraphTabs(prev => prev.map(t => t.id === tabId ? { ...t, nodes: laid.nodes as any,
@@ -2129,13 +2129,9 @@ function App({ entrySearch = false }: { entrySearch?: boolean }) {
   const scopeGraph = useMemo(() => {
     const target = allNodesInMemory.find(n => n.data.isTarget) || allNodesInMemory[0];
     if (graphScope === 'simple' && target) {
-      const immediate = immediateCompanyGraph(allNodesInMemory, edges as unknown as GraphEdge[], target.id);
-      const liveById = new Map(nodes.map(n => [n.id, n]));
-      // Preserve React Flow measurements when deriving the immediate view.
-      const measured = immediate.nodes.map(n => ({ ...liveById.get(n.id), ...n }));
-      const depthNodes = assignDepths(measured, immediate.edges);
-      const laid = getLayoutedElements(depthNodes, immediate.edges as unknown as Edge[]);
-      return { nodes: laid.nodes, edges: styleEdgesByDepth(laid.edges, nodesToMap(depthNodes)) };
+      // Layout belongs to search/scope actions, never to a render triggered by
+      // React Flow measuring or dragging a node. Keep live controlled positions.
+      return immediateCompanyView(nodes as unknown as GraphNode[], allNodesInMemory, edges as unknown as GraphEdge[], target.id);
     }
     return { nodes, edges };
   }, [nodes, edges, allNodesInMemory, graphScope]);

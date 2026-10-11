@@ -1,9 +1,26 @@
 import { GraphNode, GraphEdge } from '../types';
 
+/** People follow the companies currently shown, including after expand/collapse. */
+export const syncPeopleVisibility = (nodes: GraphNode[], edges: GraphEdge[]): GraphNode[] => {
+    const companies = new Map(nodes.filter(n => n.type === 'companyNode').map(n => [n.id, n]));
+    const people = new Set(nodes.filter(n => n.type === 'personNode').map(n => n.id));
+    const visible = new Set<string>();
+    const direct = new Set<string>();
+    for (const edge of edges) {
+        const personId = people.has(edge.source) ? edge.source : people.has(edge.target) ? edge.target : undefined;
+        if (!personId) continue;
+        const company = companies.get(edge.source === personId ? edge.target : edge.source);
+        if (company && company.data.isVisible !== false) visible.add(personId);
+        if (company?.data.isDirectLineage) direct.add(personId);
+    }
+    return nodes.map(node => people.has(node.id) ? {
+        ...node, data: { ...node.data, isVisible: visible.has(node.id), isDirectLineage: direct.has(node.id) },
+    } : node);
+};
+
 /**
- * Marks nodes that are in the direct lineage from the root (searched entity)
- * Direct lineage = all ancestors (upstream) + all direct descendants (downstream)
- * Also keeps track of ALL nodes in memory so siblings can be revealed on expansion
+ * Starts with the target, immediate company connections and their people.
+ * Keeps the wider network in memory for explicit branch expansion.
  */
 export const markDirectLineage = (
     nodes: GraphNode[],
@@ -25,7 +42,7 @@ export const markDirectLineage = (
 
     // Mark nodes - ALL nodes remain in the array (they were already fetched)
     // We just mark which ones are visible by default (direct lineage only)
-    return nodes.map(node => ({
+    return syncPeopleVisibility(nodes.map(node => ({
         ...node,
         data: {
             ...node.data,
@@ -33,7 +50,7 @@ export const markDirectLineage = (
             isVisible: directLineageIds.has(node.id), // Only direct lineage visible by default
             isBranchExpanded: false
         }
-    }));
+    })), edges);
 };
 
 /**
@@ -96,7 +113,7 @@ export const expandNodeSubtree = (
     // Recursively expand each direct child's subtree
     directChildren.forEach(childId => findAllDescendants(childId));
 
-    return nodes.map(node => {
+    return syncPeopleVisibility(nodes.map(node => {
         if (node.id === nodeId) {
             return {
                 ...node,
@@ -110,7 +127,7 @@ export const expandNodeSubtree = (
             };
         }
         return node;
-    });
+    }), edges);
 };
 
 /**
@@ -134,7 +151,7 @@ export const collapseNodeSubtree = (
 
     findAllDescendants(nodeId);
 
-    return nodes.map(node => {
+    return syncPeopleVisibility(nodes.map(node => {
         if (node.id === nodeId) {
             return {
                 ...node,
@@ -148,5 +165,5 @@ export const collapseNodeSubtree = (
             };
         }
         return node;
-    });
+    }), edges);
 };
