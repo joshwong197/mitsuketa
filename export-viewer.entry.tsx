@@ -1,4 +1,4 @@
-import { removedCompany } from './utils/relationshipStatus';
+import { companyNodeAllowed } from './utils/companyScope';
 // Entry for the self-contained interactive HTML export.
 // Bundled by `npm run build:export-viewer` into public/export-viewer.js,
 // then inlined into exported files by services/exportService.ts.
@@ -143,7 +143,7 @@ function ExportedGraph({ payload }: { payload: ExportPayload }) {
     const [rfNodes,setRfNodes,onNodesChange]=useNodesState([]);
     const [rfEdges,setRfEdges]=useState<Edge[]>([]);
     const filtered=useMemo(()=>{
-        const eligible=new Map<string, GraphNode>(initialNodes.filter(n=>(scope!=='simple'&&removed) || !removedCompany(n.data)).map(n=>[n.id,n] as [string, GraphNode]));
+        const eligible=new Map<string, GraphNode>(initialNodes.filter(n=>companyNodeAllowed(n,scope,removed)).map(n=>[n.id,n] as [string, GraphNode]));
         const edges=payload.edges.filter(e=>eligible.has(e.source)&&eligible.has(e.target)&&((scope!=='simple'&&former)||(!e.data?.isCeased&&!e.data?.currentUnverified)));
         const ids=new Set<string>(); if(eligible.has(root.id)) ids.add(root.id);
         const company=(id:string)=>eligible.get(id)?.type==='companyNode';
@@ -197,8 +197,8 @@ function ExportedGraph({ payload }: { payload: ExportPayload }) {
                 <div className="revision-title"><strong>{payload.title}</strong><span>{filtered.nodes.length} of {payload.nodes.length} entities · {filtered.edges.length} relationships shown</span></div>
                 <div className="revision-controls">
                 <select aria-label="Chart scope" value={scope} onChange={e=>{setScope(e.target.value);setMode('focused')}}><option value="simple">Simple</option>{payload.scope!=='simple'&&<option value="comprehensive">Comprehensive</option>}</select>
-                {scope!=='simple'&&<label><input type="checkbox" checked={removed} onChange={e=>setRemoved(e.target.checked)}/> Include removed companies</label>}
-                {scope!=='simple'&&<label><input type="checkbox" checked={former} onChange={e=>setFormer(e.target.checked)}/> Include former / unverified relationships</label>}
+                {scope!=='simple'&&<label><input type="checkbox" checked={removed} onChange={e=>{setRemoved(e.target.checked);if(e.target.checked)setMode('all')}}/> Include removed companies</label>}
+                {scope!=='simple'&&<label><input type="checkbox" checked={former} onChange={e=>{setFormer(e.target.checked);if(e.target.checked)setMode('all')}}/> Include former / unverified relationships</label>}
                 {scope!=='simple'&&<label><input type="checkbox" checked={people} onChange={e=>{setPeople(e.target.checked);setMode('focused')}}/> Show people</label>}
                 <button onClick={resetView}>Reset</button>{scope!=='simple'&&<button onClick={expandAll}>Expand all branches</button>}
                 </div>

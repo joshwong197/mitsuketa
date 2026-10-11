@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { immediateCompanyGraph, immediateCompanyView } from './companyScope.ts';
+import { companyNodeAllowed, immediateCompanyGraph, immediateCompanyView } from './companyScope.ts';
 import { markDirectLineage, syncPeopleVisibility, expandNodeSubtree, collapseNodeSubtree } from './graphVisibility.ts';
 import { applyNodeChanges, type Node } from 'reactflow';
 import { entityStatus } from './entityStatus.ts';
@@ -44,3 +44,21 @@ assert.equal(renderedPerson.data.roleKind, 'director', 'Simple role comes from i
 assert.equal(JSON.stringify(initial), oldGraphJson, 'Projecting the view must not mutate stored graph data');
 assert.ok(projected.edges.every(e => !e.data?.isCeased && !e.data?.currentUnverified), 'Current-only rules remain enforced');
 console.log('ok - directors survive layout/measurement; Simple retains drag positions; expansion/collapse and saved-graph repair');
+
+// Evergreen: a removed company can still be a CURRENT register-listed holder.
+const removedHolder = { ...node('removed-holder'), data: { ...node('removed-holder').data, status: 'Removed' } };
+const formerHolder = node('former-holder');
+const unverifiedHolder = node('unverified-holder');
+const holderGraph = immediateCompanyGraph(
+    [node('target'), removedHolder, formerHolder, unverifiedHolder],
+    [edge('removed-holder', 'target'), edge('former-holder', 'target', 'shareholder', true),
+        { ...edge('unverified-holder', 'target'), data: { ...edge('unverified-holder', 'target').data, currentUnverified: true } }],
+    'target',
+);
+assert.deepEqual(holderGraph.nodes.map(n => n.id), ['target', 'removed-holder']);
+assert.ok(holderGraph.nodes.every(n => companyNodeAllowed(n, 'simple', false)));
+assert.equal(companyNodeAllowed(removedHolder, 'comprehensive', false), false);
+assert.equal(companyNodeAllowed(removedHolder, 'comprehensive', true), true);
+assert.equal(companyNodeAllowed({ ...removedHolder, data: { ...removedHolder.data, isTarget: true } }, 'comprehensive', false), true);
+assert.equal(companyNodeAllowed({ ...removedHolder, type: 'personNode' }, 'comprehensive', false), true);
+console.log('ok - current removed holder retained in Simple; former/unverified links still excluded; Comprehensive removed filter remains strict');

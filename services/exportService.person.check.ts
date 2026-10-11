@@ -5,6 +5,7 @@ import type { InsolvencyRecord } from '../src/api/insolvencyApi';
 const historical: InsolvencyRecord = {
     estateNumber: 1, estateName: 'Alex Example', adjudicationOrLiquidationDate: '2012-01-01',
     insolvencyTypeDescription: 'Bankruptcy', multipleInsolvencies: false, insolvencyStatus: 'Discharged',
+    dischargeOrCompletionDate: '2015-01-01', courtName: 'Example High Court',
 };
 const current: InsolvencyRecord = {
     ...historical, estateNumber: 2, insolvencyStatus: 'Current Bankrupt',
@@ -25,6 +26,12 @@ const unknown = buildPersonReportHtml(base);
 assertIncludes(unknown, 'Register check completion not available.');
 if (unknown.includes('Register checks · clear')) throw new Error('Report must not call unknown checks clear');
 assertIncludes(unknown, 'current and historical records returned');
+assertIncludes(unknown, 'Estate number');
+assertIncludes(unknown, 'Example High Court');
+assertIncludes(unknown, '2012-01-01');
+assertIncludes(unknown, '2015-01-01');
+if (unknown.includes('Identity not confirmed')) throw new Error('Duplicate header identity qualification must be removed');
+assertIncludes(unknown, 'Individuals are matched by name');
 
 const unavailable = buildPersonReportHtml({
     ...base, registerChecks: { disqualified: 'unavailable', insolvency: 'unavailable' },

@@ -22,7 +22,7 @@ import { getSession as getPropertySession, subscribe as subscribePropertySession
 import { IntroAnimation, INTRO_SEEN_KEY } from './components/IntroAnimation';
 import { assignDepths } from './utils/graphDepth';
 import { computePersonRoleFlags } from './utils/personRoles';
-import { immediateCompanyGraph, immediateCompanyView } from './utils/companyScope';
+import { companyNodeAllowed, immediateCompanyGraph, immediateCompanyView } from './utils/companyScope';
 import { entityStatus } from './utils/entityStatus';
 import { getStatusBucket } from './utils/statusRamp';
 import { CompanyNode, PersonNode, SummaryNode } from './components/CustomNodes';
@@ -2116,14 +2116,18 @@ function App({ entrySearch = false }: { entrySearch?: boolean }) {
   const hideInactiveCompanies = currentCompanyTab?.hideInactiveCompanies !== false;
   const setHideInactiveCompanies = (next: boolean | ((previous: boolean) => boolean)) => {
     const id = activeCaseIdRef.current;
+    const hidden = typeof next === 'function' ? next(hideInactiveCompanies) : next;
+    if (!hidden && allNodesInMemory.some(n => n.data.isVisible === false)) handleShowAll();
     setGraphTabs(prev => prev.map(t => t.id === id ? { ...t,
-      hideInactiveCompanies: typeof next === 'function' ? next(t.hideInactiveCompanies !== false) : next } : t));
+      hideInactiveCompanies: hidden } : t));
   };
   const hideInactiveDirectors = currentCompanyTab?.hideInactiveDirectors !== false;
   const setHideInactiveDirectors = (next: boolean | ((previous: boolean) => boolean)) => {
     const id = activeCaseIdRef.current;
+    const hidden = typeof next === 'function' ? next(hideInactiveDirectors) : next;
+    if (!hidden && allNodesInMemory.some(n => n.data.isVisible === false)) handleShowAll();
     setGraphTabs(prev => prev.map(t => t.id === id ? { ...t,
-      hideInactiveDirectors: typeof next === 'function' ? next(t.hideInactiveDirectors !== false) : next } : t));
+      hideInactiveDirectors: hidden } : t));
   };
   const graphScope = currentCompanyTab?.viewScope || allNodesInMemory.find(n => n.data.isTarget)?.data.companySearchScope;
   const scopeGraph = useMemo(() => {
@@ -2159,7 +2163,7 @@ function App({ entrySearch = false }: { entrySearch?: boolean }) {
     const keptNodes = nodesWithAnnotations.filter(n => {
       const d = n.data as unknown as NodeData;
       if (hideDirectors && d.roleKind === 'director') return false;
-      if ((graphScope === 'simple' || hideInactiveCompanies) && isRemovedCompany(d)) return false;
+      if (!companyNodeAllowed(n as GraphNode, graphScope, !hideInactiveCompanies)) return false;
       return true;
     });
     const keptIds = new Set(keptNodes.map(n => n.id));
@@ -2180,12 +2184,12 @@ function App({ entrySearch = false }: { entrySearch?: boolean }) {
 
   const hideableDirectors = scopeGraph.nodes.filter(n => (n.data as unknown as NodeData).roleKind === 'director').length;
   const inactiveCompanyCount = useMemo(() =>
-    scopeGraph.nodes.filter(n => isRemovedCompany(n.data as unknown as NodeData)).length, [scopeGraph.nodes]);
+    allNodesInMemory.filter(n => isRemovedCompany(n.data as unknown as NodeData)).length, [allNodesInMemory]);
   // People whose only ties are ceased directorships — the ones "hide inactive
   // directors" would remove.
   const inactiveDirectorCount = useMemo(() => {
-    return scopeGraph.edges.filter(isCeasedDirectorEdge).length;
-  }, [scopeGraph.nodes, scopeGraph.edges]);
+    return edges.filter(isCeasedDirectorEdge).length;
+  }, [edges]);
 
   // Case-file derived values
   useEffect(() => {
@@ -2334,6 +2338,7 @@ function App({ entrySearch = false }: { entrySearch?: boolean }) {
             onToggleHideDirectors={() => setHideDirectors(v => !v)}
             hideableDirectors={hideableDirectors}
             showHistoryControls={graphScope !== 'simple'}
+            onExpandAllBranches={handleShowAll}
             hideInactiveCompanies={hideInactiveCompanies}
             onToggleHideInactiveCompanies={() => setHideInactiveCompanies(v => !v)}
             inactiveCompanyCount={inactiveCompanyCount}

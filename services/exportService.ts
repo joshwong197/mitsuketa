@@ -238,6 +238,9 @@ export function buildPersonReportHtml(opts: {
              ${insolvency.map((r) => `
              <table class="kv">
                  <tr><td>Estate</td><td>${esc(r.estateName)} — ${esc(r.insolvencyStatus)}${r.dischargeSuspended ? ' (discharge suspended)' : ''}</td></tr>
+                 <tr><td>Estate number</td><td>${esc(String(r.estateNumber))}</td></tr>
+                 ${r.courtName ? `<tr><td>Court</td><td>${esc(r.courtName)}</td></tr>` : ''}
+                 ${r.detailUnavailable ? '<tr><td>Record coverage</td><td>Full record details unavailable; search summary only.</td></tr>' : ''}
                  <tr><td>Type</td><td>${esc(r.insolvencyTypeDescription)}</td></tr>
                  ${formatBirth(r.monthOfBirth, r.yearOfBirth) ? `<tr><td>Born</td><td>${esc(formatBirth(r.monthOfBirth, r.yearOfBirth)!)}</td></tr>` : ''}
                  ${r.occupationAtAdjudicationOrIndustryAtLiquidation ? `<tr><td>Occupation</td><td>${esc(r.occupationAtAdjudicationOrIndustryAtLiquidation)}</td></tr>` : ''}
@@ -490,7 +493,6 @@ export function buildPersonReportHtml(opts: {
                 <div class="subject-identity">
                     <p class="subject-source">Individual search · Companies Office</p>
                     <div class="subject-name-row">${roleSeal}<div><h1>${esc(personName)}</h1><p class="subject-roles">${esc(roleLabel)}</p></div></div>
-                    <p class="subject-qualification">Results for this name · Identity not confirmed</p>
                 </div>
                 <dl class="subject-counts">
                     <div><dt>Company matches</dt><dd>${results.length}</dd></div>

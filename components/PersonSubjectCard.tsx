@@ -45,7 +45,6 @@ export const PersonSubjectCard: React.FC<{
                         <PersonRoleSeal director={directors > 0} shareholder={shareholders > 0} />
                         <div><h2>{name}</h2><p className="person-subject-roles">{roles}</p></div>
                     </div>
-                    <p className="person-subject-qualification">Results for this name · Identity not confirmed</p>
                 </div>
                 <dl className="person-subject-counts">
                     <div><dt>Company matches</dt><dd>{results.length}</dd></div>
