@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Building2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { PersonCompanyResult, PersonRegisterChecks } from '../types';
 import { PersonSubjectCard } from './PersonSubjectCard';
@@ -416,13 +416,12 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
     const [filterMode, setFilterMode] = useState<FilterMode>('all');
     const [currentPage, setCurrentPage] = useState(1);
     const [showKyd, setShowKyd] = useState(false);
-    // Register-check strips: collapsed by default, but a CURRENT record opens
-    // automatically — you shouldn't have to click to learn someone is presently
-    // bankrupt or disqualified (design/HANDOVER.md §3e/§4.3).
+    // Insolvency matches open with their actual record details, including history.
     const [dqOpen, setDqOpen] = useState(() =>
         !!disqualifiedDirectors?.some(d => d.disqualificationCriteria?.criteria?.some(c => !c.endDate))
     );
-    const [insOpen, setInsOpen] = useState(() => !!insolvencyRecords?.some(isInsolvencyRecordCurrent));
+    const [insOpen, setInsOpen] = useState(() => !!insolvencyRecords?.length);
+    useEffect(() => { if (insolvencyRecords?.length) setInsOpen(true); }, [insolvencyRecords?.length]);
 
     // Filter results
     const filteredResults = results.filter(r => {
@@ -632,7 +631,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                                 <CheckSquare tone="crit" glyph="紅" />
                                 <span className="min-w-0 flex-1">
                                     <p className="font-bold text-ink truncate" style={{ fontSize: '13px' }}>
-                                        Insolvency
+                                        Insolvency name matches
                                         <span className="text-ink-mid font-normal ml-1" style={{ fontSize: '12px' }}>
                                             · {insolvencyRecords!.length} {insolvencyRecords!.length === 1 ? 'record' : 'records'}
                                         </span>
@@ -647,7 +646,7 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                                     className={`uppercase font-bold text-right ${insolvencyCurrent ? 'text-crit' : 'text-ink-pale'}`}
                                     style={{ fontSize: '10px', letterSpacing: '.04em' }}
                                 >
-                                    {insolvencyCurrent ? 'Current insolvency' : 'No current insolvency'}
+                                    {insolvencyCurrent ? 'Current insolvency' : 'Historical records'}
                                 </span>
                                 <span
                                     className="text-ink-pale"
@@ -685,6 +684,9 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                                                 </p>
                                             )}
                                             <div className="mt-1.5 text-ink-mid" style={{ fontSize: '12px' }}>
+                                                <p>Estate number: {record.estateNumber}</p>
+                                                {record.courtName && <p>Court: {record.courtName}</p>}
+                                                {record.detailUnavailable && <p className="text-amber">Full record details unavailable. The search summary is shown below.</p>}
                                                 <p>
                                                     <span className="text-crit">Type:</span> {record.insolvencyTypeDescription}
                                                 </p>

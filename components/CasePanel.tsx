@@ -188,6 +188,7 @@ export interface CasePanelProps {
   onToggleHideDirectors: () => void;
   hideableDirectors: number;
   showHistoryControls?: boolean;
+  onExpandAllBranches: () => void;
   hideInactiveCompanies: boolean;
   onToggleHideInactiveCompanies: () => void;
   inactiveCompanyCount: number;
@@ -263,6 +264,7 @@ export const CasePanel: React.FC<CasePanelProps> = ({
   onToggleHideDirectors,
   hideableDirectors,
   showHistoryControls = true,
+  onExpandAllBranches,
   hideInactiveCompanies,
   onToggleHideInactiveCompanies,
   inactiveCompanyCount,
@@ -422,6 +424,8 @@ export const CasePanel: React.FC<CasePanelProps> = ({
                 </p>
               )}
               {showHistoryControls && <>
+              <button className="border border-rule px-3 py-2 text-left text-xs text-ink-mid hover:border-ink hover:text-ink" onClick={onExpandAllBranches}>Expand all branches</button>
+              <p className="text-ink-pale" style={{ fontSize: 10.5, marginTop: 2 }}>Shows the fetched network. The filters below still apply; enabling either also expands the branches.</p>
               <RoleToggle
                 on={!hideInactiveCompanies}
                 onClick={onToggleHideInactiveCompanies}

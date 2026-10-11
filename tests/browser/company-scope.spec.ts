@@ -1,6 +1,40 @@
 import { test, expect } from '@playwright/test';
 import {readFile} from 'node:fs/promises';
 
+test('a current removed holder remains in Simple and the Comprehensive filter expands loaded branches', async ({page}) => {
+    const makeCompany = (nzbn: string, name: string, status: string, holder?: string) => ({
+        nzbn, entityName: name, entityStatusDescription: status, sourceRegister: 'COMPANY',
+        roles: [], 'company-details': {shareholding: {numberOfShares: 100, shareAllocation: holder ? [{
+            allocation: 100, shareholder: [{otherShareholder: {nzbn: holder, currentEntityName: holder === '9429000000002' ? 'REMOVED HOLDER LIMITED' : 'UPSTREAM COMPANY LIMITED'}}],
+        }] : []}},
+    });
+    const root = makeCompany('9429000000001', 'CURRENT HOLDING LIMITED', 'Registered', '9429000000002');
+    const fixtures = [root, makeCompany('9429000000002', 'REMOVED HOLDER LIMITED', 'Removed', '9429000000003'),
+        makeCompany('9429000000003', 'UPSTREAM COMPANY LIMITED', 'Registered')];
+    await page.route('**/api/proxy?**', async route => {
+        const path = new URL(route.request().url()).searchParams.get('path') || '';
+        const entity = fixtures.find(f => path.endsWith(`/entities/${f.nzbn}`));
+        await route.fulfill({json: entity || (path.includes('/history/') ? [] : path.includes('/entities?')
+            ? {items:[root], totalItems:1} : {roles:[], items:[], searchResults:[], totalItems:0})});
+    });
+    await page.goto('/#/app');
+    await page.getByRole('button', {name:'Simple', exact:true}).click();
+    await page.getByLabel('Search company or person').fill('CURRENT HOLDING');
+    await page.getByLabel('Search company or person').press('Enter');
+    await page.getByRole('option').first().click();
+    const nodes = page.locator('.react-flow__node');
+    await expect(nodes.filter({hasText:'REMOVED HOLDER LIMITED'})).toContainText('Removed', {timeout:30000});
+    await expect(page.getByRole('button', {name:'Include removed companies', exact:true})).toHaveCount(0);
+    await page.getByRole('button', {name:'Simple · immediate relationships', exact:true}).click();
+    await page.getByRole('button', {name:'Run comprehensive search', exact:true}).click();
+    const removed = page.getByRole('button', {name:'Include removed companies', exact:true});
+    await expect(removed).toBeEnabled({timeout:30000});
+    await expect(nodes.filter({hasText:'REMOVED HOLDER LIMITED'})).toHaveCount(0);
+    await removed.click();
+    await expect(nodes.filter({hasText:'REMOVED HOLDER LIMITED'})).toBeVisible();
+    await expect(nodes.filter({hasText:'UPSTREAM COMPANY LIMITED'})).toBeVisible();
+});
+
 test.beforeEach(async ({page})=>{
     await page.addInitScript(() => sessionStorage.setItem('mitsuketa_intro_seen', '1'));
     await page.route('**/api/entity-record?**',route=>route.fulfill({json:{historicalAddresses:[],historicalShareholders:[],documents:[],documentsStatus:'empty',unavailable:[]}}));

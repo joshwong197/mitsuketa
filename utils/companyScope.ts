@@ -1,5 +1,11 @@
 import type { GraphEdge, GraphNode } from '../types';
 import { computePersonRoleFlags } from './personRoles';
+import { removedCompany } from './relationshipStatus';
+
+/** Simple reports current register allocations, even if a listed holder is removed. */
+export function companyNodeAllowed(node: GraphNode, scope: string | undefined, includeRemoved: boolean) {
+    return node.type !== 'companyNode' || !!node.data.isTarget || scope === 'simple' || includeRemoved || !removedCompany(node.data);
+}
 
 /** Match a fresh Simple search: current role/shareholder edges into the target only. */
 export function immediateCompanyGraph(nodes: GraphNode[], edges: GraphEdge[], targetId: string) {

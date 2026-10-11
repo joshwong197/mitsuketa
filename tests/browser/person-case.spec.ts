@@ -22,6 +22,33 @@ const personRoles = {
     }],
 };
 
+test('historical insolvency matches show their record details without opening the strip', async ({page}) => {
+    const record = {estateNumber:12345, estateName:personName, insolvencyTypeDescription:'Bankruptcy',
+        insolvencyStatus:'Discharged', multipleInsolvencies:false, adjudicationOrLiquidationDate:'2012-01-01',
+        dischargeOrCompletionDate:'2015-01-01', courtName:'Example High Court'};
+    await page.route('**/api/proxy?**', async route => {
+        const path = new URL(route.request().url()).searchParams.get('path') || '';
+        const json = path.includes('entity-roles/v3/search') ? personRoles
+            : path.includes('/insolvencies/12345') ? record
+            : path.includes('/insolvencies?') ? {searchResults:[record],totalItems:1}
+            : path.includes('/history/') ? []
+            : path.endsWith(`/entities/${company.nzbn}`) ? company
+            : {roles:[],items:[],searchResults:[],totalItems:0};
+        await route.fulfill({json});
+    });
+    await page.goto('/#/app');
+    await page.getByRole('button',{name:'People',exact:true}).click();
+    await page.getByLabel('Search company or person').fill(personName);
+    await page.getByLabel('Search company or person').press('Enter');
+    const panel = page.locator('#person-search-results');
+    await expect(panel.getByText('Estate number: 12345')).toBeVisible({timeout:30000});
+    await expect(panel.getByText('Court: Example High Court')).toBeVisible();
+    await expect(panel.getByText('Adjudication: 1 January 2012')).toBeVisible();
+    await expect(panel.getByText('Discharge/completion: 1 January 2015')).toBeVisible();
+    await expect(panel.getByText('Identity not confirmed', {exact:false})).toHaveCount(0);
+    await expect(panel.getByText(/Same-name notice:/)).toBeVisible();
+});
+
 test.beforeEach(async ({ page }) => {
     await page.addInitScript(() => sessionStorage.setItem('mitsuketa_intro_seen', '1'));
     await page.route('**/api/consent-forms**', route => route.fulfill({ json: { forms: [] } }));
@@ -56,8 +83,8 @@ test('person subject card is retained through person-to-company chart and Detail
     await expect(subject.getByRole('img', { name: 'Director and shareholder', exact: true })).toBeVisible();
     await expect(subject.getByText('Individual search · Companies Office', { exact: true })).toBeVisible();
     await expect(identifyingEvidence.getByText('All addresses match', { exact: true })).toBeVisible();
-    await expect(subject.getByText('Results for this name', { exact: false })).toBeVisible();
-    await expect(subject.getByText('Identity not confirmed', { exact: false })).toBeVisible();
+    await expect(subject.getByText('Identity not confirmed', { exact: false })).toHaveCount(0);
+    await expect(personPanel.getByText(/Same-name notice:/)).toBeVisible();
 
     const [subjectBox, panelBox] = await Promise.all([subject.boundingBox(), personPanel.boundingBox()]);
     expect(subjectBox).not.toBeNull();
