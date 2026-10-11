@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+import { noticeAcceptance, reviewNotice } from './property-fixtures';
 
 test('Mitsuketa entry, Property tab, reference, report and admin audit stay connected', async ({ page, context }, testInfo) => {
     const requests: URL[] = [];
@@ -40,7 +41,7 @@ test('Mitsuketa entry, Property tab, reference, report and admin audit stay conn
         await route.fulfill({ json: body });
     });
     await page.goto('/');
-    await page.getByRole('button', { name: 'Start searching', exact: true }).first().click();
+    await expect(page.getByLabel('Search company or person')).toBeVisible();
     const skip = page.getByRole('button', { name: 'Skip', exact: true });
     if (await skip.count()) await skip.click();
     await expect(page.getByRole('button', { name: /Compare/ }).first()).toBeVisible();
@@ -50,11 +51,8 @@ test('Mitsuketa entry, Property tab, reference, report and admin audit stay conn
     await page.getByLabel('Password', { exact: true }).fill('synthetic-only');
     await page.getByRole('button', { name: /Unlock/ }).click();
     await expect(page.getByRole('button', { name: 'Agree and continue' })).toBeDisabled();
-    await expect(page.getByRole('checkbox')).toBeDisabled();
-    await page.getByRole('region', { name: 'Privacy notice document', exact: true }).evaluate(node => { node.scrollTop = node.scrollHeight; node.dispatchEvent(new Event('scroll')); });
-    await page.locator('summary').filter({ hasText: 'Terms of use' }).click();
-    await page.getByRole('region', { name: 'Terms of use document', exact: true }).evaluate(node => { node.scrollTop = node.scrollHeight; node.dispatchEvent(new Event('scroll')); });
-    await page.getByRole('checkbox').check();
+    await reviewNotice(page);
+    await noticeAcceptance(page).check();
     await page.getByRole('button', { name: 'Agree and continue' }).click();
     await page.getByLabel('Property address', { exact: true }).fill('Example commercial address');
     await expect(page.locator('form').getByRole('button', { name: 'Search', exact: true })).toBeDisabled();

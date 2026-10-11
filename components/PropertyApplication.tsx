@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { propertyAuthHeaders } from '../utils/propertyAuthClient';
 import { NoticeAcceptance } from './NoticeAcceptance';
+import { applicationOptions } from '../utils/propertyApplicationDetails';
 export { NoticeAcceptance } from './NoticeAcceptance';
 
 export async function applicationRequest(mode: string, body?: object) {
@@ -17,6 +18,8 @@ export function PropertyApplication({ email: initialEmail = '' }: { email?: stri
     const [email, setEmail] = useState(initialEmail);
     const [organisation, setOrganisation] = useState('');
     const [purpose, setPurpose] = useState('');
+    const [details, setDetails] = useState({ version: 1, fullName: '', role: '', use: '', volume: '', sharing: '', recipients: '', safeguards: '', confirmed: false });
+    const answer = (key: string, value: string | boolean) => setDetails(previous => ({ ...previous, [key]: value }));
     const [notice, setNotice] = useState('');
     const [accepted, setAccepted] = useState(false);
     const [busy, setBusy] = useState(false);
@@ -25,19 +28,35 @@ export function PropertyApplication({ email: initialEmail = '' }: { email?: stri
     const loadNotice = () => applicationRequest('notice').then(data => { setNotice(data.noticeVersion); setError(''); }).catch(() => setError('Could not load the access notice. Please retry.'));
     useEffect(() => { void loadNotice(); }, []);
     return <form className="sumi-application" aria-label="Request property access" onSubmit={async e => {
-        e.preventDefault(); if (!accepted || !notice || busy) return; setBusy(true); setError('');
-        try { const data = await applicationRequest('apply', { email, organisation, purpose, noticeVersion: notice }); setMessage(data.message); }
+        e.preventDefault(); if (!accepted || !details.confirmed || !notice || busy) return; setBusy(true); setError('');
+        try { const data = await applicationRequest('apply', { email, organisation, purpose, details, noticeVersion: notice }); setMessage(data.message); }
         catch (e) { setError(e instanceof Error ? e.message : 'Please try again.'); }
         finally { setBusy(false); }
     }}>
-        <h3>Request property access</h3>
-        <p>Tell us a little about your work. If approved, we’ll email a link to set up your Mitsuketa account.</p>
+        <h2>Your application</h2>
+        <p>We review each request before granting property access. No account or password is needed to apply. All fields are required unless marked optional.</p>
         {message ? <p role="status">{message}</p> : <>
+            <fieldset><legend><span aria-hidden="true">一</span> About you</legend>
+            <label>Full name<input autoComplete="name" required maxLength={160} value={details.fullName} onChange={e => answer('fullName', e.target.value)} /></label>
             <label>Email address<input type="email" autoComplete="email" required maxLength={254} value={email} onChange={e => setEmail(e.target.value)} /></label>
             <label>Organisation (optional)<input autoComplete="organization" maxLength={160} value={organisation} onChange={e => setOrganisation(e.target.value)} /></label>
-            <label>Intended property-related use<textarea required maxLength={1000} rows={3} value={purpose} onChange={e => setPurpose(e.target.value)} /></label>
+            <label>Your role or capacity<span className="application-help">For example, solicitor, researcher, business owner or private individual.</span><input autoComplete="organization-title" required maxLength={160} value={details.role} onChange={e => answer('role', e.target.value)} /></label>
+            </fieldset>
+            <fieldset><legend><span aria-hidden="true">二</span> Using property information</legend>
+            <p>Toitū Te Whenua Land Information New Zealand (LINZ) supplies the title information used in property searches. It can include personal information, such as registered owners’ names. These questions help us assess your intended use.</p>
+            <label>Main reason for access<select required value={details.use} onChange={e => answer('use', e.target.value)}><option value="">Choose a reason</option>{applicationOptions.use.map(option => <option key={option}>{option}</option>)}</select></label>
+            <label>What will you use the information for?<span className="application-help">Describe the task and why title or ownership information is needed. Use a general example; do not include client names, addresses or confidential case details.</span><textarea required maxLength={1000} rows={4} value={purpose} onChange={e => setPurpose(e.target.value)} /></label>
+            <label>Expected searches per month<select required value={details.volume} onChange={e => answer('volume', e.target.value)}><option value="">Choose an estimate</option>{applicationOptions.volume.map(option => <option key={option}>{option}</option>)}</select></label>
+            <label>Who will receive the information?<select required value={details.sharing} onChange={e => answer('sharing', e.target.value)}><option value="">Choose the closest option</option>{applicationOptions.sharing.map(option => <option key={option}>{option}</option>)}</select></label>
+            <label>Tell us about any sharing or publication<span className="application-help">Describe recipients by role, not name. Include any exports, client reports, publication, marketing, bulk collection or automated use you intend. If none, say so.</span><textarea required maxLength={1000} rows={3} value={details.recipients} onChange={e => answer('recipients', e.target.value)} /></label>
+            <label>How will you store and protect the information?<span className="application-help">Tell us who will have access to saved reports and when you expect to delete them. If you will not save reports, say so.</span><textarea required maxLength={1000} rows={3} value={details.safeguards} onChange={e => answer('safeguards', e.target.value)} /></label>
+            </fieldset>
+            <fieldset><legend><span aria-hidden="true">三</span> Review and submit</legend>
+            <p>Administrators use these answers to assess and manage access. An application does not grant access or permission for a particular use of LINZ data. Approved users must meet the applicable terms before searching.</p>
             <NoticeAcceptance key={notice} accepted={accepted} onChange={setAccepted} />
-            <button className="sumi-primary" disabled={busy || !accepted || !notice}>{busy ? 'Submitting…' : 'Submit for review'} <span aria-hidden="true">→</span></button>
+            <label className="sumi-notice-confirm"><input type="checkbox" required checked={details.confirmed} onChange={e => answer('confirmed', e.target.checked)} />I confirm these answers describe my intended use accurately. I understand this request needs review before property access is granted.</label>
+            <button className="sumi-primary" disabled={busy || !accepted || !details.confirmed || !notice}>{busy ? 'Submitting…' : 'Submit application'} <span aria-hidden="true">→</span></button>
+            </fieldset>
         </>}
         {error && <p role="alert">{error} {!notice && <button type="button" onClick={() => void loadNotice()}>Retry</button>}</p>}
     </form>;
@@ -67,6 +86,9 @@ export function ApplicationReview() {
                         : row.invitation_state === 'sent' ? 'Invited · awaiting signup' : 'Approved · sending invitation'
                 : row.status === 'active' ? 'Active' : row.status}</p>
             <p>{row.organisation} {row.organisation && '·'} {row.purpose}</p>
+            {row.application_details ? <dl className="application-review-answers">
+                {([['fullName', 'Name'], ['role', 'Role or capacity'], ['use', 'Main use'], ['volume', 'Searches per month'], ['sharing', 'Recipients'], ['recipients', 'Sharing plans'], ['safeguards', 'Storage and protection']] as const).map(([key, label]) => <React.Fragment key={key}><dt>{label}</dt><dd>{row.application_details[key]}</dd></React.Fragment>)}
+            </dl> : <p>Earlier application — the additional use and handling questions were not collected.</p>}
             <div className="flex flex-wrap gap-4">
                 {row.status === 'pending' && <button className="sumi-text-action" disabled={busy} onClick={() => void run('invite', row.id)}>Approve & invite</button>}
                 {row.status === 'approved' && <button className="sumi-text-action" disabled={busy} onClick={() => void run(row.invitation_state === 'sent' ? 'resend' : 'invite', row.id)}>{row.invitation_state === 'sent' ? 'Resend invitation' : 'Retry invitation'}</button>}

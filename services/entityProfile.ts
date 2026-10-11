@@ -13,6 +13,16 @@ export function registerLink(source: string, number: string): { label: string; u
     if (['Y', 'Z', 'LP', 'LimitedPartnershipNz', 'LimitedPartnershipOverseas'].includes(source)) return { label: 'Limited Partnerships Register', url: 'https://lp-register.companiesoffice.govt.nz/' };
     return { label: 'NZBN Register', url: 'https://www.nzbn.govt.nz/' };
 }
+export function formatBusinessAddress(parts: unknown[]) {
+    const rawText = parts.map(asText).filter(Boolean).join(', ');
+    const seen = new Set<string>();
+    const text = parts.map(asText).filter(Boolean).flatMap(part => part.split(',')).map(part => part.trim()).filter(part => {
+        const key = part.toLowerCase().replace(/\s+/g, ' ');
+        if (!key || seen.has(key)) return false;
+        seen.add(key); return true;
+    }).join(', ');
+    return { text, rawText };
+}
 export function normaliseEntityProfile(raw: any, retrievedAt = new Date().toISOString()) {
     const company = raw?.['company-details'];
     const nonCompany = raw?.['non-company-details'];
@@ -37,7 +47,7 @@ export function normaliseEntityProfile(raw: any, retrievedAt = new Date().toISOS
     const current = (item: any) => !item.endDate || Date.parse(item.endDate) > Date.now();
     const addresses = list(raw?.addresses?.addressList).filter(current).map(address => ({
         type: asText(address.addressType) || 'Business address',
-        text: [address.careOf, address.address1, address.address2, address.address3, address.address4, address.postCode, address.countryCode].map(asText).filter(Boolean).join(', '),
+        ...formatBusinessAddress([address.careOf, address.address1, address.address2, address.address3, address.address4, address.postCode, address.countryCode]),
     })).filter(a => a.text);
     const websites = list(raw?.websites).filter(current).map(item => asText(item.url)).filter(url => {
         try { return ['https:', 'http:'].includes(new URL(url).protocol); } catch { return false; }
@@ -51,7 +61,7 @@ export function normaliseEntityProfile(raw: any, retrievedAt = new Date().toISOS
         register: registerLink(source, number), isCompany: source === 'COMPANY',
         addresses, websites,
         phones: list(raw?.phoneNumbers).filter(current).map(p => [p.phoneCountryCode ? `+${p.phoneCountryCode}` : '', p.phoneAreaCode, p.phoneNumber].map(asText).filter(Boolean).join(' ')).filter(Boolean),
-        emails: list(raw?.emailAddresses).filter(current).map(e => asText(e.emailAddress)).filter(Boolean),
+        emails: list(raw?.emailAddresses).filter(current).map(e => asText(e.emailAddress)).filter((email, index, all) => !!email && all.findIndex(e => e.toLowerCase() === email.toLowerCase()) === index),
         tradingNames: list(raw?.tradingNames).filter(current).map(n => asText(n.name || n.tradingName)).filter(Boolean),
         industries: list(raw?.industryClassifications).map(i => [i.classificationCode || i.code, i.classificationDescription || i.description].map(asText).filter(Boolean).join(' · ')).filter(Boolean),
         annualMonth: numeric(company?.annualReturnFilingMonth ?? nonCompany?.annualReturnFilingMonth),
@@ -64,7 +74,7 @@ export function normaliseEntityProfile(raw: any, retrievedAt = new Date().toISOS
         shareholdingSupplied: !!company?.shareholding,
         formerNames: [] as {name:string;startDate:string;endDate:string}[],
         historicalAddresses: list(raw?.addresses?.addressList).filter(a=>a.endDate && Date.parse(a.endDate)<=Date.now()).map(a=>({
-            type:asText(a.addressType),text:[a.address1,a.address2,a.address3,a.address4,a.postCode,a.countryCode].map(asText).filter(Boolean).join(', '),startDate:asText(a.startDate),endDate:asText(a.endDate),
+            type:asText(a.addressType),...formatBusinessAddress([a.address1,a.address2,a.address3,a.address4,a.postCode,a.countryCode]),startDate:asText(a.startDate),endDate:asText(a.endDate),
         })),
         historicalShareholders: [] as {name:string;endDate:string}[],
         documents: [] as {title:string;filing:string;date:string;size:string;url:string}[],

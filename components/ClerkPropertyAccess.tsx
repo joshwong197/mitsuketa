@@ -1,3 +1,4 @@
+import { PrivacyReview } from './PrivacyReview';
 import React, { useEffect, useState } from 'react';
 import { UserButton, useUser } from '@clerk/react';
 import { accountRequest, type AccountStatus } from '../services/propertyAccountService';
@@ -10,6 +11,8 @@ export function PropertyAccountPanel({ account, refresh }: { account: AccountSta
 
 
     const [accepted, setAccepted] = useState(false);
+    const [linzAccepted, setLinzAccepted] = useState(false);
+    useEffect(() => { setAccepted(false); setLinzAccepted(false); }, [account.legal?.documentSet, account.noticeVersion]);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState('');
     const [members, setMembers] = useState<any[] | null>(null);
@@ -27,12 +30,14 @@ export function PropertyAccountPanel({ account, refresh }: { account: AccountSta
         {account.status === 'pending' && <PropertyApplication email={account.searcher} />}
         {account.status === 'approved' && account.accepted_notice_version !== account.noticeVersion && <div>
             <p>Read and accept the current notice before searching.</p>
-            <NoticeAcceptance key={account.noticeVersion} accepted={accepted} onChange={setAccepted} />
-            <button className="sumi-primary" disabled={busy || !accepted} onClick={() => void run(async () => {
-                await accountRequest('accept-notice', { noticeVersion: account.noticeVersion }); await refresh();
+            <NoticeAcceptance key={account.legal?.documentSet || account.noticeVersion} accepted={accepted} onChange={setAccepted} />
+            {account.legal && <label className="sumi-notice-confirm"><input type="checkbox" checked={linzAccepted} onChange={e => setLinzAccepted(e.target.checked)} /><span>I agree to the <a href={account.legal.linzUrl} target="_blank" rel="noopener noreferrer">LINZ Licence for Personal Data {account.legal.linzVersion}</a>, including its incorporated CC BY 4.0 terms, for property information I receive.</span></label>}
+            <button className="sumi-primary" disabled={busy || !accepted || (!!account.legal && !linzAccepted)} onClick={() => void run(async () => {
+                await accountRequest('accept-notice', { noticeVersion: account.noticeVersion, documentSet: account.legal?.documentSet, acceptTerms: accepted, acknowledgePrivacy: accepted, acceptLinz: linzAccepted }); await refresh();
             })}>Continue to Property →</button>
         </div>}
         {['rejected', 'suspended'].includes(account.status) && <p>Contact the administrator to discuss your access.</p>}
+        {account.canAudit && <PrivacyReview />}
         {account.canAudit && <div style={{ marginTop: 16 }}>
             <ApplicationReview />
             <button type="button" className="text-accent" disabled={busy} onClick={() => void run(async () => setMembers((await accountRequest('members')).rows))}>Manage existing accounts</button>
@@ -77,7 +82,7 @@ export default function ClerkPropertyAccess({ children }: { children: React.Reac
     if (!isLoaded) return <p>Loading sign-in…</p>;
     if (!user) return <section className="sumi-property-entry">
         <p className="sumi-eyebrow">地 · Property intelligence</p>
-        <h3>The land.<br />The people behind it.</h3>
+        <h3>Property records</h3>
         <p className="sumi-property-copy">Search titles, trace registered owners and read the interests recorded against a property.</p>
         <div className="sumi-property-actions"><a href="/?access=signin" className="sumi-primary">Sign in <span aria-hidden="true">→</span></a>
             <a href="/?access=request" className="sumi-text-action">Request access</a></div>

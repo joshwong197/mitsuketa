@@ -1,3 +1,4 @@
+import { legalRelease, legalDocuments } from './legalAcceptance.js';
 // Server-only identity and vetting. Provider IDs, never submitted emails, own accounts.
 import { createClerkClient } from '@clerk/backend';
 import { neon } from '@neondatabase/serverless';
@@ -9,6 +10,7 @@ export class AccessError extends Error {
 }
 export function authMode() {
     const mode = process.env.PROPERTY_AUTH_MODE || 'password';
+    if (legalRelease() && mode !== 'clerk') throw new AccessError(503, 'not_configured', 'Versioned legal acceptance requires Clerk authentication.');
     if (mode !== 'password' && mode !== 'clerk') throw new AccessError(503, 'not_configured', 'Property access is not configured.');
     return mode;
 }
@@ -73,6 +75,11 @@ export async function getMember(req: VercelRequest): Promise<Member> {
             typeof grant?.applicationId === 'string' ? grant.applicationId : '',
             typeof grant?.nonce === 'string' ? grant.nonce : '', NOTICE_VERSION]);
     const access = (await accountQuery('SELECT status,accepted_notice_version FROM property_access WHERE account_id=$1', [id]))[0];
+    if (legalRelease()) {
+        const evidence = await accountQuery('SELECT id FROM property_legal_acceptance WHERE account_id=$1 AND issuer=$2 AND subject=$3 AND document_set=$4 LIMIT 1',
+            [id, process.env.CLERK_ISSUER, auth.userId, legalDocuments().documentSet]);
+        if (!evidence.length) access.accepted_notice_version = null;
+    }
     const canAudit = (process.env.PROPERTY_CLERK_ADMINS || '').split(',').map(s => s.trim()).includes(auth.userId);
     return { id, searcher: email, issuer: process.env.CLERK_ISSUER, subject: auth.userId, canAudit,
         status: access.status, accepted_notice_version: access.accepted_notice_version };

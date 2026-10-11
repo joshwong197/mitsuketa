@@ -879,7 +879,7 @@ export function buildTitleReportHtml(view: TitleView, now: Date, mapSvg = ''): s
            ${rating.note ? `<p class="hint">${esc(rating.note)}</p>` : ''}`);
 
     return `<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8">
+<html lang="en"><head><meta charset="UTF-8"><meta name="robots" content="noindex, nofollow, noarchive">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${esc(view.titleNo)} — Record of title — Mitsuketa</title>
 <style>
@@ -1030,28 +1030,26 @@ dt:first-of-type,dt:first-of-type + dd{border-top:none}
  .sec-head,.ev-year{break-after:avoid}
  .ev-year span{background:#fff}
 }
+
+.property-subject{display:flex;border:1px solid var(--ink);margin-bottom:34px;box-shadow:5px 5px 0 var(--paper2)}
+.property-subject-spine{width:58px;flex-shrink:0;background:var(--accent);color:var(--accent-ink);display:flex;flex-direction:column;justify-content:space-between;align-items:center;padding:24px 0}
+.property-subject-spine span{writing-mode:vertical-rl;font-family:"Shippori Mincho","Yu Mincho",serif;font-size:28px;letter-spacing:.25em}.property-subject-spine small{writing-mode:vertical-rl;font-family:"Shippori Mincho","Yu Mincho",serif}
+.property-subject-main{min-width:0;flex:1;padding:24px 28px}.property-subject-source{font-size:11px;letter-spacing:.08em;color:var(--ink-mid)}
+.property-subject h1{font-family:"Zen Kaku Gothic New",system-ui,sans-serif;font-weight:500;font-size:clamp(24px,3vw,34px);line-height:1.3;margin:18px 0 12px;overflow-wrap:anywhere}
+.property-subject-number{font-family:"Zen Kaku Gothic New",system-ui,sans-serif;font-size:15px;font-variant-numeric:tabular-nums;margin-bottom:20px}.property-subject .summary-item span{font-size:15px}.property-subject .summary-item b{font-size:11px}
+@media(max-width:600px){.property-subject-spine{width:36px}.property-subject-spine span{font-size:22px}.property-subject-main{padding:18px}.property-subject .summary-grid{grid-template-columns:1fr}}
+
+.property-subject .summary{border:0;background:none;padding:0;margin:0}.property-subject h1{font-family:system-ui,sans-serif}.property-subject-spine{color:#fff}
+
 </style></head>
 <body><div class="doc">
 
-<header class="mast">
-  <div style="min-width:0;flex:1">
-    <p class="sup"><em>登記簿</em>Record of title · LINZ Title Register</p>
-    <h1>${esc(view.address || view.titleNo)}</h1>
-    ${view.address ? `<p class="addr">Title ${esc(view.titleNo)}</p>` : ''}
-    <p class="meta">${esc(view.meta)}</p>
-  </div>
-  <div class="stampwrap">
-    <div class="hanko${isLive ? ' stamp' : ''}">${isLive ? '現' : '地'}</div>
-    <div class="status${isLive ? ' on' : ''}">${esc(view.status ?? 'Status unknown')}</div>
-  </div>
-</header>
-<div class="rule2"></div>
+<header class="property-subject"><div class="property-subject-spine" aria-hidden="true"><span>登記</span><small>見つけた</small></div><div class="property-subject-main">
+<p class="property-subject-source">Record of title · LINZ Title Register</p><h1>${esc(view.address || view.titleNo)}</h1>
+<p class="property-subject-number">Title ${esc(view.titleNo)} · ${esc(view.status ?? 'Status unknown')}</p>
+<section class="summary">
 
-<div class="body">
-<section class="summary" aria-labelledby="summary-title">
-  <h2 id="summary-title">Title summary</h2>
   <div class="summary-grid">
-    <div class="summary-item"><b>Address</b><span>${esc(view.address ?? 'Not supplied')}</span></div>
     <div class="summary-item"><b>Title number</b><span>${esc(view.summary.titleNo)}</span></div>
     <div class="summary-item"><b>Registered owners</b><span>${esc(view.summary.owners.join(' · ') || 'Not supplied')}</span></div>
     <div class="summary-item"><b>Tenure / type</b><span>${esc(view.summary.tenure)}</span></div>
@@ -1061,7 +1059,9 @@ dt:first-of-type,dt:first-of-type + dd{border-top:none}
     <div class="summary-item"><b>Issue date</b><span>${esc(view.summary.issueDate)}</span></div>
     <div class="summary-item summary-interests"><b>Current mortgages, caveats and leases</b><span>${view.summary.interests.length ? `<ul>${view.summary.interests.map(e => `<li>${esc(e.headline)}${e.instrument ? ` · ${esc(e.instrument)}` : ''}</li>`).join('')}</ul>` : 'None recorded'}</span></div>
   </div>
-</section>
+</section></div></header>
+<div class="body">
+
 ${mapSvg ? section('地図', 'Parcel', '', mapSvg) : ''}
 
 ${section('登記', 'Register detail', '', `<dl>${view.facts.map(f =>
@@ -1096,9 +1096,7 @@ ${view.burdens.length === 0 ? '' : section('負担', 'Standing burdens', String(
   <p><em>注記</em>Reference copy of the LINZ Title Register, not a title search. It may lag the
   register and is not legal advice. Every line above is taken from the register\'s own fields — no
   interpretation has been added. Obtain a formal search from LINZ before relying on it.</p>
-  <p>This document contains personal information supplied under the LINZ Licence for Personal Data.
-  Handle it in line with the Privacy Act 2020 and do not pass it to anyone who has not accepted
-  equivalent terms.</p>
+  <p>This report contains personal information. Share it only with a recipient who has accepted the LINZ Licence for Personal Data 2.3. Keep it secure, retain the source notices, and do not publish it on a publicly searchable page. A downloaded report does not update automatically; you may need to correct or delete copies if instructed. <a href="https://data.linz.govt.nz/license/linz-licence-for-personal-data-23/">Read the LINZ licence</a>.</p>
   <p>Generated ${esc(nzTimestamp(now))} · Mitsuketa 見つけた</p>
 </div>
 

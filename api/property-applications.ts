@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { accountQuery, authMode, getMember, AccessError, NOTICE_VERSION, requireOrigin, sendAccessError } from '../utils/propertyAccount.js';
 import { createInvitationService, invitationClient } from '../utils/propertyInvitations.js';
 import { checkRateLimit } from '../mcp/lib/rateLimit.js';
+import { parseApplicationDetails } from '../utils/propertyApplicationDetails.js';
 
 const clean = (value: unknown, max: number) => {
     if (typeof value !== 'string' || value.trim().length > max || /[\x00-\x1f\x7f]/.test(value)) throw new AccessError(400, 'invalid_input', 'Check the information you entered.');
@@ -26,21 +27,25 @@ export function createApplicationsHandler(deps: { query?: typeof accountQuery; m
                 const email = clean(req.body?.email, 254).toLowerCase();
                 if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new AccessError(400, 'invalid_email', 'Enter a valid email address.');
                 const organisation = clean(req.body?.organisation || '', 160);
-                const purpose = clean(req.body?.purpose, 1000);
+                const purpose = typeof req.body?.purpose === 'string' ? req.body.purpose.trim() : '';
+                if (purpose.length > 1000 || /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(purpose)) throw new AccessError(400, 'invalid_input', 'Keep the intended use within 1,000 characters.');
                 if (!purpose) throw new AccessError(400, 'purpose_required', 'Tell us how you intend to use property searches.');
+                let details;
+                try { details = parseApplicationDetails(req.body?.details); }
+                catch (error) { throw new AccessError(400, 'invalid_application', (error as Error).message); }
                 if (req.body?.noticeVersion !== NOTICE_VERSION) throw new AccessError(400, 'notice_required', 'Read and accept the current privacy notice and terms.');
                 if (!process.env.CLERK_ISSUER) throw new AccessError(503, 'not_configured', 'Applications are not configured.');
                 // Duplicate public requests cannot change decisions or overwrite details.
-                await query(`INSERT INTO property_application(issuer,email,organisation,purpose,notice_version)
-                    VALUES($1,$2,$3,$4,$5) ON CONFLICT(issuer,email) DO NOTHING`,
-                    [process.env.CLERK_ISSUER, email, organisation, purpose, NOTICE_VERSION]);
+                await query(`INSERT INTO property_application(issuer,email,organisation,purpose,notice_version,application_details)
+                    VALUES($1,$2,$3,$4,$5,$6::jsonb) ON CONFLICT(issuer,email) DO NOTHING`,
+                    [process.env.CLERK_ISSUER, email, organisation, purpose, NOTICE_VERSION, JSON.stringify(details)]);
                 return res.status(200).json({ ok: true, message: 'Request received. If approved, you will receive an invitation by email. If you have already applied, your existing request remains in review.' });
             }
             const actor = await member(req);
             if (!actor.canAudit) throw new AccessError(403, 'forbidden', 'Administrator access is required.');
             if (mode === 'list' && req.method === 'GET') {
                 const rows = await query(`SELECT id,email,organisation,purpose,status,invitation_state,requested_at,reviewed_at,
-                    expires_at,activated_at FROM property_application WHERE issuer=$1 ORDER BY requested_at DESC LIMIT 200`, [actor.issuer]);
+                    expires_at,activated_at,application_details FROM property_application WHERE issuer=$1 ORDER BY requested_at DESC LIMIT 200`, [actor.issuer]);
                 return res.status(200).json({ rows });
             }
             if (req.method !== 'POST') return res.status(405).json({ error: 'POST_required' });

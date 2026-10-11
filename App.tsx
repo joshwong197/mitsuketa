@@ -2298,8 +2298,8 @@ function App({ entrySearch = false }: { entrySearch?: boolean }) {
             <button
               onClick={() => { closeSearchView(); setSidebarView('case'); }}
               className={`relative w-10 h-10 grid place-items-center transition-colors ${!searchViewOpen && sidebarView === 'case' ? 'text-ink' : 'text-ink-mid hover:text-ink'}`}
-              aria-label="Case"
-              title="Case"
+              aria-label="File"
+              title="File"
             >
               {!searchViewOpen && sidebarView === 'case' && <span className="absolute left-[-12px] top-2 bottom-2 w-0.5 bg-accent" />}
               <FolderOpen size={17} strokeWidth={1.5} />
@@ -2422,7 +2422,7 @@ function App({ entrySearch = false }: { entrySearch?: boolean }) {
 
           {!searchViewOpen && activeMainTab === 'company' && nodes.length > 0 && <RegisterCheckProgress
             nodes={allNodesInMemory} phase={searchPhases[activeCompanyTabId || 'current']} />}
-          <div className="flex-1 relative">
+          <div className="flex-1 min-h-0 relative">
             {/* A property report owns the canvas whenever its tab is active — it
                 is a document, not a graph, so it scrolls in place. */}
             {!searchViewOpen && activeMainTab === 'property' && activePropertyTab ? (

@@ -1,0 +1,16 @@
+import React, {useEffect,useState} from 'react';
+import {accountRequest} from '../services/propertyAccountService';
+export function PrivacyReview(){
+ const [data,setData]=useState<any>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false),[reference,setReference]=useState(''),[kind,setKind]=useState('access'),[accountId,setAccountId]=useState('');
+ const refresh=async()=>{const [acceptance,retention,requests]=await Promise.all([accountRequest('acceptance-history'),accountRequest('retention-review'),accountRequest('privacy-requests')]);setData({acceptance,retention,requests})};
+ const run=async(fn:()=>Promise<void>)=>{setBusy(true);setError('');try{await fn()}catch(e){setError(e instanceof Error?e.message:'Review unavailable')}finally{setBusy(false)}};
+ useEffect(()=>{void run(refresh)},[]);
+ return <section aria-label="Privacy administration" style={{marginTop:20,border:'1px solid var(--rule)',padding:16}}><h3>Privacy administration</h3><p>Administrator access only. Use internal references here; keep request documents in your secure records system.</p>{error&&<p role="alert">{error}</p>}
+ <button disabled={busy} onClick={()=>void run(refresh)}>Refresh review</button>
+ {data&&<><h4>Retention review</h4><p>{data.retention.configured?`${data.retention.rows[0]?.candidates||0} searches are older than the ${data.retention.reviewAfterDays}-day review threshold.`:'No retention review period has been configured.'} No records are deleted by this tool.</p><p>{data.retention.scope}</p>
+ <details><summary>Acceptance history ({data.acceptance.rows.length} most recent)</summary><div style={{overflowX:'auto'}}><table><thead><tr><th>Account</th><th>Release</th><th>LINZ version</th><th>Accepted</th></tr></thead><tbody>{data.acceptance.rows.map((r:any)=><tr key={r.id}><td>{r.account_id}</td><td>{r.release}</td><td>{r.linz_version}</td><td>{new Date(r.accepted_at).toLocaleString()}</td></tr>)}</tbody></table></div></details>
+ <h4>Privacy requests</h4><p>An open request pauses retention eligibility for its account. A request without an account pauses eligibility for all accounts in this environment. Closing a request does not itself delete or correct any records.</p>
+ <form onSubmit={e=>{e.preventDefault();void run(async()=>{await accountRequest('privacy-request',{kind,reference,accountId});setReference('');await refresh()})}}><label>Request type <select value={kind} onChange={e=>setKind(e.target.value)}>{['access','correction','deletion','incident','source-recall'].map(k=><option key={k}>{k}</option>)}</select></label><label> Internal reference <input required maxLength={120} value={reference} onChange={e=>setReference(e.target.value)}/></label><label> Account ID (optional) <input value={accountId} onChange={e=>setAccountId(e.target.value)}/></label><button disabled={busy}>Record request</button></form>
+ <ul>{data.requests.rows.map((r:any)=><li key={r.id}>{r.reference} · {r.kind} · {r.status} <label>Update status <select disabled={busy} value={r.status} onChange={e=>{const status=e.target.value;void run(async()=>{await accountRequest('privacy-request-status',{id:r.id,status});await refresh()})}}>{['open','in-progress','closed'].map(k=><option key={k}>{k}</option>)}</select></label></li>)}</ul></>}
+ </section>
+}

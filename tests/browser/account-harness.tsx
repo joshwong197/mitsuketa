@@ -1,6 +1,8 @@
 // Development test fixture only; not a production build entry point.
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import '../../index.css';
+import '../../components/sumi-surfaces.css';
 import { PropertyAccountPanel } from '../../components/ClerkPropertyAccess';
 import { accountRequest, type AccountStatus } from '../../services/propertyAccountService';
 function Harness() {

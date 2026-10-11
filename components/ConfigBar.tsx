@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Moon, Sun, Info } from 'lucide-react';
-import { AboutPage } from './AboutPage';
+
 
 interface Props {
   theme: 'light' | 'dark';
@@ -8,7 +8,7 @@ interface Props {
 }
 
 export const ConfigBar: React.FC<Props> = ({ theme, toggleTheme }) => {
-  const [isAboutOpen, setIsAboutOpen] = useState(false);
+
 
   const iconBtn =
     'w-7 h-7 grid place-items-center border border-rule text-ink-mid hover:border-ink-mid hover:text-ink transition-colors';
@@ -36,25 +36,24 @@ export const ConfigBar: React.FC<Props> = ({ theme, toggleTheme }) => {
           <div className="flex-1" />
 
           {/* MBIE disclaimer link */}
-          <button
-            onClick={() => setIsAboutOpen(true)}
+          <a
+            href="#/about"
             className="hidden md:block text-ink-mid underline decoration-rule hover:text-ink transition-colors"
             style={{ fontSize: 11 }}
             title="View Data Source & Terms of Use"
           >
-            Data sourced from MBIE registers. Not for unlawful commercial use.
-          </button>
+            Register sources & usage
+          </a>
 
           {/* Register status */}
           <div className="hidden sm:flex items-center gap-1.5 text-ink-mid" style={{ fontSize: 11.5 }}>
-            <span className="w-[7px] h-[7px] bg-green inline-block" aria-hidden="true" />
-            Registers · connected
+            New Zealand registers
           </div>
 
           <div className="flex items-center gap-2">
-            <button onClick={() => setIsAboutOpen(true)} className={iconBtn} aria-label="About Mitsuketa" title="About Mitsuketa">
+            <a href="#/about" className={iconBtn} aria-label="About Mitsuketa" title="About Mitsuketa">
               <Info size={15} strokeWidth={1.5} />
-            </button>
+            </a>
             <button onClick={toggleTheme} className={iconBtn} aria-label="Toggle theme" title="Toggle theme">
               {theme === 'dark' ? <Sun size={15} strokeWidth={1.5} /> : <Moon size={15} strokeWidth={1.5} />}
             </button>
@@ -62,7 +61,7 @@ export const ConfigBar: React.FC<Props> = ({ theme, toggleTheme }) => {
         </div>
       </div>
 
-      {isAboutOpen && <AboutPage onClose={() => setIsAboutOpen(false)} />}
+
     </>
   );
 };
