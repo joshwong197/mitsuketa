@@ -51,6 +51,17 @@ test('company scope defaults to Comprehensive and Simple only renders immediate 
         const a = layout.nodes[i], b = layout.nodes[j];
         expect(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top).toBe(true);
     }
+    const directorNode = page.locator('.react-flow__node').filter({ hasText: 'Alex Fixture' });
+    const beforeDrag = await directorNode.boundingBox();
+    expect(beforeDrag).not.toBeNull();
+    await page.mouse.move(beforeDrag!.x + beforeDrag!.width / 2, beforeDrag!.y + beforeDrag!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(beforeDrag!.x + beforeDrag!.width / 2 + 90, beforeDrag!.y + beforeDrag!.height / 2 + 45, { steps: 12 });
+    await page.mouse.up();
+    await expect.poll(async () => (await directorNode.boundingBox())!.x).toBeGreaterThan(beforeDrag!.x + 60);
+    // Selection is a second controlled-state update; it must not snap the node back.
+    await directorNode.click();
+    expect((await directorNode.boundingBox())!.x).toBeGreaterThan(beforeDrag!.x + 60);
     expect(requests.some(p => p.includes('role-type=SHR'))).toBe(false);
     await page.getByRole('button', { name: 'Details', exact: true }).click();
     const profile = page.getByRole('region', { name: 'Details' });
@@ -87,6 +98,7 @@ test('company scope defaults to Comprehensive and Simple only renders immediate 
     await page.getByRole('button', { name: 'Simple · immediate relationships', exact: true }).click();
     await page.getByRole('button', { name: 'Run comprehensive search', exact: true }).click();
     await expect(page.getByLabel('Comprehensive · wider network', { exact: true })).toBeVisible({ timeout: 30000 });
+    await expect(directorNode).toBeVisible();
     expect(requests.some(p => p.includes('role-type=SHR'))).toBe(true);
     await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('mitsuketa_session_v1') || '{}').companyTabs?.[0]?.allNodesInMemory?.find((n: any) => n.data.isTarget)?.data.companySearchScope)).toBe('comprehensive');
     expect(await page.evaluate(() => JSON.parse(localStorage.getItem('mitsuketa_session_v1') || '{}').companyTabs.length)).toBe(1);

@@ -13,3 +13,18 @@ export function immediateCompanyGraph(nodes: GraphNode[], edges: GraphEdge[], ta
     }));
     return { nodes: computePersonRoleFlags(immediateNodes, incoming), edges: incoming };
 }
+
+/** Project data without replacing controlled React Flow positions or measurements. */
+export function immediateCompanyView(liveNodes: GraphNode[], memoryNodes: GraphNode[], edges: GraphEdge[], targetId: string) {
+    const immediate = immediateCompanyGraph(memoryNodes, edges, targetId);
+    const liveById = new Map(liveNodes.map(node => [node.id, node]));
+    return {
+        nodes: immediate.nodes.map(node => {
+            const live = liveById.get(node.id);
+            return { ...node, ...live, data: { ...node.data, ...live?.data,
+                roleKind: node.data.roleKind, isVisible: true, hiddenDescendantCount: undefined, isBranchExpanded: false,
+                ...(node.id === targetId ? { companySearchScope: 'simple' as const } : {}) } };
+        }),
+        edges: immediate.edges,
+    };
+}
