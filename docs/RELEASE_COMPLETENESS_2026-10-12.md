@@ -38,3 +38,11 @@ Browser CI tests were updated but not executed. They now cover direct search ent
 4. Check a company with current liquidation evidence, repeated addresses and repeated emails: confirm the red spine, clean deduplicated values and retained source information.
 5. Confirm File labels and the neutral register-source header. Confirm property access offers no payment checkout.
 6. Keep the legal release and retention settings unset until the final terms are approved; complete the release configuration only after that decision.
+
+## Legacy MCP removal — 12 October 2026
+
+The old `/api/mcp`, `/api/mcp-ping` and `/graph.html` viewer are removed, together with their nine tools, graph store, MCP templates, build entry and unused dependencies. Website APIs now import the same key-resolution and rate-limit logic from `utils/apiKeys.ts` and `utils/apiRateLimit.ts`. Website searches, property access and downloadable HTML reports retain their existing implementation.
+
+MCP/CLI development is parked on `codex/private-mcp-pilot`. No replacement endpoint, agent grant, OAuth client or background worker is enabled by this release. That branch holds the capability review and the agreed future scope: Simple company graphs; bounded individual searches/checks; approved property searches and reports; separate private-pilot authorization; no account, administration or workspace tools. Comprehensive remains a website function.
+
+TypeScript, production build, proxy throttling/header forwarding, entity-record routing, property invitations and property access checks passed. The lockfile cleanup changes no retained dependency versions. Production verification must confirm the retired routes no longer expose an MCP transport or diagnostics and the website proxy still returns company records.

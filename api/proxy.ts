@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { resolveApiKey } from '../mcp/lib/keys.js';
-import { checkRateLimit } from '../mcp/lib/rateLimit.js';
+import { resolveApiKey } from '../utils/apiKeys.js';
+import { checkRateLimit } from '../utils/apiRateLimit.js';
 
 // Generous by design: a whole team can sit behind one office IP, and one
 // full graph build fans out to hundreds of proxy calls (the crawler's own
