@@ -1,5 +1,5 @@
 import type {VercelRequest,VercelResponse} from '@vercel/node';
-import {checkRateLimit} from '../mcp/lib/rateLimit.js';
+import {checkRateLimit} from '../utils/apiRateLimit.js';
 import {parseAddressHistory,parseDocumentLinks,parseShareholderHistory} from '../utils/registerEvidence.js';
 import { registerDocumentSource } from '../utils/registerDocumentSource.js';
 
