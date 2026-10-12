@@ -19,7 +19,6 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         input: {
           main: path.resolve(__dirname, 'index.html'),
-          graph: path.resolve(__dirname, 'graph.html'),
         },
       },
     },

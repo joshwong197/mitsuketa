@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import * as cheerio from 'cheerio';
-import { checkRateLimit } from '../mcp/lib/rateLimit.js';
+import { checkRateLimit } from '../utils/apiRateLimit.js';
 
 const COMPANIES_OFFICE_BASE = 'https://app.companiesoffice.govt.nz';
 

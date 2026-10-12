@@ -1,4 +1,4 @@
-// In-memory per-IP rate limiter, shared by /api/proxy, /api/mcp,
+// In-memory per-IP rate limiter, shared by /api/proxy,
 // /api/documents and /api/consent-forms. State is per Vercel function
 // instance — fine for a soft anti-abuse limit, not a hard SLA.
 //
@@ -22,7 +22,7 @@ export interface RateLimitResult {
 }
 
 /**
- * @param scope  Names the endpoint ("proxy", "mcp", ...) so endpoints don't
+ * @param scope  Names the endpoint ("proxy", "documents", ...) so endpoints don't
  *               share budgets when handlers run in one process (dev server).
  * @param limit  Max requests per minute for this scope.
  */

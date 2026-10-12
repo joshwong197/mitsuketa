@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { accountQuery, authMode, getMember, AccessError, NOTICE_VERSION, requireOrigin, sendAccessError } from '../utils/propertyAccount.js';
 import { createInvitationService, invitationClient } from '../utils/propertyInvitations.js';
-import { checkRateLimit } from '../mcp/lib/rateLimit.js';
+import { checkRateLimit } from '../utils/apiRateLimit.js';
 import { parseApplicationDetails } from '../utils/propertyApplicationDetails.js';
 
 const clean = (value: unknown, max: number) => {

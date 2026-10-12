@@ -9,7 +9,7 @@ import { loadEnv } from 'vite';
 import type { IncomingMessage, ServerResponse } from 'http';
 
 // Server-side env vars the handlers read: the four org API keys used by
-// mcp/lib/keys.ts, plus LINZ, Neon and audit-admin configuration.
+// utils/apiKeys.ts, plus LINZ, Neon and audit-admin configuration.
 // Loaded from .env (or the process environment) and copied onto process.env so
 // the handlers -- which read process.env directly -- see them exactly as they
 // would on Vercel. Missing required configuration fails closed in dev too.
