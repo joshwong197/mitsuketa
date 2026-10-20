@@ -26,31 +26,40 @@ export default async function handler(req:VercelRequest,res:VercelResponse) {
         historicalAddresses:[],historicalShareholders:[],documents:[],limited:false,documentsStatus:'not_supported',
         documentsStatusNote:documentSource.note,documentsSource:documentSource,unavailable:[],retrievedAt:new Date().toISOString(),
     });
-    const tabs=['addresses','shareholdings','documents'] as const;
+    const page=(path:string)=>`https://app.companiesoffice.govt.nz/companies/app/ui/pages/companies/${number}/${path}`;
     const loadTab=async(tab:string)=>{
-        const response=await fetch(`https://app.companiesoffice.govt.nz/companies/app/ui/pages/companies/${number}/${tab}`,{signal:AbortSignal.timeout(10000)});
+        const response=await fetch(page(tab),{signal:AbortSignal.timeout(10000)});
         if(!response.ok)throw new Error('Register unavailable');
         const html=await response.text();if(html.length>4_000_000)throw new Error('Register page too large');
         return html;
     };
-    const documentsPage=loadTab('documents');
-    // Summary reports hang off the documents page we already load: one extra page each, only when filed.
-    const summaries=documentsPage.then(html=>Promise.all(parseSummaryReportFilings(html).slice(0,3).map(f=>
-        loadTab(`${f.id}/entityFilingRequirement`).then(parseSummaryReport).then(s=>({...s,url:`https://app.companiesoffice.govt.nz/companies/app/ui/pages/companies/${number}/${f.id}/entityFilingRequirement`})))));
+    // A filed summary report never changes, so the client asks for each one
+    // separately (?filing=) and the CDN keeps it; the record itself doesn't wait on it.
+    const filing=req.query.filing;
+    if(filing!==undefined){
+        if(typeof filing!=='string'||!/^\d{1,12}$/.test(filing))return res.status(400).json({error:'invalid_filing'});
+        try{
+            const summary={...parseSummaryReport(await loadTab(`${filing}/entityFilingRequirement`)),url:page(`${filing}/entityFilingRequirement`)};
+            res.setHeader('Vercel-CDN-Cache-Control','max-age=31536000, immutable');
+            return res.status(200).json({summary});
+        }catch{return res.status(502).json({error:'summary_unavailable'});}
+    }
+    const tabs=['addresses','shareholdings','documents'] as const;
     const results=await Promise.allSettled([
         loadTab('addresses').then(parseAddressHistory),
         loadTab('shareholdings').then(parseShareholderHistory),
-        documentsPage.then(parseDocumentLinks),
-        summaries,
+        loadTab('documents').then(html=>({...parseDocumentLinks(html),summaryFilings:parseSummaryReportFilings(html).slice(0,3)})),
     ]);
+    const unavailable=tabs.filter((_,i)=>results[i].status==='rejected');
+    // Register pages are public; let the CDN answer repeat views. Partial failures aren't cached.
+    if(!unavailable.length)res.setHeader('Vercel-CDN-Cache-Control','max-age=1800, stale-while-revalidate=3600');
     return res.status(200).json({
         historicalAddresses:results[0].status==='fulfilled'?results[0].value:[],
         historicalShareholders:results[1].status==='fulfilled'?results[1].value:[],
-        ...(results[2].status==='fulfilled'?results[2].value:{documents:[],limited:false}),
+        ...(results[2].status==='fulfilled'?results[2].value:{documents:[],limited:false,summaryFilings:[]}),
         documentsStatus:results[2].status==='fulfilled'?(results[2].value.documents.length?'available':'empty'):'unavailable',
         documentsStatusNote:results[2].status==='fulfilled'?'':'The Companies Register document list could not be retrieved.',
         documentsSource:documentSource,
-        insolvencySummaries:results[3].status==='fulfilled'?results[3].value:[],
-        unavailable:[...tabs.filter((_,i)=>results[i].status==='rejected'),...(results[3].status==='rejected'&&results[2].status==='fulfilled'?['insolvency summary reports']:[])],retrievedAt:new Date().toISOString(),
+        unavailable,retrievedAt:new Date().toISOString(),
     });
 }

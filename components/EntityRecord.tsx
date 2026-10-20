@@ -72,7 +72,7 @@ const SummaryReport:React.FC<{s:Summary}>=({s})=>{
 
 const Roles=({roles}:{roles:EntityProfile['roles']})=><div className="entity-people">{roles.map((r,i)=><div className="entity-person" key={i}><span className="entity-person-mark" aria-hidden="true">人</span><div><strong>{r.name||'Name not supplied'}</strong><p>{r.role} · {r.status||'Status not supplied'}</p><small>From {registerDate(r.startDate)}{r.endDate?` · To ${registerDate(r.endDate)}`:''}</small></div></div>)}</div>;
 
-export function EntityRecord({profile,onRefresh,statusContext}:{profile:EntityProfile;onRefresh?:()=>void;statusContext?:EntityStatusInput}) {
+export function EntityRecord({profile,onRefresh,statusContext,loading=false}:{profile:EntityProfile;onRefresh?:()=>void;statusContext?:EntityStatusInput;loading?:boolean}) {
     const id=useId();
     const status=entityStatus({...statusContext,status:profile.status});
     // Spine = the company's state now; the brush stroke = insolvency in its past.
@@ -90,7 +90,7 @@ export function EntityRecord({profile,onRefresh,statusContext}:{profile:EntityPr
         return {...a,label:`Previously in ${type}${row?` · ${monthYear(row.startDate)} – ${row.endDate?monthYear(row.endDate):'now'}`:''}`};
     });
     const summaries=profile.insolvencySummaries||[];
-    const showAdmin=inAdmin||insolvencies.length>0||pastAdmin.length>0||summaries.length>0;
+    const showAdmin=inAdmin||insolvencies.length>0||pastAdmin.length>0||summaries.length>0||(loading&&hasHistory);
     const timeline=[...statusHistory,{status:profile.status,startDate:statusHistory.at(-1)?.endDate||'',endDate:''}];
     // Heading names what the company is in now (or was last in): "Liquidation", or "Liquidation & Receivership" when both run at once.
     const adminTitle=[...new Set(current.length?current.map(i=>i.type)
@@ -126,7 +126,8 @@ export function EntityRecord({profile,onRefresh,statusContext}:{profile:EntityPr
                 ?<details className="entity-history"><summary>Previous insolvencies ({previous.length})</summary>{grid(previous,false)}</details>
                 :grid(previous,false))}
             {summaries.length>0&&<div className="entity-insolvency-grid">{summaries.map((s,i)=><SummaryReport key={i} s={s}/>)}</div>}
-            {!insolvencies.length&&!summaries.length&&<p className="entity-coverage">{removed?'Practitioner details are no longer published once a company is removed.':'No practitioner details were supplied by the register.'} Insolvency filings, including practitioners’ reports, are listed under <button className="entity-inline-link" onClick={()=>document.getElementById(`${id}-documents`)?.scrollIntoView({block:'start'})}>Documents</button>.</p>}
+            {!insolvencies.length&&!summaries.length&&loading&&<p className="entity-coverage" role="status">Checking the register for practitioner reports…</p>}
+            {!insolvencies.length&&!summaries.length&&!loading&&<p className="entity-coverage">{removed?'Practitioner details are no longer published once a company is removed.':'No practitioner details were supplied by the register.'} Insolvency filings, including practitioners’ reports, are listed under <button className="entity-inline-link" onClick={()=>document.getElementById(`${id}-documents`)?.scrollIntoView({block:'start'})}>Documents</button>.</p>}
         </section>}
         <div className="entity-at-a-glance" aria-label="Record at a glance">
             <div><strong>{currentRoles.length}</strong><span>Current roles supplied</span></div>
@@ -184,7 +185,8 @@ export function EntityRecord({profile,onRefresh,statusContext}:{profile:EntityPr
                 {!documents.length&&profile.documentsStatus==='empty'&&<p>No document links were returned by {profile.documentSource.label}. This is a confirmed empty result.</p>}
                 {!documents.length&&profile.documentsStatus==='unavailable'&&<p>{profile.documentsStatusNote||`${profile.documentSource.label} could not be reached.`} Check the official register directly.</p>}
                 {!documents.length&&profile.documentsStatus==='not_supported'&&<p>{profile.documentsStatusNote||`${profile.documentSource.label} provides public document viewing through its own record screen; automated document retrieval is not available.`}</p>}
-                {!documents.length&&profile.documentsStatus==='not_checked'&&<p>Document availability has not been checked yet. Open the official register to inspect filings.</p>}
+                {!documents.length&&profile.documentsStatus==='not_checked'&&loading&&<p role="status">Checking {profile.documentSource?.label||profile.register.label} for documents…</p>}
+                {!documents.length&&profile.documentsStatus==='not_checked'&&!loading&&<p>Document availability has not been checked yet. Open the official register to inspect filings.</p>}
                 {profile.documentsLimited&&<p>Showing 250 document links; the latest constitution filing is retained when available.</p>}
                 <a className="entity-source-link" href={registerDocumentsUrl} target="_blank" rel="noreferrer">Browse {profile.documentSource?.label||profile.register.label} documents ↗</a>
                 {profile.documentSources?.slice(1).map(source=><a key={source.kind} className="entity-source-link entity-secondary-source" href={source.browseUrl} target="_blank" rel="noreferrer">Browse {source.label} records ↗</a>)}

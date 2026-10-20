@@ -23,4 +23,7 @@ assert.deepEqual(society.body.unavailable, []);
 const bad = await invoke({ sourceRegister: 'COMPANY', registerNumber: '../bad' });
 assert.equal(bad.statusCode, 400);
 assert.equal(bad.body.error, 'invalid_register_number');
-console.log('PASS: entity-record distinguishes source-link-only documents from invalid input');
+const badFiling = await invoke({ sourceRegister: 'COMPANY', registerNumber: '1012907', filing: '12/../x' });
+assert.equal(badFiling.statusCode, 400);
+assert.equal(badFiling.body.error, 'invalid_filing');
+console.log('PASS: entity-record distinguishes source-link-only documents from invalid input and rejects bad filing ids');

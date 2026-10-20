@@ -2,7 +2,10 @@
   "functions": {
     "api/property.ts": {
       "maxDuration": 30
-    }
+    },
+    "api/entity-record.ts": { "regions": ["syd1"] },
+    "api/proxy.ts": { "regions": ["syd1"] },
+    "api/documents.ts": { "regions": ["syd1"] }
   },
   "headers": [
     {

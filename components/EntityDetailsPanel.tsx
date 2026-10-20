@@ -27,7 +27,8 @@ export const EntityDetailsPanel: React.FC<{ nzbn: string; statusContext?: Entity
         if (!refresh && readyProfile(nzbn)) return;
         let active = true;
         setProfile(null); setError('');
-        loadEntityRecord(nzbn, config, refresh > 0).then(record => {
+        // Paint the NZBN core straight away; history, documents and summary reports fill in as they land.
+        loadEntityRecord(nzbn, config, refresh > 0, record => { if (active) setProfile(record); }).then(record => {
             if (active) setProfile(record);
         }).catch(() => { if (active) setError('Could not load the register record. Please try again.'); });
         return () => { active = false; };
@@ -49,7 +50,7 @@ export const EntityDetailsPanel: React.FC<{ nzbn: string; statusContext?: Entity
             <div className="sumi-dossier-body" ref={bodyRef} onScroll={e => scrollPositions.set(nzbn, e.currentTarget.scrollTop)}>
                 {error && <p role="alert">{error} <button className="text-accent underline" onClick={() => setRefresh(n => n + 1)}>Retry</button></p>}
                 {!profile && !error && <p role="status">Loading register information…</p>}
-                {profile && <EntityRecord profile={profile} statusContext={statusContext} onRefresh={() => setRefresh(n => n + 1)} />}
+                {profile && <EntityRecord profile={profile} statusContext={statusContext} loading={!profile.historyCheckedAt} onRefresh={() => setRefresh(n => n + 1)} />}
             </div>
         </section>;
 }
