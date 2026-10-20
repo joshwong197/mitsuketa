@@ -36,6 +36,7 @@ async function fetchRecord(nzbn:string,config:ApiConfig,refresh=false) {
             if(!Array.isArray(extra.documents)||typeof extra.documentsStatus!=='string')throw new Error();
             if(profile.isCompany&&!extra.unavailable?.includes('addresses'))result.historicalAddresses=Array.isArray(extra.historicalAddresses)?extra.historicalAddresses:[];
             if(profile.isCompany)result.historicalShareholders=Array.isArray(extra.historicalShareholders)?extra.historicalShareholders:[];
+            result.insolvencySummaries=Array.isArray(extra.insolvencySummaries)?extra.insolvencySummaries:[];
             result.documents=extra.documents;result.documentsLimited=extra.limited===true;
             result.documentsStatus=extra.documentsStatus;
             result.documentsStatusNote=asText(extra.documentsStatusNote);

@@ -47,3 +47,51 @@ export function parseDocumentLinks(html:string) {
     if(latestConstitution&&!selected.includes(latestConstitution))selected[selected.length-1]=latestConstitution;
     return {documents:selected,limited:documents.length>250};
 }
+
+// Liquidators Summary Reports are online forms (no PDF), listed on the documents
+// page as showDocumentDetails(<filingId>). They keep the liquidator's name,
+// licence and the outcome after the register stops publishing appointees.
+export function parseSummaryReportFilings(html:string) {
+    const $=cheerio.load(html);
+    return $('a[href^="javascript:showDocumentDetails("]').map((_,a)=>({
+        id:($(a).attr('href')!.match(/\((\d+)\)/)||[])[1]||'',title:clean($(a).text()),date:clean($(a).closest('tr').children('td').first().text()),
+    })).get().filter(f=>f.id&&/summary report/i.test(f.title));
+}
+const money=(s:string)=>{const n=Number(s.replace(/[^0-9.-]/g,''));return s.trim()&&Number.isFinite(n)?n:null;};
+export type InsolvencySummary=ReturnType<typeof parseSummaryReport>;
+export function parseSummaryReport(html:string) {
+    const $=cheerio.load(html);
+    if(!/summary report/i.test($('body').text()))throw new Error('Summary report unavailable');
+    // Labelled read-only fields in page order; an empty label continues the previous field.
+    const fields:[string,string][]=[];
+    $('label').each((_,l)=>{
+        const key=clean($(l).text()).replace(/:$/,'');
+        const parent=$(l).parent();const copy=parent.clone();copy.find('label').remove();const value=clean(copy.text());
+        if(key)fields.push([key,value]);else if(value&&fields.length)fields[fields.length-1][1]+=`\n${value}`;
+    });
+    const get=(key:string)=>fields.find(([k])=>k.toLowerCase()===key.toLowerCase())?.[1]||'';
+    const appointees:{name:string;appointed:string;registration:string}[]=[];
+    for(const [k,v] of fields){
+        if(k==='Name')appointees.push({name:v,appointed:'',registration:''});
+        else if(appointees.length&&/^Appointment date/i.test(k))appointees[appointees.length-1].appointed=v;
+        else if(appointees.length&&/^Registration number/i.test(k))appointees[appointees.length-1].registration=v;
+    }
+    const [presenterName,presenterFirm]=(get('Presenter').split('\n')[0].match(/^(.*?)\s*\(\s*(.*?)\s*\)\s*$/)||[,get('Presenter').split('\n')[0],'']).slice(1) as string[];
+    const rows=(i:number)=>$('table').eq(i).find('tr').map((_,tr)=>[$(tr).children('td,th').map((_,c)=>clean($(c).text())).get()]).get() as string[][];
+    const payments=rows(0), row=(label:RegExp)=>payments.find(r=>label.test(r[0]))?.slice(1).map(money)||[];
+    const paid=row(/amount paid/i),rate=row(/rate of payment/i),owed=row(/remaining amounts owed/i);
+    const creditors=['Preferential','Secured','Unsecured'].map((name,i)=>({name,paid:paid[i]??null,centsInDollar:rate[i]??null,owed:owed[i]??null}));
+    const recoveries=rows(1).filter(r=>r.length>=2&&r[0]&&!/^total/i.test(r[0])).map(r=>({label:r[0].replace(/\s*\(e\.g\..*\)$/,''),amount:money(r[r.length-1])}));
+    const fees=rows(2).find(r=>/grand total/i.test(r[0]))?.slice(1).map(money)||[];
+    return {
+        filed:get('Registration Date and Time'),
+        presenter:{name:presenterName||'',firm:presenterFirm||'',address:get('Presenter').split('\n').slice(1).filter(l=>!/^new zealand$/i.test(l)).join(', ')},
+        appointees,start:get('Liquidation start date and time'),end:get('Liquidation end date and time'),
+        method:[get('Subsection'),get('Paragraph')].filter(Boolean).join(' · '),
+        reasons:get('Reasons for liquidation').split('\n').filter(Boolean),
+        solvency:get('Was this a solvent or insolvent liquidation?'),
+        creditors,recoveries,recoveriesTotal:recoveries.reduce((sum,r)=>sum+(r.amount||0),0),
+        fees:fees.reduce<number>((sum,f)=>sum+(f||0),0),email:get('Email address of the practitioner filing the report'),
+    };
+}
+

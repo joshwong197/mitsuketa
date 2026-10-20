@@ -1,6 +1,7 @@
 // Deliberately project public business fields, not the entire NZBN payload.
 // Personal role/shareholder addresses, bank accounts and GST identifiers stay out.
 import { registerDocumentSource, registerDocumentSources, type DocumentStatus } from '../utils/registerDocumentSource.js';
+import type { InsolvencySummary } from '../utils/registerEvidence.js';
 export const asText = (value: unknown): string => typeof value === 'string' ? value.trim() : typeof value === 'number' ? String(value) : '';
 const list = (value: unknown): any[] => Array.isArray(value) ? value : [];
 const numeric = (value: unknown): number | null => typeof value === 'number' && Number.isFinite(value) ? value : null;
@@ -91,6 +92,7 @@ export function normaliseEntityProfile(raw: any, retrievedAt = new Date().toISOS
         shareholdingSupplied: !!company?.shareholding,
         insolvencies: insolvencies(company),
         statusHistory: [] as {status:string;startDate:string;endDate:string}[],
+        insolvencySummaries: [] as (InsolvencySummary & { url: string })[],
         formerNames: [] as {name:string;startDate:string;endDate:string}[],
         historicalAddresses: list(raw?.addresses?.addressList).filter(a=>a.endDate && Date.parse(a.endDate)<=Date.now()).map(a=>({
             type:asText(a.addressType),...formatBusinessAddress([a.address1,a.address2,a.address3,a.address4,a.postCode,a.countryCode]),startDate:asText(a.startDate),endDate:asText(a.endDate),

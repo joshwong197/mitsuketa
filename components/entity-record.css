@@ -107,6 +107,12 @@
 .entity-appointee span{font-size:12px;color:var(--ink-mid)}
 .entity-appointee small{font-size:12px;color:var(--ink-mid);font-variant-numeric:tabular-nums}
 .entity-insolvency-reports{font-size:12px;color:var(--ink-mid);border-top:1px solid var(--rule);padding-top:10px;margin-top:4px}
+.entity-summary-outcome{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px 20px;margin:4px 0 0;padding:14px 0;border-top:1px solid var(--rule)}
+.entity-summary-outcome dt{font-size:11px;color:var(--ink-mid);text-transform:uppercase;letter-spacing:.08em}
+.entity-summary-outcome dd{font-family:var(--serif);font-size:20px;font-variant-numeric:tabular-nums}
+.entity-summary-creditors{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums;margin-bottom:4px}
+.entity-summary-creditors th{text-align:left;font-weight:500;color:var(--ink-mid);border-bottom:1px solid var(--rule);padding:6px 8px 6px 0}
+.entity-summary-creditors td{border-bottom:1px solid var(--rule);padding:6px 8px 6px 0}
 .entity-inline-link{color:var(--accent);text-decoration:underline;font:inherit}
 
 /* Insolvency in a company's past: a brush stroke along the card spine's seam.

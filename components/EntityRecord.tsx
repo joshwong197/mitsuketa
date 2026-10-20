@@ -34,6 +34,42 @@ const InsolvencyBlock:React.FC<{item:Insolvency;current:boolean;showType?:boolea
     </div>;
 };
 
+const nzd=(n:number|null)=>n===null?'—':n.toLocaleString('en-NZ',{style:'currency',currency:'NZD',maximumFractionDigits:0});
+const day=(s:string)=>s.replace(/\s+\d{1,2}:\d{2}(:\d{2})?$/,'');
+type Summary=EntityProfile['insolvencySummaries'][number];
+// The liquidator's own end-of-liquidation filing: who, how appointed, and what creditors got.
+const SummaryReport:React.FC<{s:Summary}>=({s})=>{
+    const unpaid=s.creditors.reduce((sum,c)=>sum+(c.owed||0),0);
+    const owedClasses=s.creditors.filter(c=>(c.owed||0)>0||(c.paid||0)>0);
+    return <div className="entity-insolvency entity-summary-report">
+        <header><strong>{s.appointees.length===1?'Liquidator':'Liquidators'}</strong><span>Liquidation · Summary report filed {day(s.filed)}</span></header>
+        <div className="entity-appointees">{s.appointees.map((a,i)=><div className="entity-appointee" key={i}>
+            <strong>{a.name}</strong>{s.presenter.firm&&<span>{s.presenter.firm}</span>}
+            <small>{a.registration&&!/^n\/?a$/i.test(a.registration)&&`Licence ${a.registration} · `}Appointed {day(a.appointed)}</small>
+            {i===0&&s.email&&<small><a href={`mailto:${s.email}`}>{s.email}</a></small>}
+            {i===0&&s.presenter.address&&<small>{s.presenter.address}</small>}
+        </div>)}</div>
+        <dl className="entity-summary-outcome">
+            {s.solvency&&<div><dt>Outcome</dt><dd>{s.solvency}</dd></div>}
+            <div><dt>Unpaid to creditors</dt><dd>{nzd(unpaid)}</dd></div>
+            <div><dt>Recovered</dt><dd>{nzd(s.recoveriesTotal)}</dd></div>
+            <div><dt>Liquidator fees</dt><dd>{nzd(s.fees)}</dd></div>
+        </dl>
+        {owedClasses.length>0&&<table className="entity-summary-creditors"><thead><tr><th>Creditors</th><th>Paid</th><th>Cents in the $</th><th>Still owed</th></tr></thead>
+            <tbody>{owedClasses.map(c=><tr key={c.name}><td>{c.name}</td><td>{nzd(c.paid)}</td><td>{c.centsInDollar===null?'—':`${c.centsInDollar}¢`}</td><td>{nzd(c.owed)}</td></tr>)}</tbody></table>}
+        <details className="entity-history"><summary>Appointment, reasons and recoveries</summary>
+            <dl className="entity-facts">
+                <dt>Liquidation began</dt><dd>{day(s.start)||'Not supplied'}</dd>
+                {s.end&&<><dt>Liquidation ended</dt><dd>{day(s.end)}</dd></>}
+                <dt>Method of appointment</dt><dd>{s.method||'Not supplied'}</dd>
+                <dt>Reasons given</dt><dd>{s.reasons.length?s.reasons.map(r=><span key={r} className="block">{r}</span>):'Not supplied'}</dd>
+                {s.recoveries.map(r=><React.Fragment key={r.label}><dt>Recovered · {r.label}</dt><dd>{nzd(r.amount)}</dd></React.Fragment>)}
+            </dl>
+        </details>
+        <p className="entity-insolvency-reports"><a href={s.url} target="_blank" rel="noreferrer">View the summary report on the Companies Register ↗</a></p>
+    </div>;
+};
+
 const Roles=({roles}:{roles:EntityProfile['roles']})=><div className="entity-people">{roles.map((r,i)=><div className="entity-person" key={i}><span className="entity-person-mark" aria-hidden="true">人</span><div><strong>{r.name||'Name not supplied'}</strong><p>{r.role} · {r.status||'Status not supplied'}</p><small>From {registerDate(r.startDate)}{r.endDate?` · To ${registerDate(r.endDate)}`:''}</small></div></div>)}</div>;
 
 export function EntityRecord({profile,onRefresh,statusContext}:{profile:EntityProfile;onRefresh?:()=>void;statusContext?:EntityStatusInput}) {
@@ -53,7 +89,8 @@ export function EntityRecord({profile,onRefresh,statusContext}:{profile:EntityPr
         const row=pastAdmin.find(h=>h.status.toLowerCase().includes(type.split(' ')[0].toLowerCase()));
         return {...a,label:`Previously in ${type}${row?` · ${monthYear(row.startDate)} – ${row.endDate?monthYear(row.endDate):'now'}`:''}`};
     });
-    const showAdmin=inAdmin||insolvencies.length>0||pastAdmin.length>0;
+    const summaries=profile.insolvencySummaries||[];
+    const showAdmin=inAdmin||insolvencies.length>0||pastAdmin.length>0||summaries.length>0;
     const timeline=[...statusHistory,{status:profile.status,startDate:statusHistory.at(-1)?.endDate||'',endDate:''}];
     // Heading names what the company is in now (or was last in): "Liquidation", or "Liquidation & Receivership" when both run at once.
     const adminTitle=[...new Set(current.length?current.map(i=>i.type)
@@ -88,7 +125,8 @@ export function EntityRecord({profile,onRefresh,statusContext}:{profile:EntityPr
             {previous.length>0&&(current.length
                 ?<details className="entity-history"><summary>Previous insolvencies ({previous.length})</summary>{grid(previous,false)}</details>
                 :grid(previous,false))}
-            {!insolvencies.length&&<p className="entity-coverage">{removed?'Practitioner details are no longer published once a company is removed.':'No practitioner details were supplied by the register.'} Insolvency filings, including practitioners’ reports, are listed under <button className="entity-inline-link" onClick={()=>document.getElementById(`${id}-documents`)?.scrollIntoView({block:'start'})}>Documents</button>.</p>}
+            {summaries.length>0&&<div className="entity-insolvency-grid">{summaries.map((s,i)=><SummaryReport key={i} s={s}/>)}</div>}
+            {!insolvencies.length&&!summaries.length&&<p className="entity-coverage">{removed?'Practitioner details are no longer published once a company is removed.':'No practitioner details were supplied by the register.'} Insolvency filings, including practitioners’ reports, are listed under <button className="entity-inline-link" onClick={()=>document.getElementById(`${id}-documents`)?.scrollIntoView({block:'start'})}>Documents</button>.</p>}
         </section>}
         <div className="entity-at-a-glance" aria-label="Record at a glance">
             <div><strong>{currentRoles.length}</strong><span>Current roles supplied</span></div>

@@ -1,6 +1,6 @@
 import type {VercelRequest,VercelResponse} from '@vercel/node';
 import {checkRateLimit} from '../utils/apiRateLimit.js';
-import {parseAddressHistory,parseDocumentLinks,parseShareholderHistory} from '../utils/registerEvidence.js';
+import {parseAddressHistory,parseDocumentLinks,parseShareholderHistory,parseSummaryReport,parseSummaryReportFilings} from '../utils/registerEvidence.js';
 import { registerDocumentSource } from '../utils/registerDocumentSource.js';
 
 export default async function handler(req:VercelRequest,res:VercelResponse) {
@@ -27,16 +27,21 @@ export default async function handler(req:VercelRequest,res:VercelResponse) {
         documentsStatusNote:documentSource.note,documentsSource:documentSource,unavailable:[],retrievedAt:new Date().toISOString(),
     });
     const tabs=['addresses','shareholdings','documents'] as const;
-    const loadTab=async(tab:typeof tabs[number])=>{
+    const loadTab=async(tab:string)=>{
         const response=await fetch(`https://app.companiesoffice.govt.nz/companies/app/ui/pages/companies/${number}/${tab}`,{signal:AbortSignal.timeout(10000)});
         if(!response.ok)throw new Error('Register unavailable');
         const html=await response.text();if(html.length>4_000_000)throw new Error('Register page too large');
         return html;
     };
+    const documentsPage=loadTab('documents');
+    // Summary reports hang off the documents page we already load: one extra page each, only when filed.
+    const summaries=documentsPage.then(html=>Promise.all(parseSummaryReportFilings(html).slice(0,3).map(f=>
+        loadTab(`${f.id}/entityFilingRequirement`).then(parseSummaryReport).then(s=>({...s,url:`https://app.companiesoffice.govt.nz/companies/app/ui/pages/companies/${number}/${f.id}/entityFilingRequirement`})))));
     const results=await Promise.allSettled([
         loadTab('addresses').then(parseAddressHistory),
         loadTab('shareholdings').then(parseShareholderHistory),
-        loadTab('documents').then(parseDocumentLinks),
+        documentsPage.then(parseDocumentLinks),
+        summaries,
     ]);
     return res.status(200).json({
         historicalAddresses:results[0].status==='fulfilled'?results[0].value:[],
@@ -45,6 +50,7 @@ export default async function handler(req:VercelRequest,res:VercelResponse) {
         documentsStatus:results[2].status==='fulfilled'?(results[2].value.documents.length?'available':'empty'):'unavailable',
         documentsStatusNote:results[2].status==='fulfilled'?'':'The Companies Register document list could not be retrieved.',
         documentsSource:documentSource,
-        unavailable:tabs.filter((_,i)=>results[i].status==='rejected'),retrievedAt:new Date().toISOString(),
+        insolvencySummaries:results[3].status==='fulfilled'?results[3].value:[],
+        unavailable:[...tabs.filter((_,i)=>results[i].status==='rejected'),...(results[3].status==='rejected'&&results[2].status==='fulfilled'?['insolvency summary reports']:[])],retrievedAt:new Date().toISOString(),
     });
 }
