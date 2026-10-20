@@ -24,7 +24,7 @@ export function formatBusinessAddress(parts: unknown[]) {
     return { text, rawText };
 }
 // NZBN insolvencyType is a code ("L") in v5 payloads; older responses spell it out.
-const INSOLVENCY_TYPES: Record<string, string> = { L: 'Liquidation', R: 'Receivership', V: 'Voluntary administration', VA: 'Voluntary administration', S: 'Statutory management', SM: 'Statutory management' };
+const INSOLVENCY_TYPES: Record<string, string> = { L: 'Liquidation', R: 'Receivership', V: 'Voluntary Administration', VA: 'Voluntary Administration', S: 'Statutory Management', SM: 'Statutory Management' };
 export const insolvencyTypeLabel = (value: unknown) => { const t = asText(value); return INSOLVENCY_TYPES[t.toUpperCase()] || t.replace(/^in\s+/i, '') || 'Insolvency'; };
 // Licensed practitioners' published business contact details, as the register shows them.
 const insolvencies = (company: any) => [...list(company?.insolvencies), ...(company?.insolvencyDetails ? [company.insolvencyDetails] : [])]

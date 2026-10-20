@@ -12,6 +12,7 @@ import {
 import { ringsToPaths, scaleBar, TILE_FALLBACK_LEVELS, tileFallback, tileGrid } from '../utils/tiles';
 import { tileUrl } from './propertyService';
 import type { EntityProfile } from './entityProfile';
+import { insolvencyLinkedSummary, timingLabel } from '../utils/insolvencyTiming';
 
 const esc = (s: unknown): string =>
     String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -215,6 +216,7 @@ export function buildPersonReportHtml(opts: {
     const anyDisqCurrent = disqualified.some(d => d.disqualificationCriteria?.criteria?.some(c => !c.endDate));
     const anyInsolvencyHistorical = insolvency.some(r => !isInsolvencyRecordCurrent(r));
     const checksComplete = registerChecks?.disqualified === 'complete' && registerChecks?.insolvency === 'complete';
+    const linkedSummary = insolvencyLinkedSummary(results);
     const checkedAt = checksComplete && Number.isFinite(registerChecks?.checkedAt)
         ? new Intl.DateTimeFormat('en-NZ', { dateStyle: 'medium', timeStyle: 'short' }).format(registerChecks!.checkedAt!)
         : null;
@@ -223,13 +225,13 @@ export function buildPersonReportHtml(opts: {
         : current ? 'current records returned'
             : historical ? 'historical records returned' : 'records returned';
     const findingLines = [
-        disqualified.length ? `Disqualification name match${disqualified.length === 1 ? '' : 'es'} · ${disqualified.length}${anyDisqCurrent ? ' · Current finding returned' : ''}` : '',
-        insolvency.length ? `Insolvency name match${insolvency.length === 1 ? '' : 'es'} · ${insolvency.length} · ${findingState(anyInsolvencyCurrent, anyInsolvencyHistorical)}` : '',
+        disqualified.length ? `Disqualification Name Match${disqualified.length === 1 ? '' : 'es'} · ${disqualified.length}${anyDisqCurrent ? ' · Current Finding Returned' : ''}` : '',
+        insolvency.length ? `${anyInsolvencyCurrent ? 'Insolvency' : 'Historical Insolvency'} Name Match${insolvency.length === 1 ? '' : 'es'} · ${insolvency.length}${anyInsolvencyCurrent ? ' · Current Finding Returned' : ''}` : '',
     ].filter(Boolean);
     const registerSummary = findingLines.length
         ? findingLines.map(line => `<p>${esc(line)}</p>`).join('')
             + `<small>Review identifying details below.${checksComplete ? '' : ' Register check completion not available.'}</small>`
-        : `<p>${checksComplete ? 'No insolvency or disqualification name matches returned.' : 'Register check completion not available.'}</p>`;
+        : `<p>${checksComplete ? 'No Insolvency or Disqualification Name Matches Returned.' : 'Register check completion not available.'}</p>`;
 
     const flagBlock = `
         ${insolvency.length ? `<div class="flag"><span class="sq crit" aria-hidden="true">紅</span><div>
@@ -284,6 +286,7 @@ export function buildPersonReportHtml(opts: {
         if (removed && r.hasHistoricInsolvency) {
             marks.push(`<span class="sq crit sm" aria-hidden="true">紅</span><span style="color:var(--crit)">Prev: ${esc((r.historicInsolvencyType || 'Insolvency').replace(/^in\s+/i, ''))}</span>`);
         }
+        if (timingLabel(r)) marks.push(`<span style="color:var(--${timingLabel(r).startsWith('Director') || timingLabel(r).startsWith('Resigned') ? 'crit' : 'ink-mid'})">${esc(timingLabel(r))}</span>`);
         if (r.removalCommenced && !removed) {
             marks.push(`<span class="sq amber sm" aria-hidden="true">琥</span><span style="color:var(--amber)">Removal in progress</span>`);
         }
@@ -383,6 +386,9 @@ export function buildPersonReportHtml(opts: {
     .subject-spine span{font-family:var(--serif);font-size:30px;line-height:1}
     .subject-spine small{writing-mode:vertical-rl;font-family:var(--serif);letter-spacing:.15em;color:inherit}
     .subject-card.current .subject-spine{background:var(--crit);color:var(--paper)}
+    .subject-card.history .subject-spine{position:relative;--brush:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 100' preserveAspectRatio='none'%3E%3Cpath d='M2 0C5-.5 10 .5 11 3 11.5 6 9.5 9 9.3 14 9 30 9.8 45 9.2 60 8.8 70 9.4 78 8.6 84L8.2 97 7.4 86 6.6 100 5.8 87 4.9 95 4.2 84C3.4 76 3.8 66 3.4 55 3 40 3.8 25 3.2 14 3 9 1.2 6 1 3 1 1 1.5.2 2 0Z'/%3E%3C/svg%3E")}
+    .subject-card.history .subject-spine::after{content:'';position:absolute;top:-1px;bottom:-1px;right:-6px;width:12px;background:var(--crit);-webkit-mask:var(--brush) center/100% 100% no-repeat;mask:var(--brush) center/100% 100% no-repeat}
+    .subject-counts .crit dt,.subject-counts .crit dd,.subject-findings .linked{color:var(--crit)}
     .subject-main{padding:24px 28px;flex:1;min-width:0}
     .subject-row{display:flex;gap:24px 32px;justify-content:space-between;align-items:center;flex-wrap:wrap}
     .subject-identity{min-width:0;flex:1 1 280px}
@@ -486,7 +492,7 @@ export function buildPersonReportHtml(opts: {
 </head>
 <body>
 <div class="doc">
-    <section class="subject-card${anyInsolvencyCurrent || anyDisqCurrent ? ' current' : ''}" aria-label="Individual search subject">
+    <section class="subject-card${anyInsolvencyCurrent || anyDisqCurrent ? ' current' : linkedSummary.count ? ' history' : ''}" aria-label="Individual search subject">
         <div class="subject-spine" aria-hidden="true"><span>人</span><small>見つけた</small></div>
         <div class="subject-main">
             <div class="subject-row">
@@ -498,10 +504,12 @@ export function buildPersonReportHtml(opts: {
                     <div><dt>Company matches</dt><dd>${results.length}</dd></div>
                     <div><dt>Directorships</dt><dd>${directorCount}</dd></div>
                     <div><dt>Shareholdings</dt><dd>${shareholderCount}</dd></div>
+                    ${linkedSummary.count ? `<div class="crit"><dt>Insolvency-linked</dt><dd>${linkedSummary.count}</dd></div>` : ''}
                 </dl>
             </div>
             <div class="subject-footer">
                 <div class="subject-findings">${registerSummary}
+                    ${linkedSummary.line ? `<p class="linked">${esc(linkedSummary.line)}</p>` : ''}
                     ${registerChecks?.disqualified === 'unavailable' ? '<p>Disqualified directors check unavailable.</p>' : ''}
                     ${registerChecks?.insolvency === 'unavailable' ? '<p>Insolvency check unavailable.</p>' : ''}
                 </div>

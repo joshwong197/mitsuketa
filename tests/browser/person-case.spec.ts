@@ -149,5 +149,5 @@ test('person subject reports an unavailable register check without a completed t
     await expect(subject.getByText('Register check completion not available', { exact: true })).toBeVisible();
     await expect(subject.getByText('Disqualified directors check unavailable', { exact: true })).toBeVisible();
     await expect(subject.getByText(/^Checked /)).toHaveCount(0);
-    await expect(subject.getByText('No insolvency or disqualification name matches returned', { exact: true })).toHaveCount(0);
+    await expect(subject.getByText('No Insolvency or Disqualification Name Matches Returned', { exact: true })).toHaveCount(0);
 });

@@ -1,5 +1,5 @@
 import React, {useId} from 'react';
-import type {EntityProfile} from '../services/entityProfile';
+import {insolvencyTypeLabel,type EntityProfile} from '../services/entityProfile';
 import {entityStatus, type EntityStatusInput} from '../utils/entityStatus';
 
 export const registerDate=(date:string)=>{
@@ -12,24 +12,24 @@ const Facts=({rows}:{rows:[string,React.ReactNode][]})=><dl className="entity-fa
 const ADMIN=/liquidat|receiver|administration|statutory/i;
 const DEAD=/removed|struck|deregister|dissolv|deleted|amalgamat|closed|inactive/i;
 const monthYear=(date:string)=>registerDate(date).replace(/^\d{2} /,'');
-const PRACTITIONER:Record<string,string>={Liquidation:'Liquidator',Receivership:'Receiver','Voluntary administration':'Administrator','Statutory management':'Statutory manager'};
+const PRACTITIONER:Record<string,string>={Liquidation:'Liquidator',Receivership:'Receiver','Voluntary Administration':'Administrator','Statutory Management':'Statutory Manager'};
 type Insolvency=EntityProfile['insolvencies'][number];
-const Appointee:React.FC<{a:Insolvency['appointees'][number];role:string}>=({a,role})=><div className="entity-appointee">
-    <strong>{a.name||'Name not supplied'}</strong><span>{role}{a.organisation&&` · ${a.organisation}`}</span>
+const Appointee:React.FC<{a:Insolvency['appointees'][number]}>=({a})=><div className="entity-appointee">
+    <strong>{a.name||'Name not supplied'}</strong>{a.organisation&&<span>{a.organisation}</span>}
     <small>Appointed {registerDate(a.appointed)}{a.vacated&&` · Vacated ${registerDate(a.vacated)}`}</small>
     {(a.phones.length>0||a.email)&&<small>{[...a.phones.map(p=><a key={p} href={`tel:${p.replace(/\s/g,'')}`}>{p}</a>),...(a.email?[<a key="e" href={`mailto:${a.email}`}>{a.email}</a>]:[])].reduce<React.ReactNode[]>((all,n,i)=>i?[...all,' · ',n]:[n],[])}</small>}
     {a.address&&<small>{a.address}</small>}
 </div>;
-const InsolvencyBlock:React.FC<{item:Insolvency;current:boolean}>=({item,current})=>{
+const InsolvencyBlock:React.FC<{item:Insolvency;current:boolean;showType?:boolean}>=({item,current,showType})=>{
     const role=PRACTITIONER[item.type]||'Appointee';
     const active=item.appointees.filter(a=>!a.vacated),former=item.appointees.filter(a=>a.vacated);
     const filed=item.reports.filter(r=>r.filed).sort((a,b)=>b.date.localeCompare(a.date))[0];
     const due=item.reports.filter(r=>!r.filed).sort((a,b)=>a.date.localeCompare(b.date))[0];
     return <div className={`entity-insolvency${current?' is-current':''}`}>
-        <header><strong>{item.type}</strong><span>{current?'Current':'Ended'} · Commenced {registerDate(item.commenced)}</span></header>
+        <header><strong>{(current?active:item.appointees).length===1?role:`${role}s`}</strong><span>{showType&&`${item.type} · `}{current?'Current':'Ended'} · Commenced {registerDate(item.commenced)}</span></header>
         {!item.appointees.length&&<p className="entity-coverage">No {role.toLowerCase()} details supplied.</p>}
-        <div className="entity-appointees">{(current?active:item.appointees).map((a,i)=><Appointee key={i} a={a} role={role}/>)}</div>
-        {current&&former.length>0&&<details className="entity-history"><summary>Former {role.toLowerCase()}s ({former.length})</summary>{former.map((a,i)=><Appointee key={i} a={a} role={role}/>)}</details>}
+        <div className="entity-appointees">{(current?active:item.appointees).map((a,i)=><Appointee key={i} a={a}/>)}</div>
+        {current&&former.length>0&&<details className="entity-history"><summary>Former {role.toLowerCase()}s ({former.length})</summary>{former.map((a,i)=><Appointee key={i} a={a}/>)}</details>}
         {(filed||due)&&<p className="entity-insolvency-reports">{filed&&`Last report ${registerDate(filed.date)}`}{filed&&due&&' · '}{due&&`Next due ${registerDate(due.date)}`}</p>}
     </div>;
 };
@@ -49,13 +49,17 @@ export function EntityRecord({profile,onRefresh,statusContext}:{profile:EntityPr
     const current=insolvencies.filter(isCurrent), previous=insolvencies.filter(i=>!isCurrent(i));
     const alerts=status.alerts.filter(a=>a.label.toLowerCase()!==status.label.toLowerCase()).map(a=>{
         if(!a.historical)return a;
-        const type=a.label.replace(/^previous\s+(in\s+)?/i,'').toLowerCase();
-        const row=pastAdmin.find(h=>h.status.toLowerCase().includes(type.split(' ')[0]));
+        const type=insolvencyTypeLabel(a.label.replace(/^previous\s+/i,''));
+        const row=pastAdmin.find(h=>h.status.toLowerCase().includes(type.split(' ')[0].toLowerCase()));
         return {...a,label:`Previously in ${type}${row?` · ${monthYear(row.startDate)} – ${row.endDate?monthYear(row.endDate):'now'}`:''}`};
     });
     const showAdmin=inAdmin||insolvencies.length>0||pastAdmin.length>0;
     const timeline=[...statusHistory,{status:profile.status,startDate:statusHistory.at(-1)?.endDate||'',endDate:''}];
-    const grid=(items:Insolvency[],isNow:boolean)=><div className="entity-insolvency-grid">{items.map((item,i)=><InsolvencyBlock key={i} item={item} current={isNow}/>)}</div>;
+    // Heading names what the company is in now (or was last in): "Liquidation", or "Liquidation & Receivership" when both run at once.
+    const adminTitle=[...new Set(current.length?current.map(i=>i.type)
+        :insolvencies.length?[insolvencies[0].type]
+        :[insolvencyTypeLabel(inAdmin?profile.status:pastAdmin.at(-1)?.status)])].join(' & ');
+    const grid=(items:Insolvency[],isNow:boolean)=><div className="entity-insolvency-grid">{items.map((item,i)=><InsolvencyBlock key={i} item={item} current={isNow} showType={!isNow||current.length>1}/>)}</div>;
     const currentRoles=profile.roles.filter(r=>!r.historical);
     const historicRoles=profile.roles.filter(r=>r.historical);
     const documents=profile.documents||[];
@@ -78,7 +82,7 @@ export function EntityRecord({profile,onRefresh,statusContext}:{profile:EntityPr
             </div>
         </header>
         {showAdmin&&<section id={`${id}-insolvency`} className="entity-record-section entity-admin-section">
-            <header><span aria-hidden="true">紅</span><div><p>Insolvency</p><h4>External administration</h4></div></header>
+            <header><span aria-hidden="true">紅</span><div><p>Insolvency</p><h4>{adminTitle}</h4></div></header>
             {statusHistory.length>0&&<ol className="entity-status-timeline" aria-label="Status history">{timeline.map((h,i)=><li key={i} className={ADMIN.test(h.status)?'is-admin':DEAD.test(h.status)?'is-dead':''}><strong>{h.status}</strong><small>{h.startDate?registerDate(h.startDate):'Date not supplied'}{h.endDate?` – ${registerDate(h.endDate)}`:i===timeline.length-1?' – now':''}</small></li>)}</ol>}
             {current.length>0&&grid(current,true)}
             {previous.length>0&&(current.length

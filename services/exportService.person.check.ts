@@ -43,5 +43,5 @@ const complete = buildPersonReportHtml({
     ...base, disqualified: [], insolvency: [],
     registerChecks: { disqualified: 'complete', insolvency: 'complete', checkedAt: Date.UTC(2026, 0, 2, 3, 4) },
 });
-assertIncludes(complete, 'No insolvency or disqualification name matches returned.');
+assertIncludes(complete, 'No Insolvency or Disqualification Name Matches Returned.');
 assertIncludes(complete, 'Checked');

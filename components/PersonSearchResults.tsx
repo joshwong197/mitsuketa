@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { insolvencyTiming, isInsolvencyLinked, type InsolvencyTiming } from '../utils/insolvencyTiming';
+import { insolvencyTiming, timingLabel, type InsolvencyTiming } from '../utils/insolvencyTiming';
 import { Building2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { PersonCompanyResult, PersonRegisterChecks } from '../types';
 import { PersonSubjectCard } from './PersonSubjectCard';
@@ -305,12 +305,7 @@ const IdentifyingEvidence: React.FC<{
 
 // One roster row. Same data and same click target as the old card, laid out as a
 // ruled line — at 45 companies the card grid was the density problem.
-const TIMING_LABEL: Partial<Record<InsolvencyTiming, [string, string]>> = {
-    in_office: ['Director when insolvency began', 'text-crit font-bold'],
-    resigned_before: ['Resigned within 12 months before', 'text-crit'],
-    left_earlier: ['Left over 12 months before', 'text-ink-mid'],
-    appointed_after: ['Appointed after insolvency began', 'text-ink-mid'],
-};
+const TIMING_CLASS: Partial<Record<InsolvencyTiming, string>> = { in_office: 'text-crit font-bold', resigned_before: 'text-crit' };
 
 const RosterRow: React.FC<{ result: PersonCompanyResult; onClick: () => void }> = ({ result, onClick }) => {
     const {
@@ -397,9 +392,9 @@ const RosterRow: React.FC<{ result: PersonCompanyResult; onClick: () => void }> 
             </td>
             <td data-label="Held" className="align-top py-2 pr-3 border-b border-rule text-ink-pale whitespace-nowrap tabular-nums" style={{ fontSize: '11px' }}>
                 {from ? `${from} — ${to}` : '—'}
-                {isInsolvencyLinked(result) && TIMING_LABEL[insolvencyTiming(result)] && (
-                    <span className={`block whitespace-normal ${TIMING_LABEL[insolvencyTiming(result)]![1]}`} style={{ fontSize: '10px', maxWidth: '16ch' }}>
-                        {TIMING_LABEL[insolvencyTiming(result)]![0]}
+                {timingLabel(result) && (
+                    <span className={`block whitespace-normal ${TIMING_CLASS[insolvencyTiming(result)] || 'text-ink-mid'}`} style={{ fontSize: '10px', maxWidth: '16ch' }}>
+                        {timingLabel(result)}
                     </span>
                 )}
             </td>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { PersonCompanyResult, PersonRegisterChecks } from '../types';
-import { insolvencyTiming, isInsolvencyLinked } from '../utils/insolvencyTiming';
+import { insolvencyLinkedSummary } from '../utils/insolvencyTiming';
 import './person-results.css';
 
 export const PersonRoleSeal: React.FC<{ director: boolean; shareholder: boolean }> = ({ director, shareholder }) => (
@@ -28,25 +28,16 @@ export const PersonSubjectCard: React.FC<{
     const shareholders = results.filter(r => r.shareholding > 0).length;
     const roles = [directors ? 'Director' : '', shareholders ? 'Shareholder' : ''].filter(Boolean).join(' · ') || 'Individual';
     const findings = [
-        disqualificationCount ? `Disqualification name match${disqualificationCount > 1 ? 'es' : ''} · ${disqualificationCount}${currentDisqualification ? ' · Current finding returned' : ''}` : '',
-        insolvencyCount ? `${currentInsolvency ? 'Insolvency' : 'Historical insolvency'} name match${insolvencyCount > 1 ? 'es' : ''} · ${insolvencyCount}${currentInsolvency ? ' · Current finding returned' : ''}` : '',
+        disqualificationCount ? `Disqualification Name Match${disqualificationCount > 1 ? 'es' : ''} · ${disqualificationCount}${currentDisqualification ? ' · Current Finding Returned' : ''}` : '',
+        insolvencyCount ? `${currentInsolvency ? 'Insolvency' : 'Historical Insolvency'} Name Match${insolvencyCount > 1 ? 'es' : ''} · ${insolvencyCount}${currentInsolvency ? ' · Current Finding Returned' : ''}` : '',
     ].filter(Boolean);
     const incomplete = checks?.disqualified !== 'complete' || checks?.insolvency !== 'complete';
     const current = currentDisqualification || currentInsolvency;
-    // Company outcomes, kept apart from register findings against the person.
-    const linked = results.filter(isInsolvencyLinked).filter((r, i, all) => all.findIndex(o => o.nzbn === r.nzbn) === i);
-    const timings = linked.map(insolvencyTiming);
-    const count = (t: string) => timings.filter(x => x === t).length;
-    const linkedLine = linked.length ? [
-        `${linked.length} associated ${linked.length === 1 ? 'company' : 'companies'} with insolvency history`,
-        linked.filter(r => r.isInExternalAdmin).length ? `${linked.filter(r => r.isInExternalAdmin).length} current` : '',
-        count('in_office') ? `director when ${count('in_office') === linked.length ? (linked.length === 1 ? 'it' : 'each') : count('in_office')} began` : '',
-        count('resigned_before') ? `resigned within 12 months before ${count('resigned_before')}` : '',
-    ].filter(Boolean).join(' · ') : '';
+    const { count: linkedCount, line: linkedLine } = insolvencyLinkedSummary(results);
     const stamp = checks?.checkedAt && Number.isFinite(checks.checkedAt)
         ? new Intl.DateTimeFormat('en-NZ', { dateStyle: 'medium', timeStyle: 'short' }).format(checks.checkedAt) : null;
 
-    return <section className={`person-subject-card${current ? ' has-current-finding' : linked.length ? ' sumi-insolvency-history' : ''}`} aria-label="Individual search subject">
+    return <section className={`person-subject-card${current ? ' has-current-finding' : linkedCount ? ' sumi-insolvency-history' : ''}`} aria-label="Individual search subject">
         <div className="person-subject-spine" aria-hidden="true"><span>人</span><small>見つけた</small></div>
         <div className="person-subject-main">
             <div className="person-subject-row">
@@ -61,12 +52,12 @@ export const PersonSubjectCard: React.FC<{
                     <div><dt>Company matches</dt><dd>{results.length}</dd></div>
                     <div><dt>Directorships</dt><dd>{directors}</dd></div>
                     <div><dt>Shareholdings</dt><dd>{shareholders}</dd></div>
-                    {linked.length > 0 && <div className="person-subject-count-crit"><dt>Insolvency-linked</dt><dd>{linked.length}</dd></div>}
+                    {linkedCount > 0 && <div className="person-subject-count-crit"><dt>Insolvency-linked</dt><dd>{linkedCount}</dd></div>}
                 </dl>
             </div>
             <div className="person-subject-footer">
                 <div className="person-subject-findings">
-                    {findings.length ? findings.map(f => <p key={f}>{f}</p>) : <p>{incomplete ? 'Register check completion not available' : 'No insolvency or disqualification name matches returned'}</p>}
+                    {findings.length ? findings.map(f => <p key={f}>{f}</p>) : <p>{incomplete ? 'Register check completion not available' : 'No Insolvency or Disqualification Name Matches Returned'}</p>}
                     {findings.length > 0 && <small>Review identifying details below</small>}
                     {linkedLine && <p className="person-subject-linked">{linkedLine}</p>}
                     {checks?.disqualified === 'unavailable' && <p className="person-check-unavailable">Disqualified directors check unavailable</p>}
