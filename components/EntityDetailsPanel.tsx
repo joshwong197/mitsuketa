@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import type { ApiConfig } from '../types';
 import { loadEntityRecord } from '../services/entityRecordService';
 import { EntityRecord } from './EntityRecord';
+import { JdoMatches } from './JdoMatches';
 export { registerDate } from './EntityRecord';
 import type { EntityStatusInput } from '../utils/entityStatus';
 import type { EntityProfile } from '../services/entityProfile';
@@ -36,7 +37,8 @@ export const EntityDetailsPanel: React.FC<{ nzbn: string; statusContext?: Entity
             <div className="sumi-dossier-body">
                 {error && <p role="alert">{error} <button className="text-accent underline" onClick={() => setRefresh(n => n + 1)}>Retry</button></p>}
                 {!profile && !error && <p role="status">Loading register information…</p>}
-                {profile && <EntityRecord profile={profile} statusContext={statusContext} onRefresh={() => setRefresh(n => n + 1)} />}
+                {profile && <EntityRecord profile={profile} statusContext={statusContext} onRefresh={() => setRefresh(n => n + 1)}
+                    courtDecisions={<JdoMatches key={profile.nzbn} kind="company" nzbn={profile.nzbn} name={profile.name} />} />}
             </div>
         </section>;
 }

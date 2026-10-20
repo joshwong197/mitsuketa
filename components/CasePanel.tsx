@@ -3,6 +3,7 @@ import { Camera, ChevronRight, Download, RefreshCw, Trash2, Upload } from 'lucid
 import { CaseNote, GraphNode, GraphSnapshot } from '../types';
 import { PeopleSection } from './casepanel/PeopleSection';
 import { ChangesSection } from './casepanel/ChangesSection';
+import { JdoMatches } from './JdoMatches';
 import { NodeDiff } from '../utils/statusDiff';
 import {
   computePeopleInCommon,
@@ -373,6 +374,14 @@ export const CasePanel: React.FC<CasePanelProps> = ({
               <Stat value={alertCount} label="Entities with alerts" crit={alertCount > 0} last />
             </div>
             <Trail trail={trail} />
+          </Section>
+        )}
+        {/* Simple searches never query JDO; comprehensive ones do automatically. */}
+        {showCompanyFile && graphLoaded && caseTarget?.data.companySearchScope === 'comprehensive' && (caseTarget.data.entityName || caseTarget.data.label) && (
+          <Section title="Court decisions">
+            <div className="px-[18px] pb-3.5">
+              <JdoMatches key={caseTarget.data.nzbn} kind="company" nzbn={caseTarget.data.nzbn} name={(caseTarget.data.entityName || caseTarget.data.label)!} />
+            </div>
           </Section>
         )}
         {showPersonFile && (

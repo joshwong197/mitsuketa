@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Building2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { PersonCompanyResult, PersonRegisterChecks } from '../types';
 import { PersonSubjectCard } from './PersonSubjectCard';
+import { JdoMatches } from './JdoMatches';
 import { KydVerificationPanel } from './KydVerificationPanel';
 import { DisqualifiedDirector } from '../src/api/disqualifiedDirectorsApi';
 import { InsolvencyRecord, isInsolvencyRecordCurrent, formatBirth } from '../src/api/insolvencyApi';
@@ -209,7 +210,7 @@ const FlagSquare: React.FC<{ tone: 'crit' | 'amber' | 'green' | 'wash'; glyph: s
 
 // Kanji section marker. The glyph names the register the section draws on, so it
 // carries meaning rather than decorating: 人 subject · 印 verification ·
-// 険 risk/registers · 社 companies.
+// 険 risk/registers · 判 court decisions · 社 companies.
 const Marker: React.FC<{ kanji: string; label: string }> = ({ kanji, label }) => (
     <div className="flex items-baseline gap-2.5 mb-3.5">
         <span aria-hidden="true" className="text-accent leading-none" style={{ fontFamily: 'var(--serif)', fontSize: 15 }}>{kanji}</span>
@@ -733,6 +734,11 @@ export const PersonSearchResults: React.FC<PersonSearchResultsProps> = ({
                             )}
                         </div>
                     )}
+                </div>
+
+                <div className="mt-8">
+                <Marker kanji="判" label="Court decisions" />
+                <JdoMatches name={personName} />
                 </div>
 
                 {/* ── Roster ─────────────────────────────────────────── */}

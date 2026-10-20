@@ -11,7 +11,8 @@ const addressType=(t:string)=>({REGISTERED:'Registered office',SERVICE:'Address 
 const Facts=({rows}:{rows:[string,React.ReactNode][]})=><dl className="entity-facts">{rows.map(([name,value])=><React.Fragment key={name}><dt>{name}</dt><dd>{value||'Not supplied'}</dd></React.Fragment>)}</dl>;
 const Roles=({roles}:{roles:EntityProfile['roles']})=><div className="entity-people">{roles.map((r,i)=><div className="entity-person" key={i}><span className="entity-person-mark" aria-hidden="true">人</span><div><strong>{r.name||'Name not supplied'}</strong><p>{r.role} · {r.status||'Status not supplied'}</p><small>From {registerDate(r.startDate)}{r.endDate?` · To ${registerDate(r.endDate)}`:''}</small></div></div>)}</div>;
 
-export function EntityRecord({profile,onRefresh,statusContext}:{profile:EntityProfile;onRefresh?:()=>void;statusContext?:EntityStatusInput}) {
+// courtDecisions is a live-app slot: the offline export viewer renders this too and has no /api/jdo.
+export function EntityRecord({profile,onRefresh,statusContext,courtDecisions}:{profile:EntityProfile;onRefresh?:()=>void;statusContext?:EntityStatusInput;courtDecisions?:React.ReactNode}) {
     const id=useId();
     const status=entityStatus({...statusContext,status:profile.status});
     const currentRoles=profile.roles.filter(r=>!r.historical);
@@ -39,7 +40,7 @@ export function EntityRecord({profile,onRefresh,statusContext}:{profile:EntityPr
             <div><strong>{currentRoles.length}</strong><span>Current roles supplied</span></div>
             {profile.isCompany?<><div><strong>{profile.allocations.length}</strong><span>Share allocations supplied</span></div><div><strong>{profile.totalShares===null?'—':profile.totalShares.toLocaleString('en-NZ')}</strong><span>Total issued shares</span></div></>:<div><strong>{profile.addresses.length}</strong><span>Business addresses supplied</span></div>}
         </div>
-        <nav className="entity-record-index" aria-label="Record sections">{[['identity','一','Business'],['people','二','People'],['ownership','三','Ownership'],['documents','四','Documents']].map(([key,mark,label])=><button key={key} onClick={()=>document.getElementById(`${id}-${key}`)?.scrollIntoView({block:'start'})}><span aria-hidden="true">{mark}</span>{label}</button>)}</nav>
+        <nav className="entity-record-index" aria-label="Record sections">{[['identity','一','Business'],['people','二','People'],['ownership','三','Ownership'],['documents','四','Documents'],...(courtDecisions?[['decisions','五','Court decisions']]:[])].map(([key,mark,label])=><button key={key} onClick={()=>document.getElementById(`${id}-${key}`)?.scrollIntoView({block:'start'})}><span aria-hidden="true">{mark}</span>{label}</button>)}</nav>
         <div className="entity-record-grid">
             <div className="entity-record-column entity-business-column">
             <section id={`${id}-identity`} className="entity-record-section entity-business">
@@ -97,6 +98,10 @@ export function EntityRecord({profile,onRefresh,statusContext}:{profile:EntityPr
                 {profile.documentSources?.slice(1).map(source=><a key={source.kind} className="entity-source-link entity-secondary-source" href={source.browseUrl} target="_blank" rel="noreferrer">Browse {source.label} records ↗</a>)}
                 {(profile.charityNumber||/trust|charit/i.test(profile.type))&&<p><a href="https://register.charities.govt.nz/CharitiesRegister/CharityAdvancedSearch.aspx" target="_blank" rel="noreferrer">Check the Charities Register ↗</a> for charity registration, officers and annual reports. A trust name alone does not establish charity registration.</p>}
             </section>
+            {courtDecisions&&<section id={`${id}-decisions`} className="entity-record-section">
+                <header><span aria-hidden="true">五</span><div><p>The court record</p><h4>Court decisions</h4></div></header>
+                {courtDecisions}
+            </section>}
         </div>
         <footer className="entity-provenance"><div><p>Core record · NZBN API · {profile.source||'Source not supplied'}</p><p>Record updated {registerDate(profile.updated)} · Retrieved {new Date(profile.retrievedAt).toLocaleString('en-NZ')}</p>
             {profile.historyCheckedAt&&<p>History & document links checked {new Date(profile.historyCheckedAt).toLocaleString('en-NZ')}. Former names: NZBN; company address/shareholder history and documents: Companies Register.</p>}
