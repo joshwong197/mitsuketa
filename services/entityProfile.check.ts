@@ -40,4 +40,13 @@ const charityProfile=normaliseEntityProfile({sourceRegister:'T',sourceRegisterUn
 assert.deepEqual(charityProfile.documentSources.map(source=>source.kind),['charitable-trusts','charities']);
 assert.equal(charityProfile.documentsStatus,'not_checked');
 assert.equal(personName({ firstName: 'Alex', middleName: 'Taylor', lastName: 'Example' }), 'Alex Taylor Example');
+const insolvent = normaliseEntityProfile({ 'company-details': { insolvencies: [
+    { commenced: '2024-06-12T00:00:00.000+1200', insolvencyType: 'L', insolvencyReport: [{ name: 'Liquidator First Report', filed: true, date: '2024-06-20' }],
+      insolvencyAppointee: [{ fullName: 'Pat EXAMPLE', organisationName: 'EXAMPLE ADVISORY', appointmentDate: '2024-06-12', vacationDate: null,
+        insolvencyAppointeePhoneNumber: [{ phoneCountryCode: '64', phoneAreaCode: '4', phoneNumber: '1234567' }], insolvencyAppointeeAddress: { address1: 'L4, 1 Example Street', address3: 'Auckland', postCode: '1010' } }] },
+    { commenced: '2020-01-01', insolvencyType: 'R', insolvencyAppointee: [] },
+] } });
+assert.deepEqual(insolvent.insolvencies.map(i => i.type), ['Liquidation', 'Receivership'], 'codes spelled out, newest first');
+assert.equal(insolvent.insolvencies[0].appointees[0].phones[0], '+64 4 1234567');
+assert.equal(insolvent.insolvencies[0].appointees[0].address, 'L4, 1 Example Street, Auckland, 1010');
 console.log('PASS: entity profile fields, source routing, joint allocations, safe URLs, unavailable vs false, and excluded personal/financial fields.');

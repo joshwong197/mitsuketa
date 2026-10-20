@@ -29,14 +29,14 @@ const person = (id: string, label: string, isDisqualified?: boolean): GraphNode 
   data: { label, type: NodeType.PERSON, isDisqualified },
 });
 
-// 1. Company status change: Registered → In Liquidation (active → warning)
+// 1. Company status change: Registered → In Liquidation (active → crit)
 {
   const saved = [company('1', 'ACME LTD')];
   const fresh = [company('1', 'ACME LTD', { status: 'In Liquidation', isInExternalAdmin: true })];
   const d = diffStatuses(saved, fresh);
   assert(d.length === 1, 'liquidation change detected');
   assert(d[0].prevStatus === 'Registered' && d[0].newStatus === 'In Liquidation', 'raw statuses carried');
-  assert(d[0].prevBucket === 'active' && d[0].newBucket === 'warning', 'buckets active → warning');
+  assert(d[0].prevBucket === 'active' && d[0].newBucket === 'crit', 'buckets active → crit');
   assert(d[0].key === '942901', 'company key is the nzbn');
 }
 

@@ -204,10 +204,9 @@ export const CompanyNode = memo(({ data, selected }: NodeProps<NodeData>) => {
           </div>
         )}
 
-        {/* External administration (liquidation / receivership / VA) is amber
-            per the status ramp — crit red is reserved for insolvency. */}
+        {/* External administration (liquidation / receivership / VA) is crit red per the status ramp. */}
         {data.isInExternalAdmin && data.externalAdminType && (
-          <KanjiChip kanji="琥" color="var(--amber)" textClass="text-amber" label={data.externalAdminType.toUpperCase()} title={data.externalAdminType} />
+          <KanjiChip kanji="紅" color="var(--crit)" textClass="text-crit" label={data.externalAdminType.toUpperCase()} title={data.externalAdminType} />
         )}
 
         {data.removalCommenced && (

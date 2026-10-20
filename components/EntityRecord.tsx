@@ -9,11 +9,53 @@ export const registerDate=(date:string)=>{
 const month=(n:number|null)=>n&&n>=1&&n<=12?['January','February','March','April','May','June','July','August','September','October','November','December'][n-1]:'Not supplied';
 const addressType=(t:string)=>({REGISTERED:'Registered office',SERVICE:'Address for service',POSTAL:'Postal address',RECORDS:'Address for records',OFFICE:'Office address',DELIVERY:'Delivery address'}[t.toUpperCase()]||t);
 const Facts=({rows}:{rows:[string,React.ReactNode][]})=><dl className="entity-facts">{rows.map(([name,value])=><React.Fragment key={name}><dt>{name}</dt><dd>{value||'Not supplied'}</dd></React.Fragment>)}</dl>;
+const ADMIN=/liquidat|receiver|administration|statutory/i;
+const DEAD=/removed|struck|deregister|dissolv|deleted|amalgamat|closed|inactive/i;
+const monthYear=(date:string)=>registerDate(date).replace(/^\d{2} /,'');
+const PRACTITIONER:Record<string,string>={Liquidation:'Liquidator',Receivership:'Receiver','Voluntary administration':'Administrator','Statutory management':'Statutory manager'};
+type Insolvency=EntityProfile['insolvencies'][number];
+const Appointee:React.FC<{a:Insolvency['appointees'][number];role:string}>=({a,role})=><div className="entity-appointee">
+    <strong>{a.name||'Name not supplied'}</strong><span>{role}{a.organisation&&` · ${a.organisation}`}</span>
+    <small>Appointed {registerDate(a.appointed)}{a.vacated&&` · Vacated ${registerDate(a.vacated)}`}</small>
+    {(a.phones.length>0||a.email)&&<small>{[...a.phones.map(p=><a key={p} href={`tel:${p.replace(/\s/g,'')}`}>{p}</a>),...(a.email?[<a key="e" href={`mailto:${a.email}`}>{a.email}</a>]:[])].reduce<React.ReactNode[]>((all,n,i)=>i?[...all,' · ',n]:[n],[])}</small>}
+    {a.address&&<small>{a.address}</small>}
+</div>;
+const InsolvencyBlock:React.FC<{item:Insolvency;current:boolean}>=({item,current})=>{
+    const role=PRACTITIONER[item.type]||'Appointee';
+    const active=item.appointees.filter(a=>!a.vacated),former=item.appointees.filter(a=>a.vacated);
+    const filed=item.reports.filter(r=>r.filed).sort((a,b)=>b.date.localeCompare(a.date))[0];
+    const due=item.reports.filter(r=>!r.filed).sort((a,b)=>a.date.localeCompare(b.date))[0];
+    return <div className={`entity-insolvency${current?' is-current':''}`}>
+        <header><strong>{item.type}</strong><span>{current?'Current':'Ended'} · Commenced {registerDate(item.commenced)}</span></header>
+        {!item.appointees.length&&<p className="entity-coverage">No {role.toLowerCase()} details supplied.</p>}
+        <div className="entity-appointees">{(current?active:item.appointees).map((a,i)=><Appointee key={i} a={a} role={role}/>)}</div>
+        {current&&former.length>0&&<details className="entity-history"><summary>Former {role.toLowerCase()}s ({former.length})</summary>{former.map((a,i)=><Appointee key={i} a={a} role={role}/>)}</details>}
+        {(filed||due)&&<p className="entity-insolvency-reports">{filed&&`Last report ${registerDate(filed.date)}`}{filed&&due&&' · '}{due&&`Next due ${registerDate(due.date)}`}</p>}
+    </div>;
+};
+
 const Roles=({roles}:{roles:EntityProfile['roles']})=><div className="entity-people">{roles.map((r,i)=><div className="entity-person" key={i}><span className="entity-person-mark" aria-hidden="true">人</span><div><strong>{r.name||'Name not supplied'}</strong><p>{r.role} · {r.status||'Status not supplied'}</p><small>From {registerDate(r.startDate)}{r.endDate?` · To ${registerDate(r.endDate)}`:''}</small></div></div>)}</div>;
 
 export function EntityRecord({profile,onRefresh,statusContext}:{profile:EntityProfile;onRefresh?:()=>void;statusContext?:EntityStatusInput}) {
     const id=useId();
     const status=entityStatus({...statusContext,status:profile.status});
+    // Spine = the company's state now; the brush stroke = insolvency in its past.
+    const removed=DEAD.test(profile.status), inAdmin=!removed&&ADMIN.test(profile.status);
+    const tone=inAdmin?'crit':removed?'faded':statusContext?.removalCommenced?'warning':'active';
+    const insolvencies=profile.insolvencies||[], statusHistory=profile.statusHistory||[];
+    const pastAdmin=statusHistory.filter(h=>ADMIN.test(h.status));
+    const hasHistory=!inAdmin&&(!!statusContext?.hasHistoricInsolvency||insolvencies.length>0||pastAdmin.length>0);
+    const isCurrent=(i:Insolvency)=>inAdmin&&(i.appointees.length?i.appointees.some(a=>!a.vacated):profile.status.toLowerCase().includes(i.type.split(' ')[0].toLowerCase()));
+    const current=insolvencies.filter(isCurrent), previous=insolvencies.filter(i=>!isCurrent(i));
+    const alerts=status.alerts.filter(a=>a.label.toLowerCase()!==status.label.toLowerCase()).map(a=>{
+        if(!a.historical)return a;
+        const type=a.label.replace(/^previous\s+(in\s+)?/i,'').toLowerCase();
+        const row=pastAdmin.find(h=>h.status.toLowerCase().includes(type.split(' ')[0]));
+        return {...a,label:`Previously in ${type}${row?` · ${monthYear(row.startDate)} – ${row.endDate?monthYear(row.endDate):'now'}`:''}`};
+    });
+    const showAdmin=inAdmin||insolvencies.length>0||pastAdmin.length>0;
+    const timeline=[...statusHistory,{status:profile.status,startDate:statusHistory.at(-1)?.endDate||'',endDate:''}];
+    const grid=(items:Insolvency[],isNow:boolean)=><div className="entity-insolvency-grid">{items.map((item,i)=><InsolvencyBlock key={i} item={item} current={isNow}/>)}</div>;
     const currentRoles=profile.roles.filter(r=>!r.historical);
     const historicRoles=profile.roles.filter(r=>r.historical);
     const documents=profile.documents||[];
@@ -24,22 +66,31 @@ export function EntityRecord({profile,onRefresh,statusContext}:{profile:EntityPr
         :'No';
     const docList=(items:typeof documents)=><ul className="entity-documents">{items.map((d,i)=><li key={i}><div><time>{d.date||'Date not supplied'}</time><a href={d.url} target="_blank" rel="noreferrer">{d.title}<span aria-hidden="true"> ↗</span></a>{d.filing&&d.filing!==d.title&&<small>{d.filing}</small>}</div><span>{d.size}</span></li>)}</ul>;
     return <article className="entity-record">
-        <header className={`entity-card${/liquidation/i.test(profile.status) && !/removed|dissolved/i.test(profile.status) ? " entity-card-liquidation" : ""}`}>
+        <header className={`entity-card entity-card-${tone}${hasHistory?' sumi-insolvency-history':''}`}>
             <div className="entity-card-spine" aria-hidden="true"><span>記録</span><small>見つけた</small></div>
             <div className="entity-card-main">
-                <div className="entity-card-top"><span>Mitsuketa · Entity record</span><span className={`entity-status entity-status-${status.bucket}`}>{status.label}</span></div>
+                <div className="entity-card-top"><span>Mitsuketa · Entity record</span><span className={`entity-status entity-status-${tone}`}>{status.label}</span></div>
                 <h3>{profile.name}</h3>
-                <p className="entity-type">{profile.type||'Entity type not supplied'} · <strong>{status.label}</strong></p>
-                {status.alerts.length>0&&<div className={`entity-status-alerts entity-alerts-${status.bucket}`} aria-label="Register status findings">{status.alerts.map((alert,i)=><span key={`${alert.label}-${i}`} className={alert.historical?'is-historical':''}>{alert.historical?'Historical finding: ':''}{alert.label}</span>)}</div>}
+                <p className="entity-type">{profile.type||'Entity type not supplied'}</p>
+                {alerts.length>0&&<div className={`entity-status-alerts entity-alerts-${tone}`} aria-label="Register status findings">{alerts.map((alert,i)=><span key={`${alert.label}-${i}`} className={alert.historical?'is-historical':''}>{alert.label}</span>)}</div>}
                 <div className="entity-identifiers"><span>NZBN <strong>{profile.nzbn}</strong></span><span>Register no. <strong>{profile.number||'Not supplied'}</strong></span></div>
                 <div className="entity-card-bottom"><span>Registered <strong>{registerDate(profile.registered)}</strong></span><div className="entity-card-actions"><a aria-label={`Open ${profile.register.label}`} href={profile.register.url} target="_blank" rel="noreferrer">Open {profile.register.label} ↗</a>{profile.constitution===true&&<a className="entity-constitution-link" href={constitutionDocument?.url||registerDocumentsUrl} target="_blank" rel="noreferrer">{constitutionDocument?'View constitution':'Find constitution'} ↗</a>}</div></div>
             </div>
         </header>
+        {showAdmin&&<section id={`${id}-insolvency`} className="entity-record-section entity-admin-section">
+            <header><span aria-hidden="true">紅</span><div><p>Insolvency</p><h4>External administration</h4></div></header>
+            {statusHistory.length>0&&<ol className="entity-status-timeline" aria-label="Status history">{timeline.map((h,i)=><li key={i} className={ADMIN.test(h.status)?'is-admin':DEAD.test(h.status)?'is-dead':''}><strong>{h.status}</strong><small>{h.startDate?registerDate(h.startDate):'Date not supplied'}{h.endDate?` – ${registerDate(h.endDate)}`:i===timeline.length-1?' – now':''}</small></li>)}</ol>}
+            {current.length>0&&grid(current,true)}
+            {previous.length>0&&(current.length
+                ?<details className="entity-history"><summary>Previous insolvencies ({previous.length})</summary>{grid(previous,false)}</details>
+                :grid(previous,false))}
+            {!insolvencies.length&&<p className="entity-coverage">{removed?'Practitioner details are no longer published once a company is removed.':'No practitioner details were supplied by the register.'} Insolvency filings, including practitioners’ reports, are listed under <button className="entity-inline-link" onClick={()=>document.getElementById(`${id}-documents`)?.scrollIntoView({block:'start'})}>Documents</button>.</p>}
+        </section>}
         <div className="entity-at-a-glance" aria-label="Record at a glance">
             <div><strong>{currentRoles.length}</strong><span>Current roles supplied</span></div>
             {profile.isCompany?<><div><strong>{profile.allocations.length}</strong><span>Share allocations supplied</span></div><div><strong>{profile.totalShares===null?'—':profile.totalShares.toLocaleString('en-NZ')}</strong><span>Total issued shares</span></div></>:<div><strong>{profile.addresses.length}</strong><span>Business addresses supplied</span></div>}
         </div>
-        <nav className="entity-record-index" aria-label="Record sections">{[['identity','一','Business'],['people','二','People'],['ownership','三','Ownership'],['documents','四','Documents']].map(([key,mark,label])=><button key={key} onClick={()=>document.getElementById(`${id}-${key}`)?.scrollIntoView({block:'start'})}><span aria-hidden="true">{mark}</span>{label}</button>)}</nav>
+        <nav className="entity-record-index" aria-label="Record sections">{[...(showAdmin?[['insolvency','紅','Insolvency']]:[]),['identity','一','Business'],['people','二','People'],['ownership','三','Ownership'],['documents','四','Documents']].map(([key,mark,label])=><button key={key} onClick={()=>document.getElementById(`${id}-${key}`)?.scrollIntoView({block:'start'})}><span aria-hidden="true">{mark}</span>{label}</button>)}</nav>
         <div className="entity-record-grid">
             <div className="entity-record-column entity-business-column">
             <section id={`${id}-identity`} className="entity-record-section entity-business">

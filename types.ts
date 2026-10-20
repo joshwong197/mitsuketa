@@ -227,6 +227,7 @@ export interface PersonCompanyResult {
   removalCommenced?: boolean; // True if registered but removal process has started
   hasHistoricInsolvency?: boolean; // True if removed AND had insolvency history
   historicInsolvencyType?: string; // e.g. "Liquidation", "Receivership"
+  insolvencyPeriods?: Array<{ type: string; start: string; end?: string }>; // For director-timing checks
 }
 
 // Tab system types

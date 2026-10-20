@@ -2,6 +2,7 @@ import { ApiConfig, PersonCompanyResult, LoggerCallback, GraphNode } from '../..
 import { BASE_API_URL, API_PATHS } from '../../constants.js';
 import { mapPool } from '../../utils/pool.js';
 import { gatedFetch } from '../../utils/dispatchGate.js';
+import { insolvencyTypeLabel } from '../../services/entityProfile.js';
 
 /**
  * External administration status types from NZBN API entityStatusDescription
@@ -54,6 +55,8 @@ export interface CompanyStatusResult {
     removalCommenced: boolean;
     hasHistoricInsolvency: boolean;
     historicInsolvencyType?: string;
+    /** Start (and end, when the status history gives one) of each insolvency, for role-timing checks. */
+    insolvencyPeriods: Array<{ type: string; start: string; end?: string }>;
 }
 
 /**
@@ -212,17 +215,14 @@ export async function fetchCompanyStatus(
         const currentInsolvency = companyDetails?.insolvencyDetails;
 
         const allInsolvencies = new Set<string>();
+        const insolvencyPeriods: CompanyStatusResult['insolvencyPeriods'] = [];
 
-        if (currentInsolvency?.insolvencyType) {
-            allInsolvencies.add(currentInsolvency.insolvencyType);
-        }
-
-        if (Array.isArray(insolvencies)) {
-            insolvencies.forEach(inv => {
-                if (inv.insolvencyType) {
-                    allInsolvencies.add(inv.insolvencyType);
-                }
-            });
+        for (const inv of [...(currentInsolvency ? [currentInsolvency] : []), ...(Array.isArray(insolvencies) ? insolvencies : [])]) {
+            if (!inv.insolvencyType) continue;
+            // v5 sends codes ("L"); compare and display the spelled-out type.
+            const type = insolvencyTypeLabel(inv.insolvencyType);
+            allInsolvencies.add(type);
+            if (inv.commenced && !insolvencyPeriods.some(p => p.start === inv.commenced)) insolvencyPeriods.push({ type, start: inv.commenced });
         }
 
         // If currently in external admin, remove the matching current insolvency type
@@ -232,7 +232,7 @@ export async function fetchCompanyStatus(
         if (isInExternalAdmin && externalAdminType) {
             const currentType = externalAdminType.toLowerCase();
             for (const insType of allInsolvencies) {
-                if (currentType.includes(insType.toLowerCase())) {
+                if (currentType.includes(insType.toLowerCase().split(' ')[0])) {
                     allInsolvencies.delete(insType);
                 }
             }
@@ -277,6 +277,11 @@ export async function fetchCompanyStatus(
                     const historyData = await historyResponse.json();
 
                     if (Array.isArray(historyData)) {
+                        for (const row of historyData) {
+                            const desc = (row.entityStatusDescription || '').toLowerCase();
+                            if (row.startDate && ADMIN_KEYWORDS.some(kw => desc.includes(kw)) && !insolvencyPeriods.some(p => p.start.slice(0, 10) === row.startDate.slice(0, 10)))
+                                insolvencyPeriods.push({ type: insolvencyTypeLabel(row.entityStatusDescription), start: row.startDate, end: row.endDate || undefined });
+                        }
                         // Look for past statuses that match admin/insolvency keywords,
                         // but exclude the CURRENT admin type.
                         // Uses ADMIN_KEYWORDS for flexible matching — handles both
@@ -318,7 +323,8 @@ export async function fetchCompanyStatus(
             externalAdminType,
             removalCommenced,
             hasHistoricInsolvency,
-            historicInsolvencyType
+            historicInsolvencyType,
+            insolvencyPeriods
         };
     } catch (error: any) {
         console.warn(`⚠️ Error fetching status for ${nzbn}:`, error.message);
@@ -392,7 +398,8 @@ export async function enrichCompanyResults(
             externalAdminType: status.externalAdminType,
             removalCommenced: status.removalCommenced,
             hasHistoricInsolvency: status.hasHistoricInsolvency,
-            historicInsolvencyType: status.historicInsolvencyType
+            historicInsolvencyType: status.historicInsolvencyType,
+            insolvencyPeriods: status.insolvencyPeriods
         };
     });
 }

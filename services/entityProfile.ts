@@ -23,6 +23,23 @@ export function formatBusinessAddress(parts: unknown[]) {
     }).join(', ');
     return { text, rawText };
 }
+// NZBN insolvencyType is a code ("L") in v5 payloads; older responses spell it out.
+const INSOLVENCY_TYPES: Record<string, string> = { L: 'Liquidation', R: 'Receivership', V: 'Voluntary administration', VA: 'Voluntary administration', S: 'Statutory management', SM: 'Statutory management' };
+export const insolvencyTypeLabel = (value: unknown) => { const t = asText(value); return INSOLVENCY_TYPES[t.toUpperCase()] || t.replace(/^in\s+/i, '') || 'Insolvency'; };
+// Licensed practitioners' published business contact details, as the register shows them.
+const insolvencies = (company: any) => [...list(company?.insolvencies), ...(company?.insolvencyDetails ? [company.insolvencyDetails] : [])]
+    .filter((item, index, all) => all.findIndex(other => other.commenced === item.commenced && other.insolvencyType === item.insolvencyType) === index)
+    .map(item => ({
+        type: insolvencyTypeLabel(item.insolvencyType), commenced: asText(item.commenced),
+        appointees: list(item.insolvencyAppointee).map(a => ({
+            name: personName(a), organisation: asText(a.organisationName),
+            appointed: asText(a.appointmentDate), vacated: asText(a.vacationDate), email: asText(a.email),
+            phones: list(a.insolvencyAppointeePhoneNumber).map(p => [p.phoneCountryCode ? `+${p.phoneCountryCode}` : '', p.phoneAreaCode, p.phoneNumber].map(asText).filter(Boolean).join(' ')).filter(Boolean),
+            address: formatBusinessAddress([a.insolvencyAppointeeAddress?.careOf, a.insolvencyAppointeeAddress?.address1, a.insolvencyAppointeeAddress?.address2, a.insolvencyAppointeeAddress?.address3, a.insolvencyAppointeeAddress?.address4, a.insolvencyAppointeeAddress?.postCode]).text,
+        })),
+        reports: list(item.insolvencyReport).map(r => ({ name: asText(r.name), filed: r.filed === true, date: asText(r.date) })),
+    }))
+    .sort((a, b) => b.commenced.localeCompare(a.commenced));
 export function normaliseEntityProfile(raw: any, retrievedAt = new Date().toISOString()) {
     const company = raw?.['company-details'];
     const nonCompany = raw?.['non-company-details'];
@@ -72,6 +89,8 @@ export function normaliseEntityProfile(raw: any, retrievedAt = new Date().toISOS
         ultimateHolding: company?.ultimateHoldingCompany?.yn === false ? 'None declared' : asText(company?.ultimateHoldingCompany?.name),
         totalShares, extensive: company?.extensiveShareholding === true, allocations, roles,
         shareholdingSupplied: !!company?.shareholding,
+        insolvencies: insolvencies(company),
+        statusHistory: [] as {status:string;startDate:string;endDate:string}[],
         formerNames: [] as {name:string;startDate:string;endDate:string}[],
         historicalAddresses: list(raw?.addresses?.addressList).filter(a=>a.endDate && Date.parse(a.endDate)<=Date.now()).map(a=>({
             type:asText(a.addressType),...formatBusinessAddress([a.address1,a.address2,a.address3,a.address4,a.postCode,a.countryCode]),startDate:asText(a.startDate),endDate:asText(a.endDate),
@@ -94,6 +113,7 @@ export function rememberEntityProfile(raw: unknown): EntityProfile {
 }
 export function cachedEntityProfile(nzbn: string) {
     const profile = cache.get(nzbn);
-    return profile && Date.now() - Date.parse(profile.retrievedAt) < 300000 ? profile : null;
+    // ponytail: session-long cache; the record's Refresh button is the way to force fresh register data.
+    return profile || null;
 }
 export function cacheEntityProfile(profile:EntityProfile) { if(cache.size>=100&&!cache.has(profile.nzbn))cache.clear();cache.set(profile.nzbn,profile); return profile; }

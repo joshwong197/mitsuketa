@@ -13,7 +13,7 @@ assert.deepEqual(simple.nodes.map(n => n.id), ['target', 'holder', 'person']);
 assert.equal(simple.nodes.find(n => n.id === 'person')?.data.roleKind, 'director');
 assert.equal(simple.edges.length, 2);
 assert.equal(nodes.find(n => n.id === 'target')?.data.companySearchScope, undefined);
-assert.equal(entityStatus({ status: 'In Liquidation' }).bucket, 'warning');
+assert.equal(entityStatus({ status: 'In Liquidation' }).bucket, 'crit');
 assert.equal(entityStatus({ status: 'Removed', hasHistoricInsolvency: true }).alerts.length, 2);
 assert.equal(entityStatus({ status: 'Registered', removalCommenced: true }).alerts[0].label, 'Removal commenced');
 console.log('ok - immediate graph projection, original graph preserved, shared status alerts');

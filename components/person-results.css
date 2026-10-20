@@ -5,6 +5,8 @@
 .person-subject-spine span{font-family:var(--serif);font-size:30px;line-height:1}
 .person-subject-spine small{writing-mode:vertical-rl;font-family:var(--serif);letter-spacing:.15em;color:inherit}
 .has-current-finding .person-subject-spine{background:var(--crit);color:var(--paper)}
+.person-subject-count-crit dt,.person-subject-count-crit dd{color:var(--crit)}
+.person-subject-findings .person-subject-linked{color:var(--crit)}
 .person-subject-main{padding:24px 28px;flex:1;min-width:0}
 .person-subject-row{display:flex;gap:24px 32px;justify-content:space-between;align-items:center;flex-wrap:wrap}
 .person-subject-identity{min-width:0;flex:1 1 280px}

@@ -21,6 +21,13 @@ async function fetchRecord(nzbn:string,config:ApiConfig,refresh=false) {
             result.formerNames=rows.map(row=>({name:asText(row.entityName||row.name),startDate:asText(row.startDate),endDate:asText(row.endDate)})).filter(row=>row.name&&row.name!==profile.name);
         } catch { result.historyIssues.push('Former-name history could not be retrieved.'); }
     })()];
+    tasks.push((async()=>{
+        try {
+            const r=await fetch(`/api/proxy?path=${encodeURIComponent(`/nzbn/v5/entities/${nzbn}/history/entity-statuses`)}`,{headers:{'x-api-type':'nzbn','x-user-api-key':config.nzbnKey||''},signal:AbortSignal.timeout(12000)});
+            if(!r.ok)throw new Error();const rows=await r.json();if(!Array.isArray(rows))throw new Error();
+            result.statusHistory=rows.map(row=>({status:asText(row.entityStatusDescription),startDate:asText(row.startDate),endDate:asText(row.endDate)})).filter(row=>row.status).sort((a,b)=>a.startDate.localeCompare(b.startDate));
+        } catch { result.historyIssues.push('Status history could not be retrieved.'); }
+    })());
     if(profile.documentSource.kind!=='none'&&profile.number)tasks.push((async()=>{
         try {
             const params=new URLSearchParams({sourceRegister:profile.source,registerNumber:profile.number});

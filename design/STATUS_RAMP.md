@@ -9,7 +9,7 @@ Sumi logic: active = plain ink, trouble = dyed, dead = faded.
 | Status | Treatment |
 |---|---|
 | Registered / active | Default node: `--ink` on `--paper`, no status color |
-| Liquidation / receivership / voluntary admin | `--amber` border + status chip |
+| Liquidation / receivership / voluntary admin | `--crit` border + status chip (changed from amber 2026-10-20) |
 | Struck off / removed | Faded: `--ink-pale` text, `--ink-wash` border, no bright color |
 | Insolvency / disqualified director | `--crit` border + chip — the ONLY red on canvas |
 | Amalgamated | Faded like struck-off + → glyph to successor if on-graph |
