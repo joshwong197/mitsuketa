@@ -15,6 +15,7 @@ import { searchDisqualifiedDirectors, type DisqualifiedDirector } from '../src/a
 import { formatBirth, isInsolvencyRecordCurrent, searchInsolvency, type InsolvencyRecord } from '../src/api/insolvencyApi';
 import { diffSnapshot, loadNotes, loadPins, loadRecent, pushRecent, saveNotes, savePins, type MobileKey, type Pin, type Snapshot } from '../utils/mobileStore';
 import { EntityRecord, registerDate } from './EntityRecord';
+import { JdoMatches } from './JdoMatches'; // preview only: JDO is not on main yet
 import './mobile.css';
 
 // Phone layout (below 768px, chosen in index.tsx). Built for quick company
@@ -394,6 +395,8 @@ const CompanyScreen: React.FC<{ nzbn: string }> = ({ nzbn }) => {
                 : <p className="m-meta">Not a shareholder in any other company.</p>}
         </Section>
 
+        <Section title="Court decisions" aside="by name"><div className="m-jdo"><JdoMatches name={p.name} kind="company" nzbn={p.nzbn} /></div></Section>
+
         <button className="m-btn m-ghost" onClick={() => nav({ v: 'record', nzbn })}>Full register record ›</button>
     </div>;
 };
@@ -481,6 +484,7 @@ const PersonScreen: React.FC<{ name: string }> = ({ name }) => {
                 </li>)}</ul>)}
             </div>
         </Section>
+        <Section title="Court decisions" aside="by name"><div className="m-jdo"><JdoMatches name={name} /></div></Section>
         {linked.count > 0 && <div className="m-flag m-crit"><b>{linked.line}</b></div>}
         {enriching && <Loading text="Checking each company's status…" />}
         {!rs.length && <p className="m-meta">No directorships or shareholdings found for “{name}”. Try the name as it appears on the register, with first and last name.</p>}

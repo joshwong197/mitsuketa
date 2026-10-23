@@ -34,6 +34,7 @@ const API_ROUTES: Record<string, string> = {
     '/api/consent-forms': '/api/consent-forms.ts',
     '/api/documents': '/api/documents.ts',
     '/api/entity-record': '/api/entity-record.ts',
+    '/api/jdo': '/api/jdo.ts',
     '/api/property': '/api/property.ts',
     '/api/property-account': '/api/property-account.ts',
     '/api/property-applications': '/api/property-applications.ts',
