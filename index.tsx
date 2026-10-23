@@ -17,6 +17,20 @@ const RequestAccessPage = lazy(() => import('./components/RequestAccessPage'));
 import { usesClerk } from './utils/propertyAuthClient';
 const ClerkRoot = lazy(() => import('./components/ClerkRoot'));
 const AccessPage = lazy(() => import('./components/AccessPage'));
+const MobileApp = lazy(() => import('./components/MobileApp'));
+
+// Phones get their own layout (components/MobileApp); tablets and up keep the workspace.
+const PHONE = '(max-width: 767px)';
+function usePhone() {
+  const [phone, setPhone] = useState(() => window.matchMedia(PHONE).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(PHONE);
+    const onChange = () => setPhone(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return phone;
+}
 
 
 // Search is the landing page; legal documents have their own hash routes.
@@ -34,6 +48,7 @@ function Root() {
   const [entered, setEntered] = useState(() => window.location.hash === '#/app');
   const [appVisited, setAppVisited] = useState(() => pageFromHash() === 'home');
   const [page, setPage] = useState<Page>(pageFromHash);
+  const phone = usePhone();
 
   useEffect(() => {
     const onHash = () => {
@@ -49,6 +64,7 @@ function Root() {
   const access = new URLSearchParams(window.location.search).get('access');
   if (access === 'request') return <Suspense fallback={<p>Loading application…</p>}><RequestAccessPage /></Suspense>;
   if (usesClerk() && access) return <Suspense fallback={<p>Loading Mitsuketa…</p>}><AccessPage mode={access} /></Suspense>;
+  if (phone && page === 'home') return <Suspense fallback={<p>Loading Mitsuketa…</p>}><MobileApp /></Suspense>;
   const onEnter = () => { window.location.hash = '/app'; setAppVisited(true); setEntered(true); };
   const legalPage = page === 'terms' ? <Terms onEnter={onEnter} />
     : page === 'privacy' ? <Privacy onEnter={onEnter} />
