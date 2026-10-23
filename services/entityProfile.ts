@@ -87,6 +87,7 @@ export function normaliseEntityProfile(raw: any, retrievedAt = new Date().toISOS
         constitution: typeof company?.hasConstitutionFiled === 'boolean' ? company.hasConstitutionFiled : null,
         country: asText(company?.countryOfOrigin || nonCompany?.countryOfOrigin),
         charityNumber, balanceDate: asText(nonCompany?.balanceDate),
+        removalCommenced: company?.removalCommenced === true,
         ultimateHolding: company?.ultimateHoldingCompany?.yn === false ? 'None declared' : asText(company?.ultimateHoldingCompany?.name),
         totalShares, extensive: company?.extensiveShareholding === true, allocations, roles,
         shareholdingSupplied: !!company?.shareholding,

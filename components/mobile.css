@@ -66,6 +66,27 @@
 .m-actions button[aria-pressed="true"] { color: var(--accent); }
 .m-actions button:disabled { opacity: .4; }
 
+/* Register marks: same kanji squares as desktop person results. */
+.m-stamps { display: flex; align-items: center; gap: 4px; margin-top: 3px; min-width: 0; }
+.m-stamp { flex: none; width: 19px; height: 19px; display: grid; place-items: center; font-family: var(--serif); font-size: 11px; color: var(--paper); }
+.m-big .m-stamp { width: 24px; height: 24px; font-size: 14px; }
+.m-st-crit { background: var(--crit); } .m-st-amber { background: var(--amber); } .m-st-wash { background: var(--ink-mid); } .m-st-green { background: var(--green); }
+.m-stamp-text { margin-left: 4px; font-size: 12px; font-weight: 500; min-width: 0; }
+.m-big .m-stamp-text { font-size: 13px; }
+.m-st-text-crit { color: var(--crit); } .m-st-text-amber { color: var(--amber); } .m-st-text-wash { color: var(--ink-mid); }
+.m-struck { text-decoration: line-through; color: var(--ink-mid); }
+.m-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.m-checks { display: flex; flex-direction: column; border-top: 1px solid var(--rule); }
+.m-check { display: flex; gap: 12px; padding: 12px 2px; border-bottom: 1px solid var(--rule); align-items: flex-start; }
+.m-check .m-stamp { width: 30px; height: 30px; font-size: 15px; }
+.m-check > div { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.m-check b { font-weight: 500; }
+.m-check p { margin: 0; font-size: 13px; color: var(--ink-mid); }
+.m-check details { font-size: 13px; margin-top: 4px; }
+.m-check summary { color: var(--accent); cursor: pointer; }
+.m-check ul { margin: 6px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.m-check li .m-rs { display: block; white-space: normal; }
+
 .m-flag { border-left: 3px solid var(--amber); background: color-mix(in oklch, var(--amber) 10%, var(--paper)); padding: 10px 12px; font-size: 13px; }
 .m-flag.m-crit { border-color: var(--crit); background: color-mix(in oklch, var(--crit) 9%, var(--paper)); }
 .m-flag b { font-weight: 500; }

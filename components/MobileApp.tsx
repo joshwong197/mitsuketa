@@ -9,6 +9,10 @@ import { holdings, ultimateOwners, type UltimateOwner } from '../services/owners
 import type { TitleReport } from '../services/propertyService';
 import { getSession, subscribe } from '../utils/propertySession';
 import { isActivePersonCompany } from '../utils/personCompanyStatus';
+import { insolvencyLinkedSummary, timingLabel } from '../utils/insolvencyTiming';
+import { enrichCompanyResults } from '../src/api/companyStatusApi';
+import { searchDisqualifiedDirectors, type DisqualifiedDirector } from '../src/api/disqualifiedDirectorsApi';
+import { formatBirth, isInsolvencyRecordCurrent, searchInsolvency, type InsolvencyRecord } from '../src/api/insolvencyApi';
 import { diffSnapshot, loadNotes, loadPins, loadRecent, pushRecent, saveNotes, savePins, type MobileKey, type Pin, type Snapshot } from '../utils/mobileStore';
 import { EntityRecord, registerDate } from './EntityRecord';
 import './mobile.css';
@@ -67,7 +71,9 @@ const companySnap = (p: EntityProfile): Snapshot => ({
     status: p.status, directors: directors(p).map(r => r.name).sort(),
     holders: Object.fromEntries(holdings(p).map(h => [h.names.join(' & '), h.pct === null ? null : Math.round(h.pct * 10) / 10])),
 });
-const personSnap = (rs: PersonCompanyResult[]): Snapshot => ({ roles: rs.filter(r => isActivePersonCompany(r)).map(r => `${r.companyName} · ${r.roleType}`).sort() });
+// Built from the role search alone (not enrichment), so a pin compares like with like.
+const personSnap = (rs: PersonCompanyResult[]): Snapshot => ({ roles: rs.filter(r => !r.isInactive).map(r => `${r.companyName} · ${r.roleType}`).sort() });
+const enriched = new Map<string, PersonCompanyResult[]>(); // name → results with company status flags
 async function snapFor(key: MobileKey): Promise<Snapshot> {
     const id = key.slice(2);
     return key.startsWith('c:') ? companySnap(rememberEntityProfile(await fetchEntityDetails(id, config))) : personSnap(await loadPerson(id, true));
@@ -76,6 +82,35 @@ async function snapFor(key: MobileKey): Promise<Snapshot> {
 const pct = (n: number | null) => n === null ? '' : n > 0 && n < 0.1 ? '<0.1%' : `${Math.round(n * 10) / 10}%`;
 const tone = (s = '') => /liquidat|receiver|administration|statutory/i.test(s) ? 'bad' : /^registered$/i.test(s.trim()) ? 'ok' : 'faded';
 const personStatus = (r: PersonCompanyResult) => r.externalAdminType || r.entityStatusDescription || r.status;
+
+// Register marks, same glyphs, tones and order as desktop (PersonSearchResults):
+// 紅 insolvency, 琥 removal in progress (still stoppable), 消 removed.
+type Stamp = { glyph: string; tone: 'crit' | 'amber' | 'wash' | 'green'; label: string };
+const ADMIN = /liquidat|receiver|administration|statutory/i;
+const DEAD = /removed|struck|deregister|dissolv|deleted|amalgamat|closed|inactive/i;
+function stampsFor(c: { status?: string; inAdmin?: boolean; removed?: boolean; previous?: string; removalCommenced?: boolean }): Stamp[] {
+    const s: Stamp[] = [];
+    if (c.inAdmin) s.push({ glyph: '紅', tone: 'crit', label: c.status || 'External administration' });
+    if (c.previous) s.push({ glyph: '紅', tone: 'crit', label: `Previously in ${c.previous.replace(/^in\s+/i, '')}` });
+    if (c.removalCommenced && !c.removed) s.push({ glyph: '琥', tone: 'amber', label: 'Removal in progress' });
+    if (c.removed) s.push({ glyph: '消', tone: 'wash', label: 'Removed from the register' });
+    return s;
+}
+const roleStamps = (r: PersonCompanyResult) => {
+    const removed = r.entityStatusDescription ? /removed/i.test(r.entityStatusDescription) || /^inactive$/i.test(r.entityStatusDescription) : (r.entityStatusCode || 0) >= 80;
+    return stampsFor({ status: r.externalAdminType || r.entityStatusDescription, inAdmin: r.isInExternalAdmin, removed,
+        previous: removed && r.hasHistoricInsolvency ? r.historicInsolvencyType || 'Insolvency' : undefined, removalCommenced: r.removalCommenced });
+};
+const profileStamps = (p: EntityProfile) => {
+    const inAdmin = ADMIN.test(p.status);
+    const past = p.insolvencies.filter((_, i) => !(inAdmin && i === 0));
+    return stampsFor({ status: p.status, inAdmin, removed: DEAD.test(p.status), previous: past[0]?.type, removalCommenced: p.removalCommenced });
+};
+const Stamps: React.FC<{ s: Stamp[]; labels?: boolean; big?: boolean }> = ({ s, labels, big }) => s.length ? <span className={`m-stamps${big ? ' m-big' : ''}`}>
+    {s.map((x, i) => <span key={i} className={`m-stamp m-st-${x.tone}`} title={x.label} aria-hidden="true">{x.glyph}</span>)}
+    {labels ? <span className={`m-stamp-text m-st-text-${s[0].tone}`}>{s.filter(x => x.tone !== 'wash' || s.length === 1).map(x => x.label).join(' · ')}</span>
+        : <span className="m-sr">{s.map(x => x.label).join(', ')}</span>}
+</span> : null;
 
 interface Ctx {
     nav: (r: Route, replace?: boolean) => void;
@@ -177,8 +212,10 @@ export default function MobileApp() {
     </M.Provider>;
 }
 
-const Row: React.FC<{ k: string; title: string; sub?: string; right?: React.ReactNode; onClick?: () => void; warn?: boolean }> = ({ k, title, sub, right, onClick, warn }) => {
-    const body = <><span className="m-rk" aria-hidden="true">{k}</span><span className="m-rb"><span className="m-rt">{title}</span>{sub && <span className={`m-rs${warn ? ' m-warn' : ''}`}>{sub}</span>}</span>
+const Row: React.FC<{ k: string; title: string; sub?: string; right?: React.ReactNode; onClick?: () => void; warn?: boolean; stamps?: Stamp[]; note?: string }> = ({ k, title, sub, right, onClick, warn, stamps = [], note }) => {
+    const struck = stamps.some(s => s.tone === 'wash') && !stamps.some(s => s.tone === 'crit');
+    const body = <><span className="m-rk" aria-hidden="true">{k}</span><span className="m-rb"><span className={`m-rt${struck ? ' m-struck' : ''}`}>{title}</span>{sub && <span className={`m-rs${warn ? ' m-warn' : ''}`}>{sub}</span>}
+        <Stamps s={stamps} labels={stamps.some(s => s.tone !== 'wash')} />{note && <span className="m-rs m-warn">{note}</span>}</span>
         {right && <span className="m-rr">{right}</span>}{onClick && <span className="m-chev" aria-hidden="true">›</span>}</>;
     return onClick ? <button className="m-row" onClick={onClick}>{body}</button> : <div className="m-row">{body}</div>;
 };
@@ -251,7 +288,8 @@ function SearchScreen({ kind, q }: { kind: Kind; q: string }) {
             {res.error && <p className="m-error" role="alert">{res.error}</p>}
             {res.items && (res.items.length
                 ? <Section title="Companies and entities" aside={res.items.length}>
-                    <div className="m-list">{res.items.map(i => <Row key={i.nzbn} k="社" title={i.entityName} sub={`${i.entityStatusDescription} · NZBN ${i.nzbn}`} onClick={() => nav({ v: 'company', nzbn: i.nzbn })} />)}</div>
+                    <div className="m-list">{res.items.map(i => <Row key={i.nzbn} k="社" title={i.entityName} sub={ADMIN.test(i.entityStatusDescription) ? `NZBN ${i.nzbn}` : `${i.entityStatusDescription} · NZBN ${i.nzbn}`}
+                        stamps={stampsFor({ status: i.entityStatusDescription, inAdmin: ADMIN.test(i.entityStatusDescription), removed: DEAD.test(i.entityStatusDescription) })} onClick={() => nav({ v: 'company', nzbn: i.nzbn })} />)}</div>
                 </Section>
                 : <p className="m-meta">No companies match “{q}”. Check the spelling, or try the NZBN.</p>)}
             {!q && recent.length > 0 && <Section title="Recent" aside={recent.length}><RecentList limit={5} /></Section>}
@@ -295,7 +333,9 @@ const CompanyScreen: React.FC<{ nzbn: string }> = ({ nzbn }) => {
 
     const snap = companySnap(p);
     const direct = holdings(p);
-    const current = p.insolvencies.find(i => /liquidat|receiver|administration|statutory/i.test(p.status) && i.type);
+    const current = ADMIN.test(p.status) ? p.insolvencies[0] : undefined;
+    const past = p.insolvencies.filter(i => i !== current);
+    const stamps = profileStamps(p);
     const top = owners?.[0];
     const widelyHeld = p.extensive || p.allocations.length > 40;
     const openHolder = (h: { nzbn: string; names: string[] }) => h.nzbn ? nav({ v: 'company', nzbn: h.nzbn }) : h.names.length === 1 ? nav({ v: 'person', name: h.names[0] }) : undefined;
@@ -303,7 +343,7 @@ const CompanyScreen: React.FC<{ nzbn: string }> = ({ nzbn }) => {
     return <div className="m-pg">
         <div className="m-head"><span className="m-badge" aria-hidden="true">社</span><div>
             <h1 className="m-name">{p.name}</h1>
-            <span className={`m-pill m-${tone(p.status)}`}>{p.status || 'Status not supplied'}</span>
+            {stamps.length ? <Stamps s={stamps} labels big /> : <span className={`m-pill m-${tone(p.status)}`}>{p.status || 'Status not supplied'}</span>}
             <p className="m-meta">NZBN {p.nzbn}{p.number && ` · No. ${p.number}`} · Registered {registerDate(p.registered)}</p>
             {p.type && <p className="m-meta">{p.type}</p>}
         </div></div>
@@ -311,6 +351,10 @@ const CompanyScreen: React.FC<{ nzbn: string }> = ({ nzbn }) => {
         <NoteAndChanges k={`c:${nzbn}`} snap={snap} />
         {current && <div className="m-flag m-crit"><b>{current.type}</b> since {registerDate(current.commenced)}
             {current.appointees.filter(a => !a.vacated).length > 0 && <> · {current.appointees.filter(a => !a.vacated).map(a => a.name || a.organisation).join(', ')}</>}</div>}
+        {!current && ADMIN.test(p.status) && <div className="m-flag m-crit"><b>{p.status}</b></div>}
+        {p.removalCommenced && !DEAD.test(p.status) && <div className="m-flag"><b>Removal from the register has started.</b> It can still be stopped until the company is removed.</div>}
+        {past.length > 0 && <div className="m-flag m-crit"><b>Insolvency history</b>
+            <ul>{past.map((i, n) => <li key={n}>{i.type}, commenced {registerDate(i.commenced)}{i.appointees[0] && ` · ${i.appointees.map(a => a.name || a.organisation).filter(Boolean).join(', ')}`}</li>)}</ul></div>}
 
         {!p.shareholdingSupplied ? <p className="m-meta">The register holds no shareholding for this kind of entity.</p>
             : widelyHeld ? <Section title="Shareholders" aside={`widely held · ${p.allocations.length} allocations`}>
@@ -371,29 +415,53 @@ const RecordScreen: React.FC<{ nzbn: string }> = ({ nzbn }) => {
 
 const PersonScreen: React.FC<{ name: string }> = ({ name }) => {
     const { nav, setTitle, visit } = useM();
-    const [rs, setRs] = useState<PersonCompanyResult[] | null>(null);
+    const [rs, setRs] = useState<PersonCompanyResult[] | null>(() => enriched.get(name.toLowerCase()) || null);
+    const [base, setBase] = useState<PersonCompanyResult[] | null>(null);
+    const [enriching, setEnriching] = useState(false);
+    const [dq, setDq] = useState<DisqualifiedDirector[] | 'unavailable' | null>(null);
+    const [ins, setIns] = useState<InsolvencyRecord[] | 'unavailable' | null>(null);
     const [error, setError] = useState('');
     useEffect(() => {
         let off = false; setTitle(name);
+        // Same three checks as the desktop person search; company status flags patch in afterwards.
+        searchDisqualifiedDirectors(name, config).then(r => !off && setDq(r.roles || [])).catch(() => !off && setDq('unavailable'));
+        searchInsolvency(name, config).then(r => !off && setIns(r.searchResults || [])).catch(() => !off && setIns('unavailable'));
         loadPerson(name).then(r => {
             if (off) return;
-            setRs(r);
-            visit(`p:${name}`, name, `${r.filter(x => isActivePersonCompany(x)).length} current roles`);
+            setBase(r);
+            if (!enriched.has(name.toLowerCase())) setRs(r);
+            visit(`p:${name}`, name, `${r.filter(x => !x.isInactive).length} current roles`);
+            if (!r.length || enriched.has(name.toLowerCase())) return;
+            setEnriching(true);
+            enrichCompanyResults(r, config).then(e => { enriched.set(name.toLowerCase(), e); if (!off) setRs(e); })
+                .catch(() => { /* rows stay without status flags */ }).finally(() => !off && setEnriching(false));
         }).catch(() => !off && setError('The Companies Register did not answer. Try again in a moment.'));
         return () => { off = true; };
     }, [name]);
     if (error) return <div className="m-pg"><p className="m-error" role="alert">{error}</p></div>;
     if (!rs) return <div className="m-pg"><Loading text={`Searching the register for ${name}…`} /></div>;
-    const snap = personSnap(rs);
+    const snap = base ? personSnap(base) : null;
+    const linked = insolvencyLinkedSummary(rs);
     // The register matches names loosely; different middle names are usually different people.
     const groups = new Map<string, PersonCompanyResult[]>();
     for (const r of rs) { const n = [r.firstName, r.lastName].filter(Boolean).join(' ') || name; groups.set(n, [...(groups.get(n) || []), r]); }
     const row = (r: PersonCompanyResult, i: number) => {
         const st = personStatus(r);
-        return <Row key={`${r.nzbn}-${i}`} k="社" title={r.companyName}
-            sub={[r.roleType, r.shareholding > 0 ? pct(r.shareholding) : '', r.isInactive && r.resignationDate ? `ended ${registerDate(r.resignationDate)}` : r.appointmentDate ? `since ${registerDate(r.appointmentDate)}` : '', tone(st) !== 'ok' && st ? st : ''].filter(Boolean).join(' · ')}
-            warn={tone(st) === 'bad'} onClick={() => nav({ v: 'company', nzbn: r.nzbn })} />;
+        const stamps = roleStamps(r);
+        return <Row key={`${r.nzbn}-${i}`} k="社" title={r.companyName} stamps={stamps} note={timingLabel(r)}
+            sub={[r.roleType, r.shareholding > 0 ? pct(r.shareholding) : '', r.isInactive && r.resignationDate ? `ended ${registerDate(r.resignationDate)}` : r.appointmentDate ? `since ${registerDate(r.appointmentDate)}` : '', !stamps.length && tone(st) !== 'ok' && st ? st : ''].filter(Boolean).join(' · ')}
+            onClick={() => nav({ v: 'company', nzbn: r.nzbn })} />;
     };
+    const dqCurrent = Array.isArray(dq) && dq.some(d => d.disqualificationCriteria?.criteria?.some(c => !c.endDate || Date.parse(c.endDate) > Date.now()));
+    const insCurrent = Array.isArray(ins) && ins.some(isInsolvencyRecordCurrent);
+    const check = (label: string, v: unknown[] | 'unavailable' | null, current: boolean, details: React.ReactNode) =>
+        <div className="m-check">
+            <span className={`m-stamp m-st-${v === null || v === 'unavailable' ? 'wash' : v.length ? 'crit' : 'green'}`} aria-hidden="true">{v && v !== 'unavailable' && v.length ? '紅' : '青'}</span>
+            <div><b>{label}</b><p>{v === null ? 'Checking…' : v === 'unavailable' ? 'Check unavailable right now. Try again shortly.'
+                : !v.length ? 'No match'
+                : `${v.length} name match${v.length > 1 ? 'es' : ''} · ${current ? 'current' : 'none current'} · check it is the same person`}</p>
+                {Array.isArray(v) && v.length > 0 && <details><summary>Show {v.length > 1 ? 'matches' : 'match'}</summary>{details}</details>}</div>
+        </div>;
     return <div className="m-pg">
         <div className="m-head"><span className="m-badge" aria-hidden="true">人</span><div>
             <h1 className="m-name">{name}</h1>
@@ -401,6 +469,20 @@ const PersonScreen: React.FC<{ name: string }> = ({ name }) => {
         </div></div>
         <Actions k={`p:${name}`} name={name} snap={snap} />
         <NoteAndChanges k={`p:${name}`} snap={snap} />
+        <Section title="Register checks" aside="by name">
+            <div className="m-checks">
+                {check('Disqualified directors register', dq, dqCurrent, Array.isArray(dq) && <ul>{dq.map((d, i) => <li key={i}>
+                    {[d.firstName, d.middleName, d.lastName].filter(Boolean).join(' ')}
+                    {(d.disqualificationCriteria?.criteria || []).map((c, j) => <span key={j} className="m-rs">{registerDate(c.startDate)} – {c.endDate ? registerDate(c.endDate) : 'no end date'}{c.criteria && ` · ${c.criteria}`}</span>)}
+                </li>)}</ul>)}
+                {check('Insolvency register (bankruptcy and no-asset procedure)', ins, insCurrent, Array.isArray(ins) && <ul>{ins.map((r, i) => <li key={i}>
+                    {r.estateName}<span className="m-rs">{[r.insolvencyTypeDescription, r.insolvencyStatus, r.adjudicationOrLiquidationDate && registerDate(r.adjudicationOrLiquidationDate),
+                        formatBirth(r.monthOfBirth, r.yearOfBirth) && `born ${formatBirth(r.monthOfBirth, r.yearOfBirth)}`].filter(Boolean).join(' · ')}</span>
+                </li>)}</ul>)}
+            </div>
+        </Section>
+        {linked.count > 0 && <div className="m-flag m-crit"><b>{linked.line}</b></div>}
+        {enriching && <Loading text="Checking each company's status…" />}
         {!rs.length && <p className="m-meta">No directorships or shareholdings found for “{name}”. Try the name as it appears on the register, with first and last name.</p>}
         {groups.size > 1 && <p className="m-meta">{groups.size} different names matched. They may be different people.</p>}
         {[...groups].map(([n, list]) => <React.Fragment key={n}>
