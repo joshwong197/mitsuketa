@@ -1,0 +1,2 @@
+# Local assert scripts, not routes. Vercel would deploy each api/*.ts as a function (Hobby cap: 12).
+api/*.check.ts
