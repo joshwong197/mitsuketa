@@ -176,10 +176,12 @@ export interface PropertyReportProps {
     onBack?: () => void;
     onExport?: () => void;
     isExporting?: boolean;
+    /** Button text; the phone layout offers PDF or HTML behind one "Save report". */
+    exportLabel?: string;
 }
 
 export const PropertyReport: React.FC<PropertyReportProps> = ({
-    report, onBack, onExport, isExporting,
+    report, onBack, onExport, isExporting, exportLabel = 'Export report · HTML',
 }) => {
     const view = useMemo(() => buildTitleView(report), [report]);
     const [filter, setFilter] = useState<FilterKey>('all');
@@ -265,7 +267,7 @@ export const PropertyReport: React.FC<PropertyReportProps> = ({
                         style={{ padding: '7px 15px', fontSize: 12, opacity: isExporting ? 0.45 : 1 }}
                     >
                         <Download size={12} strokeWidth={1.75} />
-                        {isExporting ? 'Exporting…' : 'Export report · HTML'}
+                        {isExporting ? 'Exporting…' : exportLabel}
                     </button>
                 )}
             </div>

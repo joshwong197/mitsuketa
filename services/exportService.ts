@@ -20,7 +20,10 @@ const esc = (s: unknown): string =>
 const nzTimestamp = (d: Date) =>
     d.toLocaleString('en-NZ', { dateStyle: 'full', timeStyle: 'long', timeZone: 'Pacific/Auckland' });
 
-const downloadHtml = (html: string, filename: string) => {
+/** Where a finished report goes. Desktop downloads it; the phone layout keeps it for its share sheet. */
+export type DeliverReport = (html: string, filename: string) => void;
+
+const downloadHtml: DeliverReport = (html, filename) => {
     const blob = new Blob([html], { type: 'text/html' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -45,7 +48,7 @@ export async function downloadInteractiveGraphHtml(opts: {
     notes?: CaseNote[]; // Case notes for this tab — viewer stamps dog-ears + lists them
     record?: EntityProfile;
     recordUnavailable?: string;
-}): Promise<void> {
+}, deliver: DeliverReport = downloadHtml): Promise<void> {
     const [jsRes, cssRes] = await Promise.all([fetch('/export-viewer.js'), fetch('/export-viewer.css')]);
     if (!jsRes.ok || !cssRes.ok) throw new Error('Export viewer assets not found — run npm run build:export-viewer');
     // Neutralise any </script> inside the bundle so it can be inlined.
@@ -83,7 +86,7 @@ export async function downloadInteractiveGraphHtml(opts: {
 </body>
 </html>`;
 
-    downloadHtml(html, `mitsuketa-orgchart-${safeName(opts.title)}-${new Date().toISOString().split('T')[0]}.html`);
+    deliver(html, `mitsuketa-orgchart-${safeName(opts.title)}-${new Date().toISOString().split('T')[0]}.html`);
 }
 
 // ---------------------------------------------------------------------------
@@ -192,11 +195,11 @@ export async function downloadPersonReportHtml(opts: {
     disqualified: DisqualifiedDirector[];
     insolvency: InsolvencyRecord[];
     registerChecks?: PersonRegisterChecks;
-}): Promise<void> {
+}, deliver: DeliverReport = downloadHtml): Promise<void> {
     const signatures = await fetchKydData(opts.results);
     const now = new Date();
     const html = buildPersonReportHtml({ ...opts, signatures, generatedAt: now });
-    downloadHtml(html, `mitsuketa-director-${safeName(opts.personName)}-${now.toISOString().split('T')[0]}.html`);
+    deliver(html, `mitsuketa-director-${safeName(opts.personName)}-${now.toISOString().split('T')[0]}.html`);
 }
 
 // Pure — also used to preview the report outside the app
@@ -724,12 +727,12 @@ async function buildMapSvg(report: TitleReportData & {
 </figure>`;
 }
 
-export async function downloadTitleReportHtml(report: TitleReportData): Promise<void> {
+export async function downloadTitleReportHtml(report: TitleReportData, deliver: DeliverReport = downloadHtml): Promise<void> {
     const now = new Date();
     const view = buildTitleView(report);
     const map = await buildMapSvg(report);
     const html = buildTitleReportHtml(view, now, map);
-    downloadHtml(html, `mitsuketa-title-${safeName(view.titleNo)}-${now.toISOString().split('T')[0]}.html`);
+    deliver(html, `mitsuketa-title-${safeName(view.titleNo)}-${now.toISOString().split('T')[0]}.html`);
 }
 
 
