@@ -26,7 +26,9 @@
 .m-seg .m-k { font-size: 16px; }
 .m-lock { font-size: 11px; }
 .m-search { display: flex; align-items: center; gap: 8px; border: 1px solid var(--ink-pale); padding-left: 12px; height: 52px; }
-.m-search input { flex: 1; min-width: 0; border: 0; background: none; font-size: 16px; outline: none; height: 100%; }
+.m-search input { flex: 1; min-width: 0; border: 0; background: none; font-size: 16px; outline: none; height: 100%; padding: 0 4px; -webkit-appearance: none; appearance: none; }
+/* The box border already turns accent on focus (:focus-within); an inner outline sat on the text. */
+.m-app .m-search input:focus-visible { outline: none; }
 .m-search .m-k { color: var(--ink-mid); font-size: 17px; }
 .m-search button { align-self: stretch; padding: 0 16px; background: var(--ink); color: var(--paper); font-weight: 500; }
 .m-search button:disabled { opacity: .45; }

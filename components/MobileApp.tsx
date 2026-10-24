@@ -15,7 +15,7 @@ import { searchDisqualifiedDirectors, type DisqualifiedDirector } from '../src/a
 import { formatBirth, isInsolvencyRecordCurrent, searchInsolvency, type InsolvencyRecord } from '../src/api/insolvencyApi';
 import { diffSnapshot, loadNotes, loadPins, loadRecent, pushRecent, saveNotes, savePins, type MobileKey, type Pin, type Snapshot } from '../utils/mobileStore';
 import { EntityRecord, registerDate } from './EntityRecord';
-import { saveFile } from '../utils/saveFile';
+import { canShareFile, downloadFile, shareFile } from '../utils/saveFile';
 import type { PdfReport, PdfRow } from '../services/pdfReport';
 import { buildTitleView, formatDate } from '../utils/titleReport';
 import { JdoMatches } from './JdoMatches'; // preview only: JDO is not on main yet
@@ -246,10 +246,11 @@ export default function MobileApp() {
                     {exp.step === 'preparing' && <Loading text={exp.format === 'pdf' ? 'Preparing the PDF…' : 'Preparing the HTML report…'} />}
                     {exp.step === 'ready' && exp.file && <>
                         <p className="m-file">{exp.file.filename} · {Math.max(1, Math.round(exp.file.blob.size / 1024))} KB</p>
-                        <button className="m-btn" onClick={() => {
-                            const f = exp.file!;
-                            saveFile(f.blob, f.filename).then(r => { if (r !== 'cancelled') { setExp(null); if (r === 'downloaded') setToast('Report downloaded'); } });
-                        }}>Save {exp.format === 'pdf' ? 'PDF' : 'HTML'}</button>
+                        <button className="m-btn" onClick={() => { downloadFile(exp.file!.blob, exp.file!.filename); setExp(null); setToast('Report downloaded'); }}>
+                            Download {exp.format === 'pdf' ? 'PDF' : 'HTML'}</button>
+                        {canShareFile(exp.file.blob, exp.file.filename) && <button className="m-btn m-ghost" onClick={() => {
+                            shareFile(exp.file!.blob, exp.file!.filename).then(done => done && setExp(null)).catch(() => setToast('Sharing is not available here. Use Download.'));
+                        }}>Share…</button>}
                     </>}
                     {exp.step === 'error' && <><p className="m-error" role="alert">{exp.error}</p>
                         <button className="m-btn m-ghost" onClick={() => setExp({ spec: exp.spec, step: 'choose' })}>Try again</button></>}
@@ -394,27 +395,35 @@ const CompanyScreen: React.FC<{ nzbn: string }> = ({ nzbn }) => {
         name: p.name,
         htmlNote: 'Builds the ownership chart first, which can take a minute for large groups.',
         pdf: () => renderPdf({
-            kind: 'Company check', title: p.name,
-            subtitle: [p.status || 'Status not supplied', `NZBN ${p.nzbn}${p.number ? ` · Company number ${p.number}` : ''}`, `Registered ${registerDate(p.registered)}${p.type ? ` · ${p.type}` : ''}`],
-            flags: [
-                ...stamps.map(s => ({ text: s.label, tone: s.tone === 'crit' ? 'crit' as const : s.tone === 'amber' ? 'warn' as const : 'mute' as const })),
-                ...(current ? [{ text: `${current.type} since ${registerDate(current.commenced)}${current.appointees.some(a => !a.vacated) ? ` · ${current.appointees.filter(a => !a.vacated).map(a => a.name || a.organisation).join(', ')}` : ''}`, tone: 'crit' as const }] : []),
-                ...past.map(i => ({ text: `Earlier ${i.type.toLowerCase()}, commenced ${registerDate(i.commenced)}`, tone: 'crit' as const })),
-            ],
+            kind: 'Company check',
+            card: {
+                spine: '記録', eyebrow: 'Mitsuketa · Entity record', name: p.name, type: p.type || undefined,
+                status: { text: p.status || 'Status not supplied', tone: ADMIN.test(p.status) ? 'crit' : DEAD.test(p.status) ? 'faded' : p.removalCommenced ? 'warn' : 'active' },
+                alerts: stamps.filter(s => s.label.toLowerCase() !== p.status.toLowerCase()).map(s => ({ text: s.label, tone: s.tone === 'crit' ? 'crit' as const : s.tone === 'amber' ? 'warn' as const : 'mute' as const })),
+                ids: [['NZBN', p.nzbn], ['Register no.', p.number || 'Not supplied']],
+                footer: ['Registered', registerDate(p.registered)],
+                link: { text: `Open ${p.register.label}`, url: p.register.url },
+            },
+            glance: [[String(p.roles.filter(r => !r.historical).length), 'Current roles supplied'],
+                ...(p.isCompany ? [[String(p.allocations.length), 'Share allocations supplied'], [p.totalShares === null ? '—' : p.totalShares.toLocaleString('en-NZ'), 'Total issued shares']] as [string, string][] : [])],
             sections: [
-                !p.shareholdingSupplied ? { title: 'Shareholding', paragraphs: ['The register holds no shareholding for this kind of entity.'] }
-                    : widelyHeld ? { title: 'Largest shareholders', aside: `widely held · ${p.allocations.length} allocations`, rows: direct.slice(0, 8).map(h => ({ text: h.names.join(' & '), right: pct(h.pct) })) }
-                    : { title: "Who's behind it", aside: 'ultimate owners', rows: owners?.map(o => ({ text: o.names.join(' & '), sub: viaText(o), right: pct(o.pct) })),
+                ...(current || past.length ? [{ mark: '紅', title: 'Insolvency', rows: [
+                    ...(current ? [{ text: `${current.type} · current`, sub: [`Commenced ${registerDate(current.commenced)}`, ...current.appointees.filter(a => !a.vacated).map(a => [a.name, a.organisation].filter(Boolean).join(', '))].join(' · '), tone: 'crit' as const }] : []),
+                    ...past.map(i => ({ text: `${i.type} · ended`, sub: [`Commenced ${registerDate(i.commenced)}`, ...i.appointees.map(a => [a.name, a.organisation].filter(Boolean).join(', '))].join(' · ') })),
+                ] }] : []),
+                !p.shareholdingSupplied ? { mark: '株', title: 'Shareholding', paragraphs: ['The register holds no shareholding for this kind of entity.'] }
+                    : widelyHeld ? { mark: '株', title: 'Largest shareholders', aside: `widely held · ${p.allocations.length} allocations`, rows: direct.slice(0, 8).map(h => ({ text: h.names.join(' & '), right: pct(h.pct) })) }
+                    : { mark: '株', title: "Who's behind it", aside: 'ultimate owners', rows: owners?.map(o => ({ text: o.names.join(' & '), sub: viaText(o), right: pct(o.pct) })),
                         paragraphs: owners ? (owners.length ? [] : ['No shareholders on the register.']) : ['Ultimate owners were still loading when this report was saved.'] },
-                ...(top && top.via.length ? [{ title: 'Ownership chain', aside: 'largest owner', paragraphs: ['Each line is owned by the line below it.'],
+                ...(top && top.via.length ? [{ mark: '系', title: 'Ownership chain', aside: 'largest owner', paragraphs: ['Each line is owned by the line below it.'],
                     rows: [p.name, ...top.via.map(h => h.name), top.names.join(' & ')].map((n, i, all) => ({ text: n, sub: i === 0 ? 'this company' : i === all.length - 1 ? `largest ultimate owner · ${pct(top.pct)}` : 'holding company' })) }] : []),
-                ...(!widelyHeld && direct.some(h => h.nzbn) ? [{ title: 'Direct shareholders', aside: String(direct.length), rows: direct.map(h => ({ text: h.names.join(' & '), right: pct(h.pct) })) }] : []),
-                { title: 'Directors', aside: String(dirs.length), rows: dirs.map(d => ({ text: d.name, sub: `${d.role} since ${registerDate(d.startDate)}` })), paragraphs: dirs.length ? [] : ['No current directors on the register.'] },
-                { title: 'Shareholder in', aside: owns ? `${owns.filter(o => !o.former).length} current` : '', rows: owns?.map(o => ({ text: o.name, sub: o.former ? 'Former shareholding' : undefined, right: o.pct ? pct(o.pct) : undefined, tone: o.former ? 'mute' as const : undefined })),
+                ...(!widelyHeld && direct.some(h => h.nzbn) ? [{ mark: '主', title: 'Direct shareholders', aside: String(direct.length), rows: direct.map(h => ({ text: h.names.join(' & '), right: pct(h.pct) })) }] : []),
+                { mark: '人', title: 'Directors', aside: String(dirs.length), rows: dirs.map(d => ({ text: d.name, sub: `${d.role} since ${registerDate(d.startDate)}` })), paragraphs: dirs.length ? [] : ['No current directors on the register.'] },
+                { mark: '社', title: 'Shareholder in', aside: owns ? `${owns.filter(o => !o.former).length} current` : '', rows: owns?.map(o => ({ text: o.name, sub: o.former ? 'Former shareholding' : undefined, right: o.pct ? pct(o.pct) : undefined, tone: o.former ? 'mute' as const : undefined })),
                     paragraphs: owns ? (owns.length ? [] : ['Not a shareholder in any other company.']) : ['Still loading when this report was saved.'] },
             ],
             notices: ['Ultimate ownership multiplies each shareholding up the chain as the Companies Register records it. Trusts, nominees and overseas holders are not looked through. Check the register before relying on it.'],
-            sources: `Source: Companies Register and NZBN Register (MBIE), retrieved ${new Date(p.retrievedAt).toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland' })}. ${p.register.url}`,
+            sources: `Source: Companies Register and NZBN Register (MBIE), retrieved ${new Date(p.retrievedAt).toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland' })}. Generated by Mitsuketa.`,
         }, `mitsuketa-company-${safeName(p.name)}-${fileStamp()}.pdf`),
         html: () => catchHtml(async deliver => {
             // Same Simple-scope chart the desktop exports, built on demand.
@@ -565,24 +574,30 @@ const PersonScreen: React.FC<{ name: string }> = ({ name }) => {
     const report = (): ExportSpec => ({
         name,
         pdf: () => renderPdf({
-            kind: 'Person check', title: name,
-            subtitle: [`${rs.filter(r => isActivePersonCompany(r)).length} current and ${rs.filter(r => !isActivePersonCompany(r)).length} former roles on the Companies Register`],
-            flags: [...(linked.count ? [{ text: linked.line, tone: 'crit' as const }] : []),
-                ...(dqCurrent ? [{ text: 'Current disqualification on the register under this name · check it is the same person', tone: 'crit' as const }] : []),
-                ...(insCurrent ? [{ text: 'Current insolvency on the register under this name · check it is the same person', tone: 'crit' as const }] : [])],
+            kind: 'Person check',
+            card: {
+                spine: '人', spineTone: dqCurrent || insCurrent ? 'crit' : 'accent', eyebrow: 'Individual search · Companies Office', name,
+                type: `${rs.filter(r => isActivePersonCompany(r)).length} current and ${rs.filter(r => !isActivePersonCompany(r)).length} former roles on the Companies Register`,
+                status: dqCurrent || insCurrent ? { text: 'Current register finding', tone: 'crit' } : linked.count ? { text: 'Insolvency history', tone: 'crit' } : undefined,
+                alerts: [...(dqCurrent ? [{ text: 'Current disqualification under this name · check it is the same person', tone: 'crit' as const }] : []),
+                    ...(insCurrent ? [{ text: 'Current insolvency under this name · check it is the same person', tone: 'crit' as const }] : []),
+                    ...(linked.count ? [{ text: linked.line, tone: 'crit' as const }] : [])],
+                footer: ['Searched', new Date().toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland', dateStyle: 'medium', timeStyle: 'short' })],
+            },
+            glance: [[String(rs.filter(r => isActivePersonCompany(r)).length), 'Current roles'], [String(rs.filter(r => !isActivePersonCompany(r)).length), 'Former roles'], [String(linked.count), 'Companies with insolvency history']],
             sections: [
-                { title: 'Register checks', aside: 'by name', rows: [
+                { mark: '険', title: 'Register checks', aside: 'by name', rows: [
                     { text: 'Disqualified directors register', sub: checkText(dq, dqCurrent), tone: Array.isArray(dq) && dq.length ? 'crit' : undefined },
                     ...(Array.isArray(dq) ? dq.map(d => ({ text: [d.firstName, d.middleName, d.lastName].filter(Boolean).join(' '), sub: (d.disqualificationCriteria?.criteria || []).map(c => `${registerDate(c.startDate)} – ${c.endDate ? registerDate(c.endDate) : 'no end date'}${c.criteria ? ` · ${c.criteria}` : ''}`).join('; ') })) : []),
                     { text: 'Insolvency register (bankruptcy and no-asset procedure)', sub: checkText(ins, insCurrent), tone: Array.isArray(ins) && ins.length ? 'crit' : undefined },
                     ...(Array.isArray(ins) ? ins.map(r => ({ text: r.estateName, sub: [r.insolvencyTypeDescription, r.insolvencyStatus, r.adjudicationOrLiquidationDate && registerDate(r.adjudicationOrLiquidationDate), formatBirth(r.monthOfBirth, r.yearOfBirth) && `born ${formatBirth(r.monthOfBirth, r.yearOfBirth)}`].filter(Boolean).join(' · ') })) : []),
                 ] },
-                { title: 'Current roles', aside: String(rs.filter(r => isActivePersonCompany(r)).length), rows: rs.filter(r => isActivePersonCompany(r)).map(roleRow) },
-                { title: 'Former roles', aside: String(rs.filter(r => !isActivePersonCompany(r)).length), rows: rs.filter(r => !isActivePersonCompany(r)).map(roleRow) },
+                { mark: '社', title: 'Current roles', aside: String(rs.filter(r => isActivePersonCompany(r)).length), rows: rs.filter(r => isActivePersonCompany(r)).map(roleRow) },
+                { mark: '歴', title: 'Former roles', aside: String(rs.filter(r => !isActivePersonCompany(r)).length), rows: rs.filter(r => !isActivePersonCompany(r)).map(roleRow) },
             ],
             notices: ['Register checks and company roles are matched by name. A match does not confirm it is the same person; check identifying details before relying on it.',
                 ...(groups.size > 1 ? [`${groups.size} different names matched this search. They may be different people.`] : [])],
-            sources: `Source: Companies Register, Disqualified Directors Register and Insolvency Register (MBIE), searched ${new Date().toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland' })}.`,
+            sources: `Source: Companies Register, Disqualified Directors Register and Insolvency Register (MBIE), searched ${new Date().toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland' })}. Generated by Mitsuketa.`,
         }, `mitsuketa-person-${safeName(name)}-${fileStamp()}.pdf`),
         html: () => catchHtml(async deliver => {
             const { downloadPersonReportHtml } = await import('../services/exportService');
@@ -634,21 +649,27 @@ function TitleScreen() {
         return {
             name: view.address || view.titleNo,
             pdf: () => renderPdf({
-                kind: 'Record of title', title: view.address || view.titleNo,
-                subtitle: [`Record of title ${view.titleNo}`, view.meta].filter(Boolean),
+                kind: 'Record of title',
+                card: {
+                    spine: '登記', eyebrow: 'Record of title · LINZ Title Register', name: view.address || view.titleNo, type: view.meta || undefined,
+                    status: view.status ? { text: view.status, tone: /cancel|histor/i.test(view.status) ? 'faded' : 'active' } : undefined,
+                    ids: [['Title', view.titleNo]],
+                    footer: ['Retrieved', new Date().toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland', dateStyle: 'medium', timeStyle: 'short' })],
+                },
+                glance: [[String(view.owners.length), 'Registered owners'], [String(view.live.length), 'Live on the title'], [String(view.burdens.length), 'Standing burdens']],
                 sections: [
-                    { title: 'Title', rows: view.facts.map(f => ({ text: f.value || '—', sub: f.label })) },
-                    { title: 'Registered owners', aside: String(view.owners.length), rows: view.owners.map(o => ({ text: o.name, sub: [...o.shares, ...o.estateLines].join(' · ') || undefined, right: o.status || undefined })) },
-                    { title: 'Live on the title', aside: String(view.live.length), rows: view.live.map(event), paragraphs: view.live.length ? [] : ['Nothing live is registered against this title.'] },
-                    ...(view.chronology.length ? [{ title: 'Dealings, oldest first', aside: String(view.chronology.length), rows: view.chronology.map(event) }] : []),
-                    ...(view.burdens.length ? [{ title: 'Standing burdens', aside: String(view.burdens.length), paragraphs: ['Easements, covenants and statutory conditions. These sit on the land indefinitely.'], rows: view.burdens.map(event) }] : []),
+                    { mark: '登記', title: 'Register detail', rows: view.facts.map(f => ({ text: f.value || '—', sub: f.label })) },
+                    { mark: '所有', title: 'Registered owners', aside: String(view.owners.length), rows: view.owners.map(o => ({ text: o.name, sub: [...o.shares, ...o.estateLines].join(' · ') || undefined, right: o.status || undefined })) },
+                    { mark: '現況', title: 'Currently registered', aside: String(view.live.length), rows: view.live.map(event), paragraphs: view.live.length ? [] : ['Nothing live is registered against this title.'] },
+                    ...(view.chronology.length ? [{ mark: '経緯', title: 'Dealings, oldest first', aside: String(view.chronology.length), rows: view.chronology.map(event) }] : []),
+                    ...(view.burdens.length ? [{ mark: '負担', title: 'Standing burdens', aside: String(view.burdens.length), paragraphs: ['Easements, covenants and statutory conditions. These sit on the land indefinitely.'], rows: view.burdens.map(event) }] : []),
                 ],
                 // Same notices as the HTML title report (services/exportService.ts).
                 notices: [
                     'Reference copy of the LINZ Title Register, not a title search. It may lag the register and is not legal advice. Every line above is taken from the register\'s own fields — no interpretation has been added. Obtain a formal search from LINZ before relying on it.',
                     'This report contains personal information. Share it only with a recipient who has accepted the LINZ Licence for Personal Data 2.3. Keep it secure, retain the source notices, and do not publish it on a publicly searchable page. A downloaded report does not update automatically; you may need to correct or delete copies if instructed. LINZ licence: https://data.linz.govt.nz/license/linz-licence-for-personal-data-23/',
                 ],
-                sources: `Source: LINZ Title Register, retrieved ${new Date().toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland' })}.`,
+                sources: `Source: LINZ Title Register, retrieved ${new Date().toLocaleString('en-NZ', { timeZone: 'Pacific/Auckland' })}. Generated by Mitsuketa.`,
             }, `mitsuketa-title-${safeName(view.titleNo)}-${fileStamp()}.pdf`),
             html: () => catchHtml(async deliver => {
                 const { downloadTitleReportHtml } = await import('../services/exportService');
